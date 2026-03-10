@@ -151,3 +151,8 @@ def openrouter_main() -> None:
 
 def qwen_main() -> None:
     _provider_alias("qwen", supports_anchor=False)
+
+
+def main() -> None:
+    """Console script entrypoint."""
+    app()

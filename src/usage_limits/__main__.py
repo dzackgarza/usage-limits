@@ -4,4 +4,5 @@ from __future__ import annotations
 
 from usage_limits.cli import main
 
-main()
+if __name__ == "__main__":
+    main()
