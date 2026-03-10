@@ -1,6 +1,6 @@
 [project]
 name = "usage-limits"
-version = "1.0.2"
+version = "1.0.3"
 description = "Uniform quota collection for LLM providers"
 readme = "README.md"
 requires-python = ">=3.12"
