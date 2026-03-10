@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+import importlib.metadata
+
+try:
+    __version__ = importlib.metadata.version("usage-limits")
+except importlib.metadata.PackageNotFoundError:
+    __version__ = "unknown"
+
 from usage_limits.base import UsageProvider
 from usage_limits.contracts import (
     AvailabilityCollection,

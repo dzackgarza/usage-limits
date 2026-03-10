@@ -1,0 +1,44 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/usage-limits
+    permissions:
+      id-token: write # REQUIRED: for Trusted Publishing (OIDC)
+      contents: read  # REQUIRED: for checkout
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install
+
+      - name: Install dependencies
+        run: uv sync --all-groups
+
+      - name: Run checks
+        run: |
+          uv run ruff check .
+          uv run mypy -p usage_limits
+          uv run pytest
+
+      - name: Build package
+        run: uv build
+
+      - name: Publish to PyPI
+        run: uv publish

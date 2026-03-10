@@ -11,6 +11,10 @@ dependencies = [
     "typer>=0.21",
 ]
 
+[project.urls]
+Sponsor = "https://ko-fi.com/I2I57UKJ8"
+Repository = "https://github.com/dzackgarza/usage-limits.git"
+
 [dependency-groups]
 dev = [
     "pytest>=8.0",
