@@ -27,18 +27,19 @@ typecheck:
 test *ARGS:
     uv run pytest {{ARGS}}
 
+# Get the current version number
+v:
+    @uv version | awk '{print $2}'
+
 # Canonical CLI surfaces
-providers *ARGS:
-    uv run usage-limits providers list {{ARGS}}
-
 collect *ARGS:
-    uv run usage-limits collect {{ARGS}}
-
-availability *ARGS:
-    uv run usage-limits availability {{ARGS}}
+    uv run usage-limits --json {{ARGS}}
 
 table *ARGS:
-    uv run usage-limits table {{ARGS}}
+    uv run usage-limits {{ARGS}}
+
+providers *ARGS:
+    uv run usage-limits providers list {{ARGS}}
 
 # Run a specific provider checker
 claude *ARGS:
@@ -65,6 +66,21 @@ ollama *ARGS:
 # Get the current version number
 v:
     @uv version | awk '{print $2}'
+
+# Release current state as a patch (default)
+release: release-patch
+
+# Release a patch version
+release-patch: bump-patch publish
+    @gh release create v$(uv version | awk '{print $2}') --generate-notes
+
+# Release a minor version
+release-minor: bump-minor publish
+    @gh release create v$(uv version | awk '{print $2}') --generate-notes
+
+# Release a major version
+release-major: bump-major publish
+    @gh release create v$(uv version | awk '{print $2}') --generate-notes
 
 # Default: bump patch, commit, and tag
 bump: bump-patch
