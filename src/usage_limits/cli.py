@@ -7,7 +7,6 @@ from typing import Annotated
 
 import typer
 
-from usage_limits.contracts import UsageCollection
 from usage_limits.registry import collect_all, collect_provider, list_providers
 from usage_limits.rendering import render_collection, render_provider_snapshot
 
@@ -46,7 +45,9 @@ def _emit_json(payload: object) -> None:
 
 @providers_app.command("list")
 def providers_list(
-    json_output: Annotated[bool, typer.Option("--json", help="Emit provider metadata as JSON.")] = False,
+    json_output: Annotated[
+        bool, typer.Option("--json", help="Emit provider metadata as JSON.")
+    ] = False,
 ) -> None:
     """List registered providers."""
     providers = list_providers()
