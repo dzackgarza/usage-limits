@@ -1,7 +1,7 @@
 [project]
 name = "usage-limits"
 version = "1.0.0"
-description = "Usage limit checkers for AI provider free tiers"
+description = "Uniform quota collection for LLM providers"
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.0",

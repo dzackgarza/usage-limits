@@ -27,10 +27,6 @@ typecheck:
 test *ARGS:
     uv run pytest {{ARGS}}
 
-# Install in editable mode in the opencode venv (for use from shell)
-install-dev:
-    ~/ai/opencode/.venv/bin/pip install -e .
-
 # Canonical CLI surfaces
 providers *ARGS:
     uv run usage-limits providers list {{ARGS}}
@@ -65,3 +61,9 @@ qwen *ARGS:
 
 ollama *ARGS:
     uv run usage-ollama {{ARGS}}
+
+build:
+    uv build
+
+bump:
+    uv version --bump minor

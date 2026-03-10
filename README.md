@@ -1,31 +1,51 @@
 # usage-limits
 
-`usage_limits` is the extraction seed for a standalone quota-tracking repo. It exposes one canonical CLI, one normalized JSON contract, and provider submodules that can be extended without turning the package back into a pile of standalone scripts.
+Uniform quota collection for CLI- and API-backed LLM providers.
 
-## Canonical CLI
-
-Inside this repo:
+## Setup
 
 ```bash
-cd /home/dzack/ai/scripts/usage_limits
-uv run usage-limits providers list
-uv run usage-limits collect --provider claude --json
-uv run usage-limits availability --all --json
-uv run usage-limits table --provider claude --provider codex
+direnv allow
+just setup
 ```
 
-The public command tree is:
+Local configuration lives in `.envrc` and inherits shared shell configuration from
+`~/.envrc`:
 
-- `usage-limits providers list`
-- `usage-limits collect`
-- `usage-limits availability`
-- `usage-limits table`
+```bash
+source_up
 
-Provider aliases such as `usage-claude` and `usage-antigravity` are secondary wrappers around the same normalized implementation.
+# Required only for the Ollama provider.
+# OLLAMA_SESSION_COOKIE=
+```
+
+## Direct Use
+
+```bash
+uvx --from git+https://github.com/dzackgarza/usage-limits.git \
+  usage-limits providers list
+
+uvx --from git+https://github.com/dzackgarza/usage-limits.git \
+  usage-limits collect --provider claude --json
+
+uvx --from git+https://github.com/dzackgarza/usage-limits.git \
+  usage-limits availability --all --json
+
+uvx --from git+https://github.com/dzackgarza/usage-limits.git \
+  usage-limits table --provider claude --provider codex
+```
+
+## Commands
+
+- `usage-limits providers list` reports registered provider metadata.
+- `usage-limits collect` emits the canonical usage JSON contract.
+- `usage-limits availability` emits the availability-only JSON contract.
+- `usage-limits table` renders the same data with Rich.
+- Provider aliases such as `usage-claude` and `usage-antigravity` are thin wrappers.
 
 ## JSON Contract
 
-`collect` returns a top-level payload with:
+`collect` returns:
 
 - `version`
 - `captured_at`
@@ -48,11 +68,9 @@ Each provider entry contains:
 Collection is read-only by default. Notifications and anchoring are explicit:
 
 ```bash
-uv run usage-limits table --provider claude --notify --anchor
-uv run usage-limits collect --provider codex --json --notify --anchor
+usage-limits table --provider claude --notify --anchor
+usage-limits collect --provider codex --json --notify --anchor
 ```
-
-That keeps `uvx` and JSON-consuming callers free of surprising side effects while preserving the operational behaviors when they are actually wanted.
 
 ## Provider Coverage
 
@@ -66,4 +84,12 @@ First-party providers currently include:
 - `openrouter`
 - `qwen`
 
-`openrouter` still returns a normalized error snapshot because request counting is not yet implemented.
+`openrouter` currently returns a normalized error snapshot because request counting is not
+implemented.
+
+## Development
+
+- `just setup` installs the project and dev dependencies.
+- `just check` runs lint, tests, and typecheck.
+- `just build` builds a wheel and sdist.
+- `just bump` increments the minor version with `uv version --bump minor`.
