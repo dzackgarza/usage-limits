@@ -27,10 +27,6 @@ typecheck:
 test *ARGS:
     uv run pytest {{ARGS}}
 
-# Get the current version number
-v:
-    @uv version | awk '{print $2}'
-
 # Canonical CLI surfaces
 collect *ARGS:
     uv run usage-limits --json {{ARGS}}
