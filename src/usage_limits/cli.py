@@ -59,7 +59,7 @@ def providers_list(
 
 
 @app.callback(invoke_without_command=True)
-def main(
+def app_main(
     ctx: typer.Context,
     provider: Annotated[
         list[str] | None,
