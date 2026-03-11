@@ -124,8 +124,7 @@ class OllamaProvider(UsageProvider):
             reset_elem = None
             if wrapper:
                 reset_elem = wrapper.find("div", class_=re.compile(r".*local-time.*"))
-            reset_text = reset_elem.get_text(strip=True) if reset_elem else None
-            reset_at = self._parse_reset_time(reset_text)
+            reset_at = self._parse_reset_element(reset_elem)
 
             window_name = label_mapping.get(label_text.lower(), label_text.split()[0])
             rows.append(
@@ -138,8 +137,27 @@ class OllamaProvider(UsageProvider):
 
         return rows
 
-    def _parse_reset_time(self, text: str | None) -> datetime | None:
-        """Parse reset time from text like 'Resets in 5 hours' or 'Resets in 1 day'."""
+    def _parse_reset_element(self, elem: Any) -> datetime | None:
+        """Extract reset time from a local-time div.
+
+        Prefers the exact ``data-time`` attribute; falls back to parsing the
+        fuzzy text (e.g. "Resets in 5 hours").
+        """
+        if elem is None:
+            return None
+
+        data_time = elem.get("data-time") if hasattr(elem, "get") else None
+        if data_time:
+            try:
+                return datetime.fromisoformat(data_time.replace("Z", "+00:00"))
+            except (ValueError, TypeError):
+                pass
+
+        text = elem.get_text(strip=True) if hasattr(elem, "get_text") else str(elem)
+        return self._parse_reset_text(text)
+
+    def _parse_reset_text(self, text: str | None) -> datetime | None:
+        """Fallback: parse fuzzy text like 'Resets in 5 hours'."""
         if not text:
             return None
         text_lower = text.lower().strip()
