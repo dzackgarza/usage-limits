@@ -22,6 +22,9 @@ dependencies = [
     "rich>=13.0",
     "beautifulsoup4>=4.12",
     "typer>=0.21",
+    "fastapi>=0.135.1",
+    "uvicorn>=0.41.0",
+    "opentelemetry-proto>=1.40.0",
 ]
 
 [project.urls]
@@ -35,6 +38,7 @@ dev = [
     "ruff>=0.8",
     "mypy>=1.13",
     "types-requests>=2.32",
+    "httpx>=0.28.1",
 ]
 
 [project.scripts]

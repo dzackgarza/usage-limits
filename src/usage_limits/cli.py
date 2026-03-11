@@ -58,6 +58,19 @@ def providers_list(
         typer.echo(f"{provider.provider}\t{provider.display_name}\t{provider.source}")
 
 
+@app.command("serve")
+def serve(
+    port: Annotated[int, typer.Option("--port", help="The port to listen on.")] = 4318,
+    host: Annotated[str, typer.Option("--host", help="The host to bind to.")] = "0.0.0.0",
+) -> None:
+    """Start the OTLP sink server to collect OpenRouter traces."""
+    import uvicorn
+    from usage_limits.server import app as server_app
+
+    typer.echo(f"Starting OTLP sink on {host}:{port}...")
+    uvicorn.run(server_app, host=host, port=port)
+
+
 @app.callback(invoke_without_command=True)
 def app_main(
     ctx: typer.Context,

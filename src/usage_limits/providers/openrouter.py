@@ -15,7 +15,9 @@ TODO: Implement fetch_raw() with a request-counting mechanism.
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from usage_limits.base import UsageProvider
@@ -41,15 +43,17 @@ class OpenRouterProvider(UsageProvider):
         return "OpenRouter"
 
     def fetch_raw(self) -> dict[str, Any]:
-        """Fetch today's OpenRouter request count.
+        """Fetch today's OpenRouter request count from the OTLP sink."""
+        state_file = Path.home() / ".local" / "state" / "openrouter_usage" / "traces.json"
+        if not state_file.exists():
+            return {"count": 0}
 
-        NOT IMPLEMENTED. Must return {"count": N} where N is the number of
-        free-tier model requests made today (UTC).
-        """
-        raise NotImplementedError(
-            "OpenRouter does not expose request counts via its API. "
-            "A tracking mechanism needs to be implemented."
-        )
+        try:
+            state = json.loads(state_file.read_text())
+            today = datetime.now(UTC).date().isoformat()
+            return {"count": state.get(today, 0)}
+        except (json.JSONDecodeError, OSError):
+            return {"count": 0}
 
     def to_rows(self, raw: Any) -> list[UsageRow]:
         request_count = raw.get("count", 0)
