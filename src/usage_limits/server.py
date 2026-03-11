@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import json
+import json, os
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Annotated, Any
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from google.protobuf.json_format import Parse
 from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import ExportTraceServiceRequest
 
@@ -14,6 +15,28 @@ app = FastAPI()
 STATE_DIR = Path.home() / ".local" / "state" / "openrouter_usage"
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 STATE_FILE = STATE_DIR / "traces.json"
+
+
+def _verify_token(
+    authorization: Annotated[str | None, Header()] = None,
+    x_otlp_token: Annotated[str | None, Header(alias="X-OTLP-Token")] = None,
+) -> None:
+    """Verify the request token against OPENROUTER_SINK_TOKEN."""
+    token = os.environ.get("OPENROUTER_SINK_TOKEN")
+    if not token:
+        # If no token is set in the environment, we refuse all requests
+        # to ensure the sink is never accidentally left open.
+        raise HTTPException(status_code=500, detail="OPENROUTER_SINK_TOKEN not set locally")
+
+    # Check both Authorization: Bearer <token> and X-OTLP-Token: <token>
+    received = x_otlp_token
+    if authorization and authorization.startswith("Bearer "):
+        received = authorization[len("Bearer ") :]
+    elif authorization:
+        received = authorization
+
+    if received != token:
+        raise HTTPException(status_code=401, detail="Invalid or missing OTLP token")
 
 
 def load_state() -> dict[str, int]:
@@ -38,7 +61,7 @@ def increment_usage(date_str: str, count: int = 1) -> None:
     save_state(state)
 
 
-@app.post("/v1/traces")
+@app.post("/v1/traces", dependencies=[Depends(_verify_token)])
 async def receive_traces(request: Request) -> dict[str, str]:
     """Receive OTLP/JSON traces and count them as OpenRouter requests."""
     try:
@@ -66,7 +89,7 @@ async def receive_traces(request: Request) -> dict[str, str]:
         return {"error": str(e)}
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(_verify_token)])
 async def status() -> dict[str, Any]:
     """Check the server and usage status."""
     return {
