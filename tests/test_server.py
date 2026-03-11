@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -11,11 +11,6 @@ from usage_limits.server import app
 
 
 @pytest.fixture
-def client() -> TestClient:
-    return TestClient(app)
-
-
-@pytest.fixture
 def auth_header(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
     token = "test-token"
     monkeypatch.setenv("OPENROUTER_SINK_TOKEN", token)
@@ -23,21 +18,23 @@ def auth_header(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
 
 
 @pytest.fixture
-def state_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    state_dir = tmp_path / ".local" / "state" / "openrouter_usage"
-    state_dir.mkdir(parents=True)
-    file = state_dir / "traces.json"
-    monkeypatch.setattr("usage_limits.server.STATE_FILE", file)
+def db_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    directory = tmp_path / ".local" / "state" / "openrouter_usage"
+    directory.mkdir(parents=True)
+    file = directory / "usage.db"
+    monkeypatch.setattr("usage_limits.server.DB_FILE", file)
+    monkeypatch.setattr("usage_limits.server.get_db_path", lambda: file)
     return file
 
 
-def test_receive_traces(client: TestClient, state_file: Path, auth_header: dict[str, str]) -> None:
+def test_receive_traces(db_path: Path, auth_header: dict[str, str]) -> None:
     # Minimal OTLP/JSON payload with 2 spans
-    # IDs in OTLP/JSON must be base64-encoded bytes
     payload = {
         "resourceSpans": [
             {
-                "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "openrouter"}}]},
+                "resource": {
+                    "attributes": [{"key": "service.name", "value": {"stringValue": "openrouter"}}]
+                },
                 "scopeSpans": [
                     {
                         "spans": [
@@ -50,41 +47,57 @@ def test_receive_traces(client: TestClient, state_file: Path, auth_header: dict[
         ]
     }
 
-    response = client.post("/v1/traces", json=payload, headers=auth_header)
-    assert response.status_code == 200
-    assert response.json() == {}
+    with TestClient(app) as client:
+        response = client.post("/v1/traces", json=payload, headers=auth_header)
+        assert response.status_code == 200
+        assert response.json() == {}
 
-    # Verify state file was updated
+    # Verify SQLite DB was updated
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.execute("SELECT count(*) FROM traces")
+        assert cursor.fetchone()[0] == 2
+
+
+def test_status(db_path: Path, auth_header: dict[str, str]) -> None:
+    # Set initial state in DB
+    # We must init the DB first since we're inserting before TestClient starts
+    from usage_limits.server import TraceStore
+
+    TraceStore(db_path=db_path)
+
     today = datetime.now(UTC).date().isoformat()
-    state = json.loads(state_file.read_text())
-    assert state[today] == 2
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO traces (trace_id, span_id, provider, captured_at, raw_json)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            ("t1", "s1", "openrouter", today + "T12:00:00Z", "{}"),
+        )
+
+    with TestClient(app) as client:
+        response = client.get("/status", headers=auth_header)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "ok"
+        assert data["usage"][today] == 1
 
 
-def test_status(client: TestClient, state_file: Path, auth_header: dict[str, str]) -> None:
-    # Set initial state
-    today = datetime.now(UTC).date().isoformat()
-    state_file.write_text(json.dumps({today: 5}))
+def test_unauthorized(db_path: Path, auth_header: dict[str, str]) -> None:
+    with TestClient(app) as client:
+        # No header
+        response = client.get("/status")
+        assert response.status_code == 401
 
-    response = client.get("/status", headers=auth_header)
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "ok"
-    assert data["usage"][today] == 5
-
-
-def test_unauthorized(client: TestClient, auth_header: dict[str, str]) -> None:
-    # No header
-    response = client.get("/status")
-    assert response.status_code == 401
-
-    # Wrong token
-    response = client.get("/status", headers={"X-OTLP-Token": "wrong"})
-    assert response.status_code == 401
+        # Wrong token
+        response = client.get("/status", headers={"X-OTLP-Token": "wrong"})
+        assert response.status_code == 401
 
 
-def test_no_token_set_locally(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_no_token_set_locally(db_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # Ensure OPENROUTER_SINK_TOKEN is NOT set
     monkeypatch.delenv("OPENROUTER_SINK_TOKEN", raising=False)
-    response = client.get("/status")
-    assert response.status_code == 500
-    assert response.json()["detail"] == "OPENROUTER_SINK_TOKEN not set locally"
+    with TestClient(app) as client:
+        response = client.get("/status")
+        assert response.status_code == 500
+        assert response.json()["detail"] == "OPENROUTER_SINK_TOKEN not set locally"

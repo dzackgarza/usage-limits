@@ -12,11 +12,33 @@ from usage_limits.table import ModelAvailability, UsageRow
 __all__ = [
     "AvailabilityCollection",
     "AvailabilitySnapshot",
+    "OpenRouterTrace",
     "ProviderError",
     "ProviderSnapshot",
     "RegisteredProvider",
     "UsageCollection",
 ]
+
+
+class OpenRouterTrace(BaseModel):
+    """A unique OpenRouter trace/span for deduplication."""
+
+    model_config = ConfigDict(frozen=True)
+
+    trace_id: str
+    span_id: str
+    captured_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        exclude=True,  # Don't use for hashing/equality in Pydantic V2 frozen models
+    )
+
+    def __hash__(self) -> int:
+        return hash((self.trace_id, self.span_id))
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, OpenRouterTrace):
+            return False
+        return self.trace_id == other.trace_id and self.span_id == other.span_id
 
 
 class ProviderError(BaseModel):

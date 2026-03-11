@@ -108,3 +108,11 @@ publish:
 
 build:
     uv build
+
+# Start the OTLP sink server
+serve:
+    uv run usage-limits serve --port 4318
+
+# Start the OTLP sink server in background
+serve-bg:
+    uv run usage-limits serve --port 4318 &
