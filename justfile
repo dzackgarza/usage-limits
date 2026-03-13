@@ -3,7 +3,7 @@ default:
     @just --list
 
 # Set up the project (uv venv + install)
-setup:
+install:
     uv venv
     uv sync --all-groups
 
@@ -109,10 +109,27 @@ publish:
 build:
     uv build
 
-# Start the OTLP sink server
+# Start the OTLP sink server (foreground, for dev/test)
 serve:
     uv run usage-limits serve --port 4318
 
-# Start the OTLP sink server in background
-serve-bg:
-    uv run usage-limits serve --port 4318 &
+# Install and start the OTLP sink as a persistent systemd user service
+install-service:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "$HOME/.config/systemd/user" "$HOME/.config/usage-limits"
+    grep '^OPENROUTER_SINK_TOKEN=' "{{justfile_directory()}}/.envrc" > "$HOME/.config/usage-limits/sink.env"
+    cp "{{justfile_directory()}}/usage-limits-sink.service" "$HOME/.config/systemd/user/usage-limits-sink.service"
+    systemctl --user daemon-reload
+    systemctl --user enable usage-limits-sink
+    systemctl --user start usage-limits-sink
+    systemctl --user status usage-limits-sink
+
+# Remove the systemd user service
+uninstall-service:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    systemctl --user stop usage-limits-sink || true
+    systemctl --user disable usage-limits-sink || true
+    rm -f "$HOME/.config/systemd/user/usage-limits-sink.service"
+    systemctl --user daemon-reload
