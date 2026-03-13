@@ -4,6 +4,12 @@
 
 Uniform quota collection and rendering for CLI- and API-backed LLM providers.
 
+## Features
+
+- Collects quota data from Amp, Antigravity, Claude, Codex, Ollama, and Qwen providers
+- Multiple collection mechanisms: local CLI, OAuth API, WHAM API, HTML scraping, and log parsing
+- Unified JSON output for display or downstream automation
+
 ## Current Provider Coverage
 
 | Provider | Status | Window(s) | Mechanism | Reliance |
