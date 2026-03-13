@@ -50,62 +50,32 @@ def _verify_token(
 
 @app.post("/v1/traces", dependencies=[Depends(_verify_token)])
 async def receive_traces(request: Request) -> dict[str, str]:
-    """Receive OTLP/JSON traces and deduplicate them into SQLite."""
-    try:
-        body = await request.json()
-        otel_request = ExportTraceServiceRequest()
-        Parse(json.dumps(body), otel_request)
-
-        store: TraceStore = request.app.state.store
-
-        for resource_span in otel_request.resource_spans:
-            resource_attrs: dict[str, str] = {}
-            for attr in resource_span.resource.attributes:
-                v = attr.value
-                if v.string_value:
-                    resource_attrs[attr.key] = v.string_value
-                elif v.int_value:
-                    resource_attrs[attr.key] = str(v.int_value)
-                elif v.HasField("array_value"):
-                    # Flatten array of strings (e.g. process.command_args)
-                    resource_attrs[attr.key] = " ".join(
-                        s.string_value
-                        for s in v.array_value.values
-                        if s.string_value
-                    )
-
-            # Standard OTLP field for identifying the sender
-            provider = resource_attrs.get("service.name", "unknown")
-
-            # Refine provider if it's a gemini-cli derivative (like Qwen).
-            # Check all command-related fields — command_args carries the real binary name.
-            if provider == "gemini-cli":
-                cmd_fields = " ".join([
-                    resource_attrs.get("process.command", ""),
-                    resource_attrs.get("process.command_args", ""),
-                    resource_attrs.get("process.executable.name", ""),
-                ]).lower()
-                if "qwen" in cmd_fields:
-                    provider = "qwen"
-                else:
-                    provider = "gemini"
-
-            for scope_span in resource_span.scope_spans:
-                # Use scope name as a fallback for provider
-                if provider == "unknown" and scope_span.scope.name:
-                    provider = scope_span.scope.name
-
-                for span in scope_span.spans:
-                    store.add_trace(
-                        trace_id=span.trace_id,
-                        span_id=span.span_id,
-                        provider=provider,
-                        raw_json=body,
-                    )
-
-        return {}
-    except Exception as e:
-        return {"error": str(e)}
+    """Receive OTLP logs and store api_request events."""
+    body = await request.json()
+    
+    store: TraceStore = request.app.state.store
+    
+    # Process resourceLogs (where api_request events are)
+    for rl in body.get("resourceLogs", []):
+        provider = "unknown"
+        for attr in rl.get("resource", {}).get("attributes", []):
+            if attr.get("key") == "service.name":
+                provider = attr.get("value", {}).get("stringValue", "unknown")
+                break
+        
+        if provider == "gemini-cli":
+            provider = "qwen"
+        
+        for sl in rl.get("scopeLogs", []):
+            for lr in sl.get("logRecords", []):
+                # Only store api_request events
+                for attr in lr.get("attributes", []):
+                    if attr.get("key") == "event.name":
+                        event_name = attr.get("value", {}).get("stringValue", "")
+                        if event_name in ("qwen-code.api_request", "gemini_cli.api_request"):
+                            store.add_trace(provider, lr)
+    
+    return {}
 
 
 @app.get("/status", dependencies=[Depends(_verify_token)])

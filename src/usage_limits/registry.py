@@ -142,8 +142,14 @@ def collect_provider(
     *,
     notify: bool = False,
     anchor: bool = False,
+    prune: bool = False,
 ) -> ProviderSnapshot:
     """Collect a normalized snapshot for one provider."""
+    if prune:
+        from usage_limits.storage import TraceStore
+
+        TraceStore().prune_stale()
+
     provider_class = get_provider_class(provider)
     try:
         return provider_class().collect_snapshot(notify=notify, anchor=anchor)
@@ -156,10 +162,18 @@ def collect_all(
     *,
     notify: bool = False,
     anchor: bool = False,
+    prune: bool = False,
 ) -> UsageCollection:
     """Collect a normalized snapshot for one or more providers."""
+    if prune:
+        from usage_limits.storage import TraceStore
+
+        TraceStore().prune_stale()
+
     selected = providers or [provider.provider for provider in list_providers()]
     snapshots = [
-        collect_provider(provider, notify=notify, anchor=anchor) for provider in selected
+        collect_provider(provider, notify=notify, anchor=anchor, prune=False)
+        for provider in selected
     ]
     return UsageCollection(providers=snapshots)
+

@@ -94,12 +94,16 @@ def app_main(
         bool,
         typer.Option("--anchor", "-a", help="Allow providers to anchor idle windows."),
     ] = False,
+    prune: Annotated[
+        bool,
+        typer.Option("--prune/--no-prune", help="Prune traces older than today's UTC midnight."),
+    ] = True,
 ) -> None:
     """Collect and render usage data. Default is a Rich table of all providers."""
     if ctx.invoked_subcommand:
         return
 
-    collection = collect_all(provider, notify=notify, anchor=anchor)
+    collection = collect_all(provider, notify=notify, anchor=anchor, prune=prune)
 
     if json_output:
         _emit_json(collection)
@@ -128,11 +132,16 @@ def _provider_alias(
             bool,
             typer.Option("--anchor", "-a", help="Allow providers to anchor idle windows."),
         ] = False,
+        prune: Annotated[
+            bool,
+            typer.Option("--prune/--no-prune", help="Prune traces older than today's UTC midnight."),
+        ] = True,
     ) -> None:
         provider_snapshot = collect_provider(
             provider,
             notify=notify,
             anchor=anchor if supports_anchor else False,
+            prune=prune,
         )
         if json_output:
             _emit_json(provider_snapshot.model_dump(mode="json"))

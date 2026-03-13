@@ -19,11 +19,10 @@ def auth_header(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
 
 @pytest.fixture
 def db_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    directory = tmp_path / ".local" / "state" / "openrouter_usage"
+    directory = tmp_path / ".local" / "state" / "usage_sink"
     directory.mkdir(parents=True)
     file = directory / "usage.db"
-    monkeypatch.setattr("usage_limits.server.DB_FILE", file)
-    monkeypatch.setattr("usage_limits.server.get_db_path", lambda: file)
+    monkeypatch.setattr("usage_limits.storage.DB_FILE", file)
     return file
 
 

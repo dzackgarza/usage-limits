@@ -25,44 +25,29 @@ class TraceStore:
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS traces (
-                    trace_id TEXT NOT NULL,
-                    span_id TEXT NOT NULL,
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
                     provider TEXT NOT NULL,
                     captured_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    raw_json JSON,
-                    PRIMARY KEY (trace_id, span_id)
+                    raw_json JSON
                 )
                 """
             )
-            # Index for fast daily counts
             conn.execute("CREATE INDEX IF NOT EXISTS idx_captured_at ON traces(captured_at)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_provider ON traces(provider)")
 
-    def add_trace(
-        self,
-        trace_id: str,
-        span_id: str,
-        provider: str,
-        raw_json: dict[str, Any],
-    ) -> bool:
-        """Add a trace to the database, deduplicating by trace_id + span_id."""
-        captured_at = datetime.now(UTC).isoformat()
+    def add_trace(self, provider: str, raw_json: dict[str, Any]) -> None:
+        """Add a trace (api_request event) to the database."""
         with sqlite3.connect(self.db_path) as conn:
-            try:
-                conn.execute(
-                    """
-                    INSERT INTO traces (trace_id, span_id, provider, captured_at, raw_json)
-                    VALUES (?, ?, ?, ?, ?)
-                    """,
-                    (trace_id, span_id, provider, captured_at, json.dumps(raw_json)),
-                )
-                return True
-            except sqlite3.IntegrityError:
-                # Already exists (deduplicated)
-                return False
+            conn.execute(
+                """
+                INSERT INTO traces (provider, raw_json)
+                VALUES (?, ?)
+                """,
+                (provider, json.dumps(raw_json)),
+            )
 
     def get_daily_counts(self, provider: str | None = None) -> dict[str, int]:
-        """Return counts of traces per day for the given provider."""
+        """Return counts of api_request events per day."""
         query = """
             SELECT date(captured_at) as day, count(*)
             FROM traces
@@ -76,6 +61,16 @@ class TraceStore:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(query, params)
             return {row[0]: row[1] for row in cursor.fetchall()}
+
+    def prune_stale(self) -> int:
+        """Purge entries older than the current day's UTC midnight marker.
+        Returns the number of rows deleted.
+        """
+        today_midnight = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        limit = today_midnight.isoformat()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute("DELETE FROM traces WHERE captured_at < ?", (limit,))
+            return cursor.rowcount
 
     def prune_old_traces(self, days: int = 7) -> None:
         """Prune traces older than X days to keep DB size small."""
