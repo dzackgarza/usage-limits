@@ -1,4 +1,4 @@
-"""OpenRouter usage limits provider."""
+"""Gemini CLI usage limits provider."""
 
 from __future__ import annotations
 
@@ -10,34 +10,36 @@ from usage_limits.storage import TraceStore
 from usage_limits.table import UsageRow
 
 
-class OpenRouterProvider(UsageProvider):
-    """OpenRouter daily request quota tracker."""
+class GeminiProvider(UsageProvider):
+    """Gemini CLI usage tracker."""
 
-    slug = "openrouter"
-    name = "OpenRouter"
-    state_dir = "openrouter_usage"
+    slug = "gemini"
+    name = "Gemini CLI"
+    state_dir = "gemini_usage"
     ntfy_topic = "usage-updates"
     ntfy_server = "http://localhost"
 
-    FREE_DAILY_LIMIT = 1000
+    DEFAULT_DAILY_LIMIT = 1000
 
     def provider_name(self) -> str:
-        return "OpenRouter"
+        return "Gemini CLI"
 
     def fetch_raw(self) -> dict[str, Any]:
-        """Fetch today's OpenRouter request count from the OTLP sink DB."""
-        counts = TraceStore().get_daily_counts(provider="openrouter")
+        """Fetch today's Gemini CLI request count from the OTLP sink DB."""
+        counts = TraceStore().get_daily_counts(provider="gemini")
         today = datetime.now(UTC).date().isoformat()
         return {"count": counts.get(today, 0)}
 
     def to_rows(self, raw: Any) -> list[UsageRow]:
         request_count = raw.get("count", 0)
         pct_used = (
-            (request_count / self.FREE_DAILY_LIMIT * 100) if self.FREE_DAILY_LIMIT > 0 else 0.0
+            (request_count / self.DEFAULT_DAILY_LIMIT * 100)
+            if self.DEFAULT_DAILY_LIMIT > 0
+            else 0.0
         )
         now = datetime.now(UTC)
         tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-        return [UsageRow(identifier="OpenRouter (daily)", pct_used=pct_used, reset_at=tomorrow)]
+        return [UsageRow(identifier="Gemini CLI (daily)", pct_used=pct_used, reset_at=tomorrow)]
 
     def should_anchor(self, rows: list[UsageRow]) -> bool:
         return False
@@ -46,7 +48,7 @@ class OpenRouterProvider(UsageProvider):
         daily_row = next((r for r in rows if "daily" in r.identifier), None)
         if daily_row and daily_row.pct_used == 0:
             self.send_ntfy(
-                "OpenRouter Daily Reset",
-                f"OpenRouter daily limit reset!\n\n{self.FREE_DAILY_LIMIT} requests available.",
+                "Gemini CLI Daily Reset",
+                f"Gemini CLI daily limit reset!\n\n{self.DEFAULT_DAILY_LIMIT} requests available.",
                 tags="white_check_mark,rocket",
             )

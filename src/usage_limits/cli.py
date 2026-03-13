@@ -64,16 +64,12 @@ def serve(
     host: Annotated[str, typer.Option("--host", help="The host to bind to.")] = "0.0.0.0",
 ) -> None:
     """Start the OTLP sink server to collect OpenRouter traces.
-    Requires OPENROUTER_SINK_TOKEN to be set in the environment.
-    """
-    import os
 
+    Local connections (127.0.0.1, ::1) are trusted without a token.
+    OPENROUTER_SINK_TOKEN is required only for external traffic (e.g. via the localtunnel).
+    """
     import uvicorn
     from usage_limits.server import app as server_app
-
-    if not os.environ.get("OPENROUTER_SINK_TOKEN"):
-        typer.secho("Error: OPENROUTER_SINK_TOKEN is not set.", fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=1)
 
     typer.echo(f"Starting OTLP sink on {host}:{port}...")
     uvicorn.run(server_app, host=host, port=port)
