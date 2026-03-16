@@ -27,18 +27,25 @@ def db_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def test_receive_traces(db_path: Path, auth_header: dict[str, str]) -> None:
-    # Minimal OTLP/JSON payload with 2 spans
+    # Minimal OTLP/JSON payload with 2 log records (qwen-code api_request events)
+    def _make_log_record(event_name: str) -> dict:
+        return {
+            "attributes": [
+                {"key": "event.name", "value": {"stringValue": event_name}},
+            ]
+        }
+
     payload = {
-        "resourceSpans": [
+        "resourceLogs": [
             {
                 "resource": {
-                    "attributes": [{"key": "service.name", "value": {"stringValue": "openrouter"}}]
+                    "attributes": [{"key": "service.name", "value": {"stringValue": "qwen"}}]
                 },
-                "scopeSpans": [
+                "scopeLogs": [
                     {
-                        "spans": [
-                            {"name": "request1", "spanId": "AQ==", "traceId": "AQ=="},
-                            {"name": "request2", "spanId": "Ag==", "traceId": "AQ=="},
+                        "logRecords": [
+                            _make_log_record("qwen-code.api_request"),
+                            _make_log_record("qwen-code.api_request"),
                         ]
                     }
                 ],
@@ -51,7 +58,7 @@ def test_receive_traces(db_path: Path, auth_header: dict[str, str]) -> None:
         assert response.status_code == 200
         assert response.json() == {}
 
-    # Verify SQLite DB was updated
+    # Verify SQLite DB was updated with 2 records
     with sqlite3.connect(db_path) as conn:
         cursor = conn.execute("SELECT count(*) FROM traces")
         assert cursor.fetchone()[0] == 2
@@ -68,10 +75,10 @@ def test_status(db_path: Path, auth_header: dict[str, str]) -> None:
     with sqlite3.connect(db_path) as conn:
         conn.execute(
             """
-            INSERT INTO traces (trace_id, span_id, provider, captured_at, raw_json)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO traces (provider, captured_at, raw_json)
+            VALUES (?, ?, ?)
             """,
-            ("t1", "s1", "openrouter", today + "T12:00:00Z", "{}"),
+            ("openrouter", today + "T12:00:00Z", "{}"),
         )
 
     with TestClient(app) as client:

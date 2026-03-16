@@ -69,6 +69,7 @@ def serve(
     OPENROUTER_SINK_TOKEN is required only for external traffic (e.g. via the localtunnel).
     """
     import uvicorn
+
     from usage_limits.server import app as server_app
 
     typer.echo(f"Starting OTLP sink on {host}:{port}...")
@@ -134,7 +135,7 @@ def _provider_alias(
         ] = False,
         prune: Annotated[
             bool,
-            typer.Option("--prune/--no-prune", help="Prune traces older than today's UTC midnight."),
+            typer.Option("--prune/--no-prune", help="Prune traces older than today's UTC midnight."),  # noqa: E501
         ] = True,
     ) -> None:
         provider_snapshot = collect_provider(

@@ -7,8 +7,6 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from google.protobuf.json_format import Parse  # type: ignore[import-untyped]
-from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import ExportTraceServiceRequest
 
 from usage_limits.storage import TraceStore
 
@@ -52,9 +50,9 @@ def _verify_token(
 async def receive_traces(request: Request) -> dict[str, str]:
     """Receive OTLP logs and store api_request events."""
     body = await request.json()
-    
+
     store: TraceStore = request.app.state.store
-    
+
     # Process resourceLogs (where api_request events are)
     for rl in body.get("resourceLogs", []):
         provider = "unknown"
@@ -62,10 +60,10 @@ async def receive_traces(request: Request) -> dict[str, str]:
             if attr.get("key") == "service.name":
                 provider = attr.get("value", {}).get("stringValue", "unknown")
                 break
-        
+
         if provider == "gemini-cli":
             provider = "qwen"
-        
+
         for sl in rl.get("scopeLogs", []):
             for lr in sl.get("logRecords", []):
                 # Only store api_request events
@@ -74,7 +72,7 @@ async def receive_traces(request: Request) -> dict[str, str]:
                         event_name = attr.get("value", {}).get("stringValue", "")
                         if event_name in ("qwen-code.api_request", "gemini_cli.api_request"):
                             store.add_trace(provider, lr)
-    
+
     return {}
 
 
@@ -90,4 +88,3 @@ async def status(request: Request) -> dict[str, Any]:
 
 
 # This is for internal JSON serialization of ExportTraceServiceRequest
-import json

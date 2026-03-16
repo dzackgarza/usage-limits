@@ -1,9 +1,23 @@
-"""OpenRouter usage limits provider."""
+"""OpenRouter usage limits provider.
+
+Fetches the OpenRouter key details from the API to determine the daily
+request limits for free models.
+
+Known constraints:
+- Free tier: 50 req/day if credits were never purchased; 1000 req/day otherwise.
+- Daily limit resets at UTC midnight.
+"""
 
 from __future__ import annotations
 
+import json
+import os
+import sys
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
+
+import requests
 
 from usage_limits.base import UsageProvider
 from usage_limits.storage import TraceStore
@@ -19,22 +33,59 @@ class OpenRouterProvider(UsageProvider):
     ntfy_topic = "usage-updates"
     ntfy_server = "http://localhost"
 
-    FREE_DAILY_LIMIT = 1000
+    FREE_DAILY_LIMIT = 1000  # 1000/day if credits ever purchased; 50/day if never paid
+    FREE_DAILY_LIMIT_NO_CREDITS = 50
 
     def provider_name(self) -> str:
         return "OpenRouter"
 
     def fetch_raw(self) -> dict[str, Any]:
-        """Fetch today's OpenRouter request count from the OTLP sink DB."""
+        """Fetch OpenRouter key details from the API and today's request count.
+
+        Uses OPENROUTER_API_KEY if present, otherwise reads from a config file.
+        """
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        if not api_key:
+            config_file = Path.home() / ".config" / "usage-limits" / "openrouter.json"
+            if config_file.exists():
+                try:
+                    config = json.loads(config_file.read_text())
+                    api_key = config.get("api_key")
+                except (json.JSONDecodeError, OSError):
+                    pass
+
+        key_info: dict[str, Any] = {}
+        if not api_key:
+            print(
+                "Warning: No OpenRouter API key found (OPENROUTER_API_KEY)."
+                " Using default free tier limits.",
+                file=sys.stderr,
+            )
+        else:
+            try:
+                response = requests.get(
+                    "https://openrouter.ai/api/v1/key",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    timeout=10,
+                )
+                response.raise_for_status()
+                key_info = response.json().get("data", {})
+            except requests.RequestException as e:
+                print(f"Warning: Failed to fetch OpenRouter key info: {e}", file=sys.stderr)
+
         counts = TraceStore().get_daily_counts(provider="openrouter")
         today = datetime.now(UTC).date().isoformat()
-        return {"count": counts.get(today, 0)}
+        return {"key_info": key_info, "count": counts.get(today, 0)}
 
     def to_rows(self, raw: Any) -> list[UsageRow]:
+        key_info = raw.get("key_info", {})
         request_count = raw.get("count", 0)
-        pct_used = (
-            (request_count / self.FREE_DAILY_LIMIT * 100) if self.FREE_DAILY_LIMIT > 0 else 0.0
-        )
+
+        # is_free_tier is boolean; if true, the user has NEVER paid for credits
+        is_free_tier = key_info.get("is_free_tier", True)
+        limit = self.FREE_DAILY_LIMIT_NO_CREDITS if is_free_tier else self.FREE_DAILY_LIMIT
+
+        pct_used = (request_count / limit * 100) if limit > 0 else 0.0
         now = datetime.now(UTC)
         tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
         return [UsageRow(identifier="OpenRouter (daily)", pct_used=pct_used, reset_at=tomorrow)]
