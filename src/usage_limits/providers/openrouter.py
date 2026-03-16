@@ -32,8 +32,12 @@ class OpenRouterProvider(UsageProvider):
     ntfy_topic = "usage-updates"
     ntfy_server = "http://localhost"
 
-    FREE_DAILY_LIMIT = 1000  # 1000/day if credits ever purchased; 50/day if never paid
-    FREE_DAILY_LIMIT_NO_CREDITS = 50
+    FREE_DAILY_LIMIT: int = 1000  # 1000/day if credits ever purchased; 50/day if never paid
+    FREE_DAILY_LIMIT_NO_CREDITS: int = 50
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._resolved_limit: int = self.FREE_DAILY_LIMIT
 
     def provider_name(self) -> str:
         return "OpenRouter"
@@ -83,6 +87,7 @@ class OpenRouterProvider(UsageProvider):
         # is_free_tier is boolean; if true, the user has NEVER paid for credits
         is_free_tier = key_info.get("is_free_tier", True)
         limit = self.FREE_DAILY_LIMIT_NO_CREDITS if is_free_tier else self.FREE_DAILY_LIMIT
+        self._resolved_limit = limit
 
         pct_used = (request_count / limit * 100) if limit > 0 else 0.0
         now = datetime.now(UTC)
@@ -97,6 +102,6 @@ class OpenRouterProvider(UsageProvider):
         if daily_row and daily_row.pct_used == 0:
             self.send_ntfy(
                 "OpenRouter Daily Reset",
-                f"OpenRouter daily limit reset!\n\n{self.FREE_DAILY_LIMIT} requests available.",
+                f"OpenRouter daily limit reset!\n\n{self._resolved_limit} requests available.",
                 tags="white_check_mark,rocket",
             )

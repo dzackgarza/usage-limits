@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from otlp_collector.db import DEFAULT_DB_PATH
@@ -15,23 +16,24 @@ from usage_limits.table import UsageRow
 class GeminiProvider(UsageProvider):
     """Gemini CLI usage tracker."""
 
-    slug = "gemini"
-    name = "Gemini CLI"
-    state_dir = "gemini_usage"
-    ntfy_topic = "usage-updates"
-    ntfy_server = "http://localhost"
+    slug: str = "gemini"
+    name: str = "Gemini CLI"
+    state_dir: str = "gemini_usage"
+    ntfy_topic: str = "usage-updates"
+    ntfy_server: str = "http://localhost"
 
-    DEFAULT_DAILY_LIMIT = 1000
+    DEFAULT_DAILY_LIMIT: int = 1000
 
     def provider_name(self) -> str:
         return "Gemini CLI"
 
-    def fetch_raw(self) -> dict[str, Any]:
+    def fetch_raw(self, db_path: Path | None = None) -> dict[str, Any]:
         """Count today's Gemini CLI API requests from the otlp-collector DB."""
+        path = db_path if db_path is not None else DEFAULT_DB_PATH
         today = datetime.now(UTC).date().isoformat()
-        if not DEFAULT_DB_PATH.exists():
+        if not path.exists():
             return {"count": 0}
-        with sqlite3.connect(DEFAULT_DB_PATH) as conn:
+        with sqlite3.connect(path) as conn:
             row = conn.execute(
                 """
                 SELECT count(*) FROM logs
