@@ -20,7 +20,6 @@ from typing import Any
 import requests
 
 from usage_limits.base import UsageProvider
-from usage_limits.storage import TraceStore
 from usage_limits.table import UsageRow
 
 
@@ -73,9 +72,9 @@ class OpenRouterProvider(UsageProvider):
             except requests.RequestException as e:
                 print(f"Warning: Failed to fetch OpenRouter key info: {e}", file=sys.stderr)
 
-        counts = TraceStore().get_daily_counts(provider="openrouter")
-        today = datetime.now(UTC).date().isoformat()
-        return {"key_info": key_info, "count": counts.get(today, 0)}
+        # OpenRouter does not emit OTLP events, so request counts are not
+        # available locally. count=0 means pct_used reflects tier only.
+        return {"key_info": key_info, "count": 0}
 
     def to_rows(self, raw: Any) -> list[UsageRow]:
         key_info = raw.get("key_info", {})

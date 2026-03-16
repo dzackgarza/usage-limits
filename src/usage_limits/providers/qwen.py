@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import sqlite3
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from otlp_collector.db import DEFAULT_DB_PATH
+
 from usage_limits.base import UsageProvider
-from usage_limits.storage import TraceStore
 from usage_limits.table import UsageRow
 
 
@@ -25,10 +27,21 @@ class QwenProvider(UsageProvider):
         return "Qwen"
 
     def fetch_raw(self) -> dict[str, Any]:
-        """Fetch today's Qwen Code request count from the OTLP sink DB."""
-        counts = TraceStore().get_daily_counts(provider="qwen")
+        """Count today's Qwen Code API requests from the otlp-collector DB."""
         today = datetime.now(UTC).date().isoformat()
-        return {"count": counts.get(today, 0)}
+        if not DEFAULT_DB_PATH.exists():
+            return {"count": 0}
+        with sqlite3.connect(DEFAULT_DB_PATH) as conn:
+            row = conn.execute(
+                """
+                SELECT count(*) FROM logs
+                WHERE date(time_unix_nano / 1000000000, 'unixepoch') = ?
+                  AND json_extract(resource_attributes, '$."service.name"') = 'qwen'
+                  AND json_extract(attributes, '$."event.name"') = 'qwen-code.api_request'
+                """,
+                (today,),
+            ).fetchone()
+        return {"count": row[0] if row else 0}
 
     def to_rows(self, raw: Any) -> list[UsageRow]:
         request_count = raw.get("count", 0)
