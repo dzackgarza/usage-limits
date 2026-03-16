@@ -141,6 +141,10 @@ def antigravity_main() -> None:
     _provider_alias("antigravity", supports_anchor=False)
 
 
+def gemini_main() -> None:
+    _provider_alias("gemini", supports_anchor=False)
+
+
 def ollama_main() -> None:
     _provider_alias("ollama", supports_anchor=True)
 

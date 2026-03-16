@@ -111,14 +111,24 @@ build:
 
 # Start the OTLP sink server (foreground, for dev/test)
 serve:
-    uv run usage-limits serve --port 4318
+    uv run otlp-collector --port 4318
 
 # Install and start the OTLP sink as a persistent systemd user service
 install-service:
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "$HOME/.config/systemd/user" "$HOME/.config/usage-limits"
-    grep '^OPENROUTER_SINK_TOKEN=' "{{justfile_directory()}}/.envrc" > "$HOME/.config/usage-limits/sink.env"
+    # Resolve the token: prefer .env (local secrets), fall back to .envrc export lines
+    token_file="{{justfile_directory()}}/.env"
+    envrc_file="{{justfile_directory()}}/.envrc"
+    if grep -q '^OPENROUTER_SINK_TOKEN=' "$token_file" 2>/dev/null; then
+        grep '^OPENROUTER_SINK_TOKEN=' "$token_file" > "$HOME/.config/usage-limits/sink.env"
+    elif grep -q '^export OPENROUTER_SINK_TOKEN=' "$envrc_file" 2>/dev/null; then
+        grep '^export OPENROUTER_SINK_TOKEN=' "$envrc_file" | sed 's/^export //' > "$HOME/.config/usage-limits/sink.env"
+    else
+        echo "ERROR: OPENROUTER_SINK_TOKEN not found in .env or .envrc" >&2
+        exit 1
+    fi
     cp "{{justfile_directory()}}/usage-limits-sink.service" "$HOME/.config/systemd/user/usage-limits-sink.service"
     systemctl --user daemon-reload
     systemctl --user enable usage-limits-sink

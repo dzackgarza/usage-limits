@@ -47,6 +47,7 @@ usage-amp         = "usage_limits.cli:amp_main"
 usage-antigravity = "usage_limits.cli:antigravity_main"
 usage-openrouter  = "usage_limits.cli:openrouter_main"
 usage-qwen        = "usage_limits.cli:qwen_main"
+usage-gemini      = "usage_limits.cli:gemini_main"
 usage-ollama      = "usage_limits.cli:ollama_main"
 
 [build-system]

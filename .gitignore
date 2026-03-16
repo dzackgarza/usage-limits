@@ -7,3 +7,4 @@ dist/
 build/
 qwen_debug.json
 *.log
+server_debug.log
