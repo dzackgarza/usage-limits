@@ -7,11 +7,12 @@ from usage_limits.registry import list_providers
 
 def test_list_providers_exposes_first_party_provider_order() -> None:
     providers = list_providers()
-    assert [provider.provider for provider in providers[:7]] == [
+    assert [provider.provider for provider in providers[:8]] == [
         "amp",
         "antigravity",
         "claude",
         "codex",
+        "copilot",
         "ollama",
         "openrouter",
         "qwen",

@@ -16,6 +16,7 @@ __all__ = [
     "app",
     "claude_main",
     "codex_main",
+    "copilot_main",
     "main",
     "ollama_main",
     "openrouter_main",
@@ -69,6 +70,7 @@ def serve(
     import os
 
     import uvicorn
+
     from usage_limits.server import app as server_app
 
     if not os.environ.get("OPENROUTER_SINK_TOKEN"):
@@ -152,6 +154,10 @@ def claude_main() -> None:
 
 def codex_main() -> None:
     _provider_alias("codex", supports_anchor=True)
+
+
+def copilot_main() -> None:
+    _provider_alias("copilot", supports_anchor=False)
 
 
 def amp_main() -> None:

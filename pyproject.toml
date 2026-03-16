@@ -45,6 +45,7 @@ dev = [
 usage-limits      = "usage_limits.cli:app"
 usage-claude      = "usage_limits.cli:claude_main"
 usage-codex       = "usage_limits.cli:codex_main"
+usage-copilot     = "usage_limits.cli:copilot_main"
 usage-amp         = "usage_limits.cli:amp_main"
 usage-antigravity = "usage_limits.cli:antigravity_main"
 usage-openrouter  = "usage_limits.cli:openrouter_main"
@@ -72,6 +73,11 @@ warn_return_any = true
 warn_unused_configs = true
 explicit_package_bases = true
 mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = ["google.protobuf", "google.protobuf.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

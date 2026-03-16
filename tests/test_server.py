@@ -37,7 +37,9 @@ def test_receive_traces(client: TestClient, state_file: Path, auth_header: dict[
     payload = {
         "resourceSpans": [
             {
-                "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "openrouter"}}]},
+                "resource": {
+                    "attributes": [{"key": "service.name", "value": {"stringValue": "openrouter"}}],
+                },
                 "scopeSpans": [
                     {
                         "spans": [
