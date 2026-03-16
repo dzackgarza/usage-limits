@@ -98,10 +98,7 @@ class OpenRouterProvider(UsageProvider):
         return False
 
     def notify_always(self, rows: list[UsageRow]) -> None:
-        daily_row = next((r for r in rows if "daily" in r.identifier), None)
-        if daily_row and daily_row.pct_used == 0:
-            self.send_ntfy(
-                "OpenRouter Daily Reset",
-                f"OpenRouter daily limit reset!\n\n{self._resolved_limit} requests available.",
-                tags="white_check_mark,rocket",
-            )
+        # OpenRouter has no local request-count tracking (count is always 0),
+        # so pct_used is always 0.0 regardless of actual usage. Firing a "daily
+        # reset" notification on every run would be spam; skip it entirely.
+        pass
