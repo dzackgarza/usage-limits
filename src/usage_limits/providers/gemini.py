@@ -79,19 +79,6 @@ class GeminiProvider(UsageProvider):
             return {}
         except (json.JSONDecodeError, OSError):
             return {}
-        try:
-            data = json.loads(self.auth_file.read_text())
-            # Check for google or google.oauth keys
-            for key in ["google", "google.oauth"]:
-                if key in data:
-                    entry = data[key]
-                    if isinstance(entry, dict):
-                        oauth = entry.get("oauth", entry)
-                        if isinstance(oauth, dict):
-                            return oauth
-            return {}
-        except (json.JSONDecodeError, OSError):
-            return {}
 
     def fetch_raw(self) -> dict[str, Any]:
         """Fetch usage from Google OAuth API or fallback to local DB counting.
@@ -158,24 +145,6 @@ class GeminiProvider(UsageProvider):
             data={
                 "client_id": self.GEMINI_CLIENT_ID,
                 "client_secret": self.GEMINI_CLIENT_SECRET,
-                "refresh_token": refresh_token,
-                "grant_type": "refresh_token",
-            },
-            timeout=30,
-        )
-        if resp.ok:
-            data = resp.json()
-            return {
-                "access_token": str(data.get("access_token", "")),
-                "expires_in": int(data.get("expires_in", 3600)),
-            }
-        return None
-
-        resp = requests.post(
-            self.GOOGLE_TOKEN_ENDPOINT,
-            data={
-                "client_id": client_id,
-                "client_secret": client_secret,
                 "refresh_token": refresh_token,
                 "grant_type": "refresh_token",
             },
