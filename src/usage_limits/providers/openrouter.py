@@ -188,8 +188,13 @@ class OpenRouterProvider(UsageProvider):
         """Fire when daily limit has reset and capacity is available."""
         daily_row = next((r for r in rows if "daily" in r.identifier), None)
         if daily_row and daily_row.pct_used == 0.0:
+            # Extract limit from identifier: "OpenRouter (daily, X limit)"
+            import re
+
+            match = re.search(r"(\d+) limit", daily_row.identifier)
+            limit = int(match.group(1)) if match else self.FREE_DAILY_LIMIT
             self.send_ntfy(
                 "OpenRouter Daily Reset",
-                f"OpenRouter daily limit reset!\n\n{self._resolved_limit} requests available.",
+                f"OpenRouter daily limit reset!\n\n{limit} requests available.",
                 tags="white_check_mark,rocket",
             )
