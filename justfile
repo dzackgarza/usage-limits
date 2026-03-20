@@ -14,7 +14,10 @@ default:
 _venv:
     #!/usr/bin/env bash
     set -euo pipefail
-    uv venv
+    # Create venv if it doesn't exist, otherwise skip
+    if [ ! -d ".venv" ]; then
+        uv venv
+    fi
 
 _install: _venv
     #!/usr/bin/env bash

@@ -9,7 +9,9 @@ Aligned with OpenChamber implementation:
 
 from __future__ import annotations
 
+import contextlib
 import json
+import shutil
 import subprocess
 import sys
 from datetime import UTC, datetime
