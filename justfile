@@ -1,121 +1,108 @@
 set fallback := true
-# Default: show available commands
-default:
-    @just --list
+# justfile for usage-limits
+#
+# WORKFLOW: Always run `just test`. Do NOT add public recipes for
+# additional checks. The `test` recipe depends on the full quality
+# control stack — bypassing it defeats the purpose of enforced gates.
+# Add new analyses as private recipes (prefix with _) and add them to
+# the `test` dependency list.
 
-# Set up the project (uv venv + install)
-install:
+default:
+    @just test
+
+# private recipes (prefix with _ — do not run individually in CI)
+_venv:
+    #!/usr/bin/env bash
+    set -euo pipefail
     uv venv
+
+_install: _venv
+    #!/usr/bin/env bash
+    set -euo pipefail
     uv sync --all-groups
 
-# Run the full check suite
-check: lint typecheck test
-
-# Format and auto-fix
-fmt:
-    uv run ruff format .
-    uv run ruff check --fix .
-
-# Lint only
-lint:
+_lint: _install
+    #!/usr/bin/env bash
+    set -euo pipefail
     uv run ruff check .
 
-# Type check
-typecheck:
+_typecheck: _install
+    #!/usr/bin/env bash
+    set -euo pipefail
     uv run mypy -p usage_limits
 
-# Run tests
-test *ARGS:
-    uv run pytest {{ARGS}}
+_test: _install
+    #!/usr/bin/env bash
+    set -euo pipefail
+    uv run pytest
 
-# Canonical CLI surfaces
-collect *ARGS:
+# Canonical CLI surfaces (private — use for manual testing)
+_collect *ARGS:
     uv run usage-limits --json {{ARGS}}
 
-table *ARGS:
+_table *ARGS:
     uv run usage-limits {{ARGS}}
 
-providers *ARGS:
+_providers *ARGS:
     uv run usage-limits providers list {{ARGS}}
 
-# Run a specific provider checker
-claude *ARGS:
+_claude *ARGS:
     uv run usage-claude {{ARGS}}
 
-codex *ARGS:
+_codex *ARGS:
     uv run usage-codex {{ARGS}}
 
-amp *ARGS:
+_amp *ARGS:
     uv run usage-amp {{ARGS}}
 
-antigravity *ARGS:
+_antigravity *ARGS:
     uv run usage-antigravity {{ARGS}}
 
-openrouter *ARGS:
+_openrouter *ARGS:
     uv run usage-openrouter {{ARGS}}
 
-qwen *ARGS:
+_qwen *ARGS:
     uv run usage-qwen {{ARGS}}
 
-ollama *ARGS:
+_ollama *ARGS:
     uv run usage-ollama {{ARGS}}
 
-# Get the current version number
-v:
+_copilot *ARGS:
+    uv run usage-copilot {{ARGS}}
+
+_gemini *ARGS:
+    uv run usage-gemini {{ARGS}}
+
+# Version management (private)
+_v:
     @uv version | awk '{print $2}'
 
-# Release current state as a patch (default)
-release: release-patch
-
-# Release a patch version
-release-patch: bump-patch publish
-    @gh release create v$(uv version | awk '{print $2}') --generate-notes
-
-# Release a minor version
-release-minor: bump-minor publish
-    @gh release create v$(uv version | awk '{print $2}') --generate-notes
-
-# Release a major version
-release-major: bump-major publish
-    @gh release create v$(uv version | awk '{print $2}') --generate-notes
-
-# Default: bump patch, commit, and tag
-bump: bump-patch
-
-# Bump patch, commit, and tag
-bump-patch: check
+_bump-patch: _test
     uv version --bump patch
     git add pyproject.toml
     git commit -m "chore: bump version to v$(uv version | awk '{print $2}')"
     git tag v$(uv version | awk '{print $2}')
 
-# Bump minor, commit, and tag
-bump-minor: check
+_bump-minor: _test
     uv version --bump minor
     git add pyproject.toml
     git commit -m "chore: bump version to v$(uv version | awk '{print $2}')"
     git tag v$(uv version | awk '{print $2}')
 
-# Bump major, commit, and tag
-bump-major: check
+_bump-major: _test
     uv version --bump major
     git add pyproject.toml
     git commit -m "chore: bump version to v$(uv version | awk '{print $2}')"
     git tag v$(uv version | awk '{print $2}')
 
-# Publish: push current branch and tags to trigger GitHub Action
-publish:
+_publish:
     git push origin $(git branch --show-current) --tags
 
-build:
-    uv build
-
-# Start the OTLP sink server (foreground, for dev/test)
-serve:
+# OTLP sink (private — for development only)
+_serve:
     uv run otlp-collector --port 4318
 
-# Install and start the OTLP sink as a persistent systemd user service
-install-service:
+_install-service:
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "$HOME/.config/systemd/user" "$HOME/.config/usage-limits"
@@ -136,11 +123,16 @@ install-service:
     systemctl --user start usage-limits-sink
     systemctl --user status usage-limits-sink
 
-# Remove the systemd user service
-uninstall-service:
+_uninstall-service:
     #!/usr/bin/env bash
     set -euo pipefail
     systemctl --user stop usage-limits-sink || true
     systemctl --user disable usage-limits-sink || true
     rm -f "$HOME/.config/systemd/user/usage-limits-sink.service"
     systemctl --user daemon-reload
+
+# top-level test depends on all quality gates
+test: _lint _typecheck _test
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "All analyses completed"
