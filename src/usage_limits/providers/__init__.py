@@ -6,6 +6,7 @@ from usage_limits.providers.amp import AmpProvider
 from usage_limits.providers.antigravity import AntigravityProvider
 from usage_limits.providers.claude import ClaudeProvider
 from usage_limits.providers.codex import CodexProvider
+from usage_limits.providers.copilot import CopilotProvider
 from usage_limits.providers.gemini import GeminiProvider
 from usage_limits.providers.ollama import OllamaProvider
 from usage_limits.providers.openrouter import OpenRouterProvider
@@ -16,6 +17,7 @@ __all__ = [
     "AntigravityProvider",
     "ClaudeProvider",
     "CodexProvider",
+    "CopilotProvider",
     "GeminiProvider",
     "OllamaProvider",
     "OpenRouterProvider",
