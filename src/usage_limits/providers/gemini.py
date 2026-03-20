@@ -1,28 +1,28 @@
 """Gemini CLI usage limits provider.
 
-Supports two collection mechanisms:
-1. Google OAuth API (primary) - fetches quota from cloudcode-pa.googleapis.com
-2. Local DB counting (fallback) - counts requests from otlp-collector DB
+Aligned with OpenChamber implementation:
+- Auth source: ~/.local/share/opencode/auth.json
+- API: https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota
+- Also fetches: https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels
+- Token refresh: Automatic via OAuth2 refresh token
 """
 
 from __future__ import annotations
 
 import json
-import sqlite3
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import requests
-from otlp_collector.db import DEFAULT_DB_PATH
 
 from usage_limits.base import UsageProvider
 from usage_limits.table import UsageRow
 
 
 class GeminiProvider(UsageProvider):
-    """Gemini CLI usage checker (OAuth API and local DB tracking)."""
+    """Gemini CLI usage checker (OAuth API with automatic token refresh)."""
 
     slug: str = "gemini"
     name: str = "Gemini CLI"
@@ -30,14 +30,12 @@ class GeminiProvider(UsageProvider):
     ntfy_topic: str = "usage-updates"
     ntfy_server: str = "http://localhost"
 
-    DEFAULT_DAILY_LIMIT: int = 1000
     GOOGLE_ENDPOINT: str = "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota"
     GOOGLE_MODELS_ENDPOINT: str = (
         "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels"
     )
     GOOGLE_TOKEN_ENDPOINT: str = "https://oauth2.googleapis.com/token"
     # Gemini CLI OAuth application credentials (public, not user secrets)
-    # These identify the Gemini CLI application to Google OAuth
     GEMINI_CLIENT_ID: str = (
         "REDACTED"
     )
@@ -53,7 +51,7 @@ class GeminiProvider(UsageProvider):
     def get_credentials(self) -> dict[str, Any]:
         """Load OAuth credentials from ~/.local/share/opencode/auth.json.
 
-        Expected structure (flat or nested):
+        Expected structure:
         {
           "google": {
             "type": "oauth",
@@ -67,12 +65,10 @@ class GeminiProvider(UsageProvider):
             return {}
         try:
             data = json.loads(self.auth_file.read_text())
-            # Check for google or google.oauth keys
             for key in ["google", "google.oauth"]:
                 if key in data:
                     entry = data[key]
                     if isinstance(entry, dict):
-                        # Handle both flat structure and nested oauth structure
                         if "oauth" in entry and isinstance(entry["oauth"], dict):
                             return entry["oauth"]
                         return entry
@@ -81,25 +77,26 @@ class GeminiProvider(UsageProvider):
             return {}
 
     def fetch_raw(self) -> dict[str, Any]:
-        """Fetch usage from Google OAuth API or fallback to local DB counting.
+        """Fetch quota and available models from Google OAuth API.
 
         Calls two endpoints:
-        1. retrieveUserQuota - gets quota data for models with usage
-        2. fetchAvailableModels - gets ALL available models (including unused)
-        """
-        # Try OAuth API first
-        creds = self.get_credentials()
-        if creds:
-            try:
-                # Check if token needs refresh
-                access_token = self._get_valid_access_token(creds)
-                if access_token:
-                    return self._fetch_oauth_usage(access_token, creds)
-            except (requests.RequestException, KeyError, ValueError) as e:
-                print(f"Warning: OAuth API failed ({e}), falling back to local DB", file=sys.stderr)
+        1. retrieveUserQuota - quota data for models with usage
+        2. fetchAvailableModels - ALL available models (including unused)
 
-        # Fallback to local DB counting
-        return self._fetch_local_usage()
+        Raises:
+            SystemExit: If authentication fails or no credentials available
+        """
+        creds = self.get_credentials()
+        if not creds:
+            print("Error: Not logged in. Run 'gemini login'", file=sys.stderr)
+            sys.exit(1)
+
+        access_token = self._get_valid_access_token(creds)
+        if not access_token:
+            print("Error: No access token available", file=sys.stderr)
+            sys.exit(1)
+
+        return self._fetch_oauth_usage(access_token, creds)
 
     def _get_valid_access_token(self, creds: dict[str, Any]) -> str | None:
         """Get a valid access token, refreshing if necessary."""
@@ -108,13 +105,13 @@ class GeminiProvider(UsageProvider):
         expires = creds.get("expires")
 
         # Check if current token is still valid (with 5 min buffer)
-        now = datetime.now(UTC).timestamp() * 1000  # Convert to ms
-        if expires and expires > now + 300000:  # 5 min buffer
+        now = datetime.now(UTC).timestamp() * 1000
+        if expires and expires > now + 300000:
             return access_token
 
         # Need to refresh
         if not refresh_token_raw:
-            return access_token  # Can't refresh, use existing token
+            return access_token
 
         # Parse refresh token to get the actual refresh token (first part before |)
         parts = refresh_token_raw.split("|")
@@ -124,17 +121,14 @@ class GeminiProvider(UsageProvider):
             return access_token
 
         # Refresh the token
-        try:
-            new_creds = self._refresh_access_token(refresh_token)
-            if new_creds:
-                # Update credentials in memory (not persisted)
-                access = str(new_creds["access_token"])
-                creds["access"] = access
-                expires_in = int(new_creds.get("expires_in", 3600))
-                creds["expires"] = int(datetime.now(UTC).timestamp() * 1000) + (expires_in * 1000)
-                return access
-        except Exception:
-            pass
+        new_creds = self._refresh_access_token(refresh_token)
+        if new_creds:
+            # Update credentials in memory (not persisted)
+            access = str(new_creds["access_token"])
+            creds["access"] = access
+            expires_in = int(new_creds.get("expires_in", 3600))
+            creds["expires"] = int(datetime.now(UTC).timestamp() * 1000) + (expires_in * 1000)
+            return access
 
         return access_token
 
@@ -159,16 +153,8 @@ class GeminiProvider(UsageProvider):
         return None
 
     def _fetch_oauth_usage(self, access_token: str, creds: dict[str, Any]) -> dict[str, Any]:
-        """Fetch quota and available models from Google's cloudcode-pa API.
-
-        Calls two endpoints and merges results:
-        1. retrieveUserQuota - quota data for models with usage
-        2. fetchAvailableModels - ALL available models (including unused)
-        """
+        """Fetch quota and available models from Google's cloudcode-pa API."""
         refresh_token_raw = creds.get("refresh", "")
-
-        if not access_token:
-            raise ValueError("No access token available")
 
         # Parse refresh token: <token>|<project_id>|<managed_project_id>
         parts = refresh_token_raw.split("|") if refresh_token_raw else []
@@ -190,7 +176,8 @@ class GeminiProvider(UsageProvider):
             timeout=30,
         )
         if resp.status_code == 401:
-            raise ValueError("Authentication failed. Please re-authenticate with Gemini CLI")
+            print("Error: Authentication failed. Run 'gemini login'", file=sys.stderr)
+            sys.exit(1)
         resp.raise_for_status()
         quota_data = resp.json()
 
@@ -204,7 +191,6 @@ class GeminiProvider(UsageProvider):
             )
             if models_resp.ok:
                 models_data = models_resp.json()
-                # Merge: add models from available list that aren't in quota data
                 quota_data["all_models"] = models_data
         except requests.RequestException:
             # Non-fatal: continue with quota data only
@@ -212,28 +198,11 @@ class GeminiProvider(UsageProvider):
 
         return quota_data  # type: ignore[no-any-return]
 
-    def _fetch_local_usage(self) -> dict[str, Any]:
-        """Count today's Gemini CLI API requests from the otlp-collector DB."""
-        path = DEFAULT_DB_PATH
-        today = datetime.now(UTC).date().isoformat()
-        if not path.exists():
-            return {"count": 0, "source": "local_db"}
-
-        with sqlite3.connect(path) as conn:
-            row = conn.execute(
-                """
-                SELECT count(*) FROM logs
-                WHERE date(time_unix_nano / 1000000000, 'unixepoch') = ?
-                  AND json_extract(resource_attributes, '$."service.name"') = 'gemini-cli'
-                  AND json_extract(attributes, '$."event.name"') = 'gemini_cli.api_request'
-                """,
-                (today,),
-            ).fetchone()
-
-        return {"count": row[0] if row else 0, "source": "local_db"}
-
     def to_rows(self, raw: Any) -> list[UsageRow]:
-        """Convert raw data to usage rows.
+        """Convert OAuth API response to rows.
+
+        Merges quota data with available models list to show ALL models,
+        including those without usage yet.
 
         OAuth API response structure:
         {
@@ -243,24 +212,11 @@ class GeminiProvider(UsageProvider):
               "remainingFraction": 0.75,
               "resetTime": "2026-03-20T00:00:00Z"
             }
-          ]
+          ],
+          "all_models": {
+            "models": [{"name": "gemini-2.5-pro"}, ...]
+          }
         }
-
-        Local DB response:
-        {"count": <int>, "source": "local_db"}
-        """
-        source = raw.get("source", "oauth")
-
-        if source == "oauth":
-            return self._to_oauth_rows(raw)
-        else:
-            return self._to_local_rows(raw)
-
-    def _to_oauth_rows(self, raw: Any) -> list[UsageRow]:
-        """Convert OAuth API response to rows.
-
-        Merges quota data with available models list to show ALL models,
-        including those without usage yet.
         """
         rows: list[UsageRow] = []
         buckets = raw.get("buckets", [])
@@ -316,18 +272,6 @@ class GeminiProvider(UsageProvider):
             )
 
         return rows
-
-    def _to_local_rows(self, raw: Any) -> list[UsageRow]:
-        """Convert local DB count to rows."""
-        request_count = raw.get("count", 0)
-        pct_used = (
-            (request_count / self.DEFAULT_DAILY_LIMIT * 100)
-            if self.DEFAULT_DAILY_LIMIT > 0
-            else 0.0
-        )
-        now = datetime.now(UTC)
-        tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-        return [UsageRow(identifier="Gemini CLI (daily)", pct_used=pct_used, reset_at=tomorrow)]
 
     def should_anchor(self, rows: list[UsageRow]) -> bool:
         """Anchor when any window has never started and none are exhausted."""
