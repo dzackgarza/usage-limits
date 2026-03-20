@@ -36,6 +36,8 @@ class GeminiProvider(UsageProvider):
         "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels"
     )
     GOOGLE_TOKEN_ENDPOINT: str = "https://oauth2.googleapis.com/token"
+    # Gemini CLI OAuth application credentials (public, not user secrets)
+    # These identify the Gemini CLI application to Google OAuth
     GEMINI_CLIENT_ID: str = (
         "REDACTED"
     )
@@ -156,6 +158,24 @@ class GeminiProvider(UsageProvider):
             data={
                 "client_id": self.GEMINI_CLIENT_ID,
                 "client_secret": self.GEMINI_CLIENT_SECRET,
+                "refresh_token": refresh_token,
+                "grant_type": "refresh_token",
+            },
+            timeout=30,
+        )
+        if resp.ok:
+            data = resp.json()
+            return {
+                "access_token": str(data.get("access_token", "")),
+                "expires_in": int(data.get("expires_in", 3600)),
+            }
+        return None
+
+        resp = requests.post(
+            self.GOOGLE_TOKEN_ENDPOINT,
+            data={
+                "client_id": client_id,
+                "client_secret": client_secret,
                 "refresh_token": refresh_token,
                 "grant_type": "refresh_token",
             },
