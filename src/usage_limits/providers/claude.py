@@ -101,17 +101,26 @@ class ClaudeProvider(UsageProvider):
 
     def _refresh_token_via_cli(self) -> None:
         """Trigger token refresh by running `claude` CLI briefly."""
-        try:
+        # Find claude CLI executable in PATH
+        claude_path = shutil.which("claude")
+        if claude_path is None:
+            # CLI not installed, user needs to run `claude login` manually
+            return
+
+        # Use contextlib.suppress for cleaner exception handling (SIM105)
+        with contextlib.suppress(
+            subprocess.TimeoutExpired,
+            FileNotFoundError,
+            PermissionError,
+            OSError,
+        ):
             # Run claude CLI with a trivial command to trigger auth refresh
             subprocess.run(
-                ["claude", "--help"],
+                [claude_path, "--help"],
                 capture_output=True,
                 timeout=10,
                 check=False,  # Don't fail if command fails
             )
-        except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
-            # If CLI not available, user will need to run `claude login` manually
-            pass
 
     def _fetch_usage(self, token: str) -> dict[str, Any]:
         """Fetch usage data from Claude OAuth API."""

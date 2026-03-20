@@ -126,7 +126,6 @@ class CodexProvider(UsageProvider):
         rate_limit = raw.get("rate_limit", {})
         primary = rate_limit.get("primary_window", {})
         secondary = rate_limit.get("secondary_window", {})
-        credits = raw.get("credits", {})
 
         rows: list[UsageRow] = []
 
@@ -150,7 +149,6 @@ class CodexProvider(UsageProvider):
 
         # Note: credits field contains paid API balance, not usage limits.
         # We don't display this as it's not a quota/limit metric.
-        # if credits: ...  # Removed per user feedback
 
         return rows
 
