@@ -6,34 +6,39 @@ Uniform quota collection and rendering for CLI- and API-backed LLM providers.
 
 ## Features
 
-- Collects quota data from Amp, Antigravity, Claude, Codex, Ollama, and Qwen providers
-- Multiple collection mechanisms: local CLI, OAuth API, WHAM API, HTML scraping, and log parsing
+- Collects quota data from Amp, Antigravity, Claude, Codex, GitHub Copilot, Gemini CLI, Ollama, and Qwen providers
+- Multiple collection mechanisms: local CLI, OAuth API, WHAM API, Copilot Internal API, HTML scraping, and log parsing
 - Unified JSON output for display or downstream automation
 
 ## Current Provider Coverage
 
-| Provider | Status | Window(s) | Mechanism | Reliance |
-| :--- | :--- | :--- | :--- | :--- |
-| **Amp** | ✅ | Continual | `amp usage` | Local CLI |
-| **Antigravity** | ✅ | Dynamic | `antigravity-usage quota` | Local CLI |
-| **Claude** | ✅ | 5h, 7d | OAuth API | `~/.claude/.credentials.json` |
-| **Codex** | ✅ | 5h, 7d | WHAM API | `~/.codex/auth.json` |
-| **Ollama** | ✅ | 5h, 7d | HTML Scrape | `OLLAMA_SESSION_COOKIE` |
-| **Qwen** | ✅ | Daily | Local Logs | `~/qwen-logs/*.json` |
-| **OpenRouter** | 🛠️ | Daily | *Not Implemented* | Tracking mechanism needed |
+| Provider           | Status | Window(s) | Mechanism                 | Reliance                            |
+| :----------------- | :----- | :-------- | :------------------------ | :---------------------------------- |
+| **Amp**            | ✅     | Continual | `amp usage`               | Local CLI                           |
+| **Antigravity**    | ✅     | Dynamic   | `antigravity-usage quota` | Local CLI                           |
+| **Claude**         | ✅     | 5h, 7d    | OAuth API                 | `~/.claude/.credentials.json`       |
+| **Codex**          | ✅     | 5h, 7d    | WHAM API                  | `~/.codex/auth.json`                |
+| **GitHub Copilot** | ✅     | Monthly   | Copilot Internal API      | `~/.local/share/opencode/auth.json` |
+| **Gemini CLI**     | ✅     | Daily     | OAuth API / Local DB      | `~/.local/share/opencode/auth.json` |
+| **Ollama**         | ✅     | 5h, 7d    | HTML Scrape               | `OLLAMA_SESSION_COOKIE`             |
+| **Qwen**           | ✅     | Daily     | Local Logs                | `~/qwen-logs/*.json`                |
+| **OpenRouter**     | 🛠️     | Daily     | _Not Implemented_         | Tracking mechanism needed           |
 
 ## How It Works
 
 ### First-Party CLI Wrappers
+
 - **Amp**: Credits replenish at a fixed rate up to $10.00. Collection parses `amp usage` text.
 - **Antigravity**: Multi-model quotas (Flash, Pro, Claude, GPT-OSS). Collection parses `antigravity-usage --json`.
 
 ### Web & OAuth APIs
+
 - **Claude Code**: Anthropic OAuth API. Relies on the JSON credentials file created by `claude login`.
 - **Codex**: ChatGPT WHAM (Usage) API. Relies on the JSON auth file created by `codex login`.
 - **Ollama Cloud**: Scrapes `ollama.com/settings`. Requires `OLLAMA_SESSION_COOKIE` exported in your environment.
 
 ### Local Observability
+
 - **Qwen Code**: Free tier allows 1000 requests/day (UTC reset).
   - Requires enabling OpenAI logging in `~/.qwen/settings.json`:
     ```json
@@ -44,6 +49,7 @@ Uniform quota collection and rendering for CLI- and API-backed LLM providers.
 ## Usage
 
 ### Simple Collection
+
 By default, `usage-limits` collects data for all supported providers and renders a Rich table.
 
 ```bash
@@ -51,6 +57,7 @@ usage-limits
 ```
 
 ### JSON Output
+
 For programmatic use or custom filtering via `jq`, use the `-j` / `--json` flag.
 
 ```bash
@@ -58,6 +65,7 @@ usage-limits --json | jq '.providers[] | {p: .provider, a: .availability}'
 ```
 
 ### Options
+
 - `-p, --provider <slug>`: Collect only specified provider(s).
 - `-n, --notify`: Send notifications (via local `ntfy` topic).
 - `-a, --anchor`: Allow providers to "anchor" (warm up) windows (e.g., running `claude` or `ollama` with a trivial prompt).
@@ -72,11 +80,13 @@ just setup
 ## JSON Contract
 
 The canonical JSON contract includes:
+
 - `version`: Contract version.
 - `captured_at`: UTC timestamp.
 - `providers`: List of provider snapshots.
 
 Each provider snapshot contains:
+
 - `status`: `ok` or `error`.
 - `rows`: List of usage rows (Identifier, % used, Reset time).
 - `availability`: High-level summary of model readiness.

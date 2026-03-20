@@ -1,4 +1,8 @@
-"""Tests for GeminiProvider.fetch_raw correctness against real SQLite data."""
+"""Tests for GeminiProvider.fetch_raw correctness against real SQLite data.
+
+These tests verify the provider correctly queries the otlp-collector database
+to count Gemini CLI API requests.
+"""
 
 from __future__ import annotations
 
@@ -6,8 +10,6 @@ import json
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-
-import pytest
 
 from usage_limits.providers.gemini import GeminiProvider
 
@@ -62,62 +64,151 @@ def _yesterday_nano() -> int:
     return int(yesterday.timestamp() * 1_000_000_000)
 
 
-@pytest.fixture()
-def db_path(tmp_path: Path) -> Path:
-    path = tmp_path / "telemetry.db"
-    _make_db(path)
-    return path
+# ---------------------------------------------------------------------------
+# Database Query Tests - Real SQLite with Test Fixtures
+# ---------------------------------------------------------------------------
 
 
-def test_fetch_raw_returns_zero_when_db_missing() -> None:
+def test_fetch_raw_fallback_to_local_db_when_oauth_missing(tmp_path: Path) -> None:
+    """fetch_raw falls back to local DB counting when OAuth is not configured.
+
+    Uses a temporary test database to verify the fallback mechanism.
+    """
+    # Create empty test database
+    db_path = tmp_path / "telemetry.db"
+    _make_db(db_path)
+
+    # Provider with no OAuth credentials will use local DB
     provider = GeminiProvider()
-    result = provider.fetch_raw(db_path=Path("/nonexistent/path/telemetry.db"))
-    assert result == {"count": 0}
+    # Point to test database by setting instance attribute
+    from usage_limits.providers import gemini as gemini_module
+
+    original_path = gemini_module.DEFAULT_DB_PATH
+    try:
+        gemini_module.DEFAULT_DB_PATH = db_path
+        result = provider.fetch_raw()
+        # Empty DB should return 0 count
+        assert result["count"] == 0
+        assert result["source"] == "local_db"
+    finally:
+        gemini_module.DEFAULT_DB_PATH = original_path
 
 
-def test_fetch_raw_counts_todays_gemini_api_requests(db_path: Path) -> None:
-    """fetch_raw must return the exact count of today's gemini-cli api_request logs."""
+def test_fetch_raw_counts_todays_gemini_api_requests(tmp_path: Path) -> None:
+    """fetch_raw must return the exact count of today's gemini-cli api_request logs.
+
+    This test proves the SQL query correctly counts matching events.
+    """
+    db_path = tmp_path / "telemetry.db"
+    _make_db(db_path)
+
+    # Insert 3 requests for today
     with sqlite3.connect(db_path) as conn:
         _insert_log(conn, time_unix_nano=_today_nano())
         _insert_log(conn, time_unix_nano=_today_nano())
         _insert_log(conn, time_unix_nano=_today_nano())
 
-    result = GeminiProvider().fetch_raw(db_path=db_path)
-    assert result["count"] == 3
+    from usage_limits.providers import gemini as gemini_module
+
+    original_path = gemini_module.DEFAULT_DB_PATH
+    try:
+        gemini_module.DEFAULT_DB_PATH = db_path
+        result = GeminiProvider().fetch_raw()
+        assert result["count"] == 3
+        assert result["source"] == "local_db"
+    finally:
+        gemini_module.DEFAULT_DB_PATH = original_path
 
 
-def test_fetch_raw_excludes_yesterday_logs(db_path: Path) -> None:
-    """fetch_raw must not count logs from previous days."""
+def test_fetch_raw_excludes_yesterday_logs(tmp_path: Path) -> None:
+    """fetch_raw must not count logs from previous days.
+
+    This test proves the date filtering in the SQL query works correctly.
+    """
+    db_path = tmp_path / "telemetry.db"
+    _make_db(db_path)
+
+    # Insert 1 for today, 1 for yesterday
     with sqlite3.connect(db_path) as conn:
         _insert_log(conn, time_unix_nano=_today_nano())
         _insert_log(conn, time_unix_nano=_yesterday_nano())
 
-    result = GeminiProvider().fetch_raw(db_path=db_path)
-    assert result["count"] == 1
+    from usage_limits.providers import gemini as gemini_module
+
+    original_path = gemini_module.DEFAULT_DB_PATH
+    try:
+        gemini_module.DEFAULT_DB_PATH = db_path
+        result = GeminiProvider().fetch_raw()
+        assert result["count"] == 1  # Only today's
+        assert result["source"] == "local_db"
+    finally:
+        gemini_module.DEFAULT_DB_PATH = original_path
 
 
-def test_fetch_raw_excludes_wrong_service_name(db_path: Path) -> None:
-    """fetch_raw must only count logs from service.name == 'gemini-cli'."""
+def test_fetch_raw_excludes_wrong_service_name(tmp_path: Path) -> None:
+    """fetch_raw must only count logs from service.name == 'gemini-cli'.
+
+    This test proves the service filtering in the SQL query works correctly.
+    """
+    db_path = tmp_path / "telemetry.db"
+    _make_db(db_path)
+
+    # Insert logs for different services
     with sqlite3.connect(db_path) as conn:
         _insert_log(conn, time_unix_nano=_today_nano(), service_name="gemini-cli")
         _insert_log(conn, time_unix_nano=_today_nano(), service_name="openrouter")
         _insert_log(conn, time_unix_nano=_today_nano(), service_name="claude")
 
-    result = GeminiProvider().fetch_raw(db_path=db_path)
-    assert result["count"] == 1
+    from usage_limits.providers import gemini as gemini_module
+
+    original_path = gemini_module.DEFAULT_DB_PATH
+    try:
+        gemini_module.DEFAULT_DB_PATH = db_path
+        result = GeminiProvider().fetch_raw()
+        assert result["count"] == 1  # Only gemini-cli
+        assert result["source"] == "local_db"
+    finally:
+        gemini_module.DEFAULT_DB_PATH = original_path
 
 
-def test_fetch_raw_excludes_wrong_event_name(db_path: Path) -> None:
-    """fetch_raw must only count logs with event.name == 'gemini_cli.api_request'."""
+def test_fetch_raw_excludes_wrong_event_name(tmp_path: Path) -> None:
+    """fetch_raw must only count logs with event.name == 'gemini_cli.api_request'.
+
+    This test proves the event name filtering in the SQL query works correctly.
+    """
+    db_path = tmp_path / "telemetry.db"
+    _make_db(db_path)
+
+    # Insert logs for different event types
     with sqlite3.connect(db_path) as conn:
         _insert_log(conn, time_unix_nano=_today_nano(), event_name="gemini_cli.api_request")
         _insert_log(conn, time_unix_nano=_today_nano(), event_name="gemini_cli.stream_chunk")
         _insert_log(conn, time_unix_nano=_today_nano(), event_name="gemini_cli.session_start")
 
-    result = GeminiProvider().fetch_raw(db_path=db_path)
-    assert result["count"] == 1
+    from usage_limits.providers import gemini as gemini_module
+
+    original_path = gemini_module.DEFAULT_DB_PATH
+    try:
+        gemini_module.DEFAULT_DB_PATH = db_path
+        result = GeminiProvider().fetch_raw()
+        assert result["count"] == 1  # Only api_request events
+        assert result["source"] == "local_db"
+    finally:
+        gemini_module.DEFAULT_DB_PATH = original_path
 
 
-def test_fetch_raw_returns_zero_for_empty_db(db_path: Path) -> None:
-    result = GeminiProvider().fetch_raw(db_path=db_path)
-    assert result == {"count": 0}
+def test_fetch_raw_returns_zero_for_empty_db(tmp_path: Path) -> None:
+    """fetch_raw returns zero count for empty database."""
+    db_path = tmp_path / "telemetry.db"
+    _make_db(db_path)
+
+    from usage_limits.providers import gemini as gemini_module
+
+    original_path = gemini_module.DEFAULT_DB_PATH
+    try:
+        gemini_module.DEFAULT_DB_PATH = db_path
+        result = GeminiProvider().fetch_raw()
+        assert result["count"] == 0
+        assert result["source"] == "local_db"
+    finally:
+        gemini_module.DEFAULT_DB_PATH = original_path
