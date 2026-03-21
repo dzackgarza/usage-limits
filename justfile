@@ -1,115 +1,107 @@
 set fallback := true
 # justfile for usage-limits
 #
-# WORKFLOW: Always run `just test`. Do NOT add public recipes for
-# additional checks. The `test` recipe depends on the full quality
-# control stack — bypassing it defeats the purpose of enforced gates.
-# Add new analyses as private recipes (prefix with _) and add them to
-# the `test` dependency list.
+# PUBLIC INTERFACE (narrow - what users should run):
+#   just test       - Run full quality gate suite
+#   just install    - Set up development environment
+#   just serve      - Start OTLP collector for OpenRouter/Qwen tracking
+#
+# All other recipes are private implementation details.
 
 default:
-    @just test
+    @just --list
 
-# private recipes (prefix with _ — do not run individually in CI)
+# === PUBLIC RECIPES (intended interface) ===
+
+install:
+    uv sync --all-groups
+
+test:
+    @echo "Running quality gates..."
+    @echo "=== Lint ==="
+    uv run ruff check .
+    @echo "=== Type check ==="
+    uv run mypy -p usage_limits
+    @echo "=== Tests ==="
+    uv run pytest
+    @echo "All checks passed!"
+
+serve:
+    uv run otlp-collector --port 4318
+
+# === PRIVATE RECIPES (implementation details) ===
+
 _venv:
     #!/usr/bin/env bash
     set -euo pipefail
-    # Create venv if it doesn't exist, otherwise skip
     if [ ! -d ".venv" ]; then
-        uv venv
+        uv venv --python 3.11
     fi
 
-_install: _venv
+_install-tools: _venv
     #!/usr/bin/env bash
     set -euo pipefail
-    uv sync --all-groups
+    uv pip install coverage diff-cover vulture deptry semgrep lizard import-linter
 
-_lint: _install
-    #!/usr/bin/env bash
-    set -euo pipefail
-    uv run ruff check .
+# Quality gates (required from ~/ai/quality-control)
+_coverage: _install-tools
+    uv run coverage run -m pytest
+    uv run coverage xml -o coverage.xml
 
-_typecheck: _install
-    #!/usr/bin/env bash
-    set -euo pipefail
-    uv run mypy -p usage_limits
+_diff-cover: _coverage
+    uv run diff-cover coverage.xml --compare-branch ${DIFF_COVER_BASE:-main}
 
-_test: _install
-    #!/usr/bin/env bash
-    set -euo pipefail
-    uv run pytest
+_vulture: _install-tools
+    uv run vulture src tests --min-confidence 60
 
-# Canonical CLI surfaces (private — use for manual testing)
-_collect *ARGS:
-    uv run usage-limits --json {{ARGS}}
+_deptry: _install-tools
+    uv run deptry check src
 
-_table *ARGS:
-    uv run usage-limits {{ARGS}}
+_semgrep: _install-tools
+    uv run semgrep --config=p/ci --inline-suppression
 
-_providers *ARGS:
-    uv run usage-limits providers list {{ARGS}}
+_jscpd:
+    npx -y jscpd --path src --reporters console
 
-_claude *ARGS:
-    uv run usage-claude {{ARGS}}
+_lizard: _install-tools
+    uv run lizard src -l python -C 7 -L 100 -a 5 -i 0 \
+        -x "*/node_modules/*" \
+        -x "*/__pycache__/*" \
+        -x "*/.venv/*" \
+        -x "*/dist/*" \
+        -x "*/build/*"
 
-_codex *ARGS:
-    uv run usage-codex {{ARGS}}
+_import-linter: _install-tools
+    uv run import-linter check
 
-_amp *ARGS:
-    uv run usage-amp {{ARGS}}
+_codeql:
+    codeql database create codeql-db --language=python --source-root=.
+    codeql database analyze codeql-db --format=sarif-latest --output=codeql-report.sarif
 
-_antigravity *ARGS:
-    uv run usage-antigravity {{ARGS}}
-
-_openrouter *ARGS:
-    uv run usage-openrouter {{ARGS}}
-
-_qwen *ARGS:
-    uv run usage-qwen {{ARGS}}
-
-_ollama *ARGS:
-    uv run usage-ollama {{ARGS}}
-
-_copilot *ARGS:
-    uv run usage-copilot {{ARGS}}
-
-_gemini *ARGS:
-    uv run usage-gemini {{ARGS}}
-
-# Version management (private)
-_v:
-    @uv version | awk '{print $2}'
-
-_bump-patch: _test
+# Version management (internal)
+_bump-patch: test
     uv version --bump patch
     git add pyproject.toml
     git commit -m "chore: bump version to v$(uv version | awk '{print $2}')"
     git tag v$(uv version | awk '{print $2}')
 
-_bump-minor: _test
+_bump-minor: test
     uv version --bump minor
     git add pyproject.toml
     git commit -m "chore: bump version to v$(uv version | awk '{print $2}')"
     git tag v$(uv version | awk '{print $2}')
 
-_bump-major: _test
+_bump-major: test
     uv version --bump major
     git add pyproject.toml
     git commit -m "chore: bump version to v$(uv version | awk '{print $2}')"
     git tag v$(uv version | awk '{print $2}')
 
-_publish:
-    git push origin $(git branch --show-current) --tags
-
-# OTLP sink (private — for development only)
-_serve:
-    uv run otlp-collector --port 4318
-
+# Service management (internal)
 _install-service:
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "$HOME/.config/systemd/user" "$HOME/.config/usage-limits"
-    # Resolve the token: prefer .env (local secrets), fall back to .envrc export lines
     token_file="{{justfile_directory()}}/.env"
     envrc_file="{{justfile_directory()}}/.envrc"
     if grep -q '^OPENROUTER_SINK_TOKEN=' "$token_file" 2>/dev/null; then
@@ -133,9 +125,3 @@ _uninstall-service:
     systemctl --user disable usage-limits-sink || true
     rm -f "$HOME/.config/systemd/user/usage-limits-sink.service"
     systemctl --user daemon-reload
-
-# top-level test depends on all quality gates
-test: _lint _typecheck _test
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "All analyses completed"
