@@ -40,6 +40,10 @@ _quality-control:
     #!/usr/bin/env bash
     set -euo pipefail
     cd "{{repo_root}}"
+    if git remote get-url origin >/dev/null 2>&1; then
+        git fetch --no-tags --depth=1 origin +refs/heads/main:refs/remotes/origin/main || true
+        export DIFF_COVER_BASE="origin/main"
+    fi
     exec direnv exec "{{repo_root}}" just --justfile "{{python_qc_justfile}}" --working-directory "{{repo_root}}" test
 
 test: _lint _typecheck _quality-control
