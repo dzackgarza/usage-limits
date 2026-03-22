@@ -83,3 +83,6 @@ follow_imports = "skip"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--tb=short -q"
+
+[tool.deptry]
+known_first_party = ["usage_limits"]
