@@ -1,110 +1,104 @@
-# Default: show available commands
+set fallback := true
+repo_root := justfile_directory()
+python_qc_justfile := env_var_or_default("OPENCODE_PYTHON_QC_JUSTFILE", "/home/dzack/ai/quality-control/justfile")
+
 default:
-    @just --list
+    @just test
 
-# Set up the project (uv venv + install)
-setup:
-    uv venv
-    uv sync --all-groups
+install:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{repo_root}}"
+    exec uv sync --all-groups
 
-# Run the full check suite
-check: lint typecheck test
+serve:
+    uv run otlp-collector --port 4318
 
-# Format and auto-fix
-fmt:
-    uv run ruff format .
-    uv run ruff check --fix .
+[private]
+_format:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{repo_root}}"
+    exec direnv exec "{{repo_root}}" uv run ruff format .
 
-# Lint only
-lint:
-    uv run ruff check .
+[private]
+_lint:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{repo_root}}"
+    exec direnv exec "{{repo_root}}" uv run ruff check .
 
-# Type check
-typecheck:
-    uv run mypy -p usage_limits
+[private]
+_typecheck:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{repo_root}}"
+    exec direnv exec "{{repo_root}}" uv run mypy -p usage_limits
 
-# Run tests
-test *ARGS:
-    uv run pytest {{ARGS}}
+[private]
+_quality-control:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{repo_root}}"
+    if git remote get-url origin >/dev/null 2>&1; then
+        if [[ "$(git rev-parse --is-shallow-repository)" == "true" ]]; then
+            git fetch --no-tags --prune --unshallow origin || true
+        else
+            git fetch --no-tags --prune origin || true
+        fi
+        git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main || true
+        export DIFF_COVER_BASE="origin/main"
+    fi
+    direnv exec "{{repo_root}}" just --justfile "{{python_qc_justfile}}" --working-directory "{{repo_root}}" _diff-cover
+    direnv exec "{{repo_root}}" just --justfile "{{python_qc_justfile}}" --working-directory "{{repo_root}}" _vulture
+    exec direnv exec "{{repo_root}}" just --justfile "{{python_qc_justfile}}" --working-directory "{{repo_root}}" _deptry
 
-# Canonical CLI surfaces
-collect *ARGS:
-    uv run usage-limits --json {{ARGS}}
+test: _lint _typecheck _quality-control
 
-table *ARGS:
-    uv run usage-limits {{ARGS}}
+check: test
 
-providers *ARGS:
-    uv run usage-limits providers list {{ARGS}}
-
-# Run a specific provider checker
-claude *ARGS:
-    uv run usage-claude {{ARGS}}
-
-codex *ARGS:
-    uv run usage-codex {{ARGS}}
-
-amp *ARGS:
-    uv run usage-amp {{ARGS}}
-
-antigravity *ARGS:
-    uv run usage-antigravity {{ARGS}}
-
-openrouter *ARGS:
-    uv run usage-openrouter {{ARGS}}
-
-qwen *ARGS:
-    uv run usage-qwen {{ARGS}}
-
-ollama *ARGS:
-    uv run usage-ollama {{ARGS}}
-
-# Get the current version number
-v:
-    @uv version | awk '{print $2}'
-
-# Release current state as a patch (default)
-release: release-patch
-
-# Release a patch version
-release-patch: bump-patch publish
-    @gh release create v$(uv version | awk '{print $2}') --generate-notes
-
-# Release a minor version
-release-minor: bump-minor publish
-    @gh release create v$(uv version | awk '{print $2}') --generate-notes
-
-# Release a major version
-release-major: bump-major publish
-    @gh release create v$(uv version | awk '{print $2}') --generate-notes
-
-# Default: bump patch, commit, and tag
-bump: bump-patch
-
-# Bump patch, commit, and tag
-bump-patch: check
+_bump-patch: test
     uv version --bump patch
     git add pyproject.toml
     git commit -m "chore: bump version to v$(uv version | awk '{print $2}')"
     git tag v$(uv version | awk '{print $2}')
 
-# Bump minor, commit, and tag
-bump-minor: check
+_bump-minor: test
     uv version --bump minor
     git add pyproject.toml
     git commit -m "chore: bump version to v$(uv version | awk '{print $2}')"
     git tag v$(uv version | awk '{print $2}')
 
-# Bump major, commit, and tag
-bump-major: check
+_bump-major: test
     uv version --bump major
     git add pyproject.toml
     git commit -m "chore: bump version to v$(uv version | awk '{print $2}')"
     git tag v$(uv version | awk '{print $2}')
 
-# Publish: push current branch and tags to trigger GitHub Action
-publish:
-    git push origin $(git branch --show-current) --tags
+_install-service:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "$HOME/.config/systemd/user" "$HOME/.config/usage-limits"
+    token_file="{{repo_root}}/.env"
+    envrc_file="{{repo_root}}/.envrc"
+    if grep -q '^OPENROUTER_SINK_TOKEN=' "$token_file" 2>/dev/null; then
+        grep '^OPENROUTER_SINK_TOKEN=' "$token_file" > "$HOME/.config/usage-limits/sink.env"
+    elif grep -q '^export OPENROUTER_SINK_TOKEN=' "$envrc_file" 2>/dev/null; then
+        grep '^export OPENROUTER_SINK_TOKEN=' "$envrc_file" | sed 's/^export //' > "$HOME/.config/usage-limits/sink.env"
+    else
+        echo "ERROR: OPENROUTER_SINK_TOKEN not found in .env or .envrc" >&2
+        exit 1
+    fi
+    cp "{{repo_root}}/usage-limits-sink.service" "$HOME/.config/systemd/user/usage-limits-sink.service"
+    systemctl --user daemon-reload
+    systemctl --user enable usage-limits-sink
+    systemctl --user start usage-limits-sink
+    systemctl --user status usage-limits-sink
 
-build:
-    uv build
+_uninstall-service:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    systemctl --user stop usage-limits-sink || true
+    systemctl --user disable usage-limits-sink || true
+    rm -f "$HOME/.config/systemd/user/usage-limits-sink.service"
+    systemctl --user daemon-reload

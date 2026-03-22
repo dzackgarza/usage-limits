@@ -1,37 +1,20 @@
-"""Qwen usage limits provider.
-
-Qwen Code free tier: 1000 requests/day (resets at UTC midnight).
-Usage is tracked via local OpenAI logging files in ~/qwen-logs/.
-
-Setup:
-1. Enable OpenAI logging in ~/.qwen/settings.json:
-   {
-     "model": {
-       "enableOpenAILogging": true,
-       "openAILoggingDir": "~/qwen-logs"
-     }
-   }
-2. Logs will be created at ~/qwen-logs/openai-*.json
-"""
+"""Qwen usage limits provider."""
 
 from __future__ import annotations
 
-import glob
-import sys
+import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+from otlp_collector.db import DEFAULT_DB_PATH
 
 from usage_limits.base import UsageProvider
 from usage_limits.table import UsageRow
 
 
 class QwenProvider(UsageProvider):
-    """Qwen Code usage checker.
-
-    Counts today's requests by reading local log files created by the OpenAI
-    logging feature of the Qwen Code extension.
-    """
+    """Qwen Code usage checker."""
 
     slug = "qwen"
     name = "Qwen Code"
@@ -41,36 +24,26 @@ class QwenProvider(UsageProvider):
 
     FREE_DAILY_LIMIT = 1000
 
-    def __init__(self) -> None:
-        super().__init__()
-        self.log_dir = Path.home() / "qwen-logs"
-
     def provider_name(self) -> str:
         return "Qwen"
 
-    def fetch_raw(self) -> dict[str, Any]:
-        """Count today's requests from local log files.
-
-        Each log file represents one API request. Files are named with
-        timestamps: openai-YYYY-MM-DDTHH-MM-SS.mmmZ-*.json
-        """
-        if not self.log_dir.exists():
-            print(
-                f"Error: Log directory {self.log_dir} does not exist.\n"
-                "\nSetup:\n"
-                "1. Enable OpenAI logging in ~/.qwen/settings.json:\n"
-                '   {\n     "model": {\n'
-                '       "enableOpenAILogging": true,\n'
-                '       "openAILoggingDir": "~/qwen-logs"\n'
-                "     }\n   }",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-
-        today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-        today_str = today_start.strftime("%Y-%m-%d")
-        pattern = str(self.log_dir / f"openai-{today_str}T*.json")
-        return {"count": len(glob.glob(pattern))}
+    def fetch_raw(self, db_path: Path | None = None) -> dict[str, Any]:
+        """Count today's Qwen Code API requests from the otlp-collector DB."""
+        path = db_path if db_path is not None else DEFAULT_DB_PATH
+        today = datetime.now(UTC).date().isoformat()
+        if not path.exists():
+            return {"count": 0}
+        with sqlite3.connect(path) as conn:
+            row = conn.execute(
+                """
+                SELECT count(*) FROM logs
+                WHERE date(time_unix_nano / 1000000000, 'unixepoch') = ?
+                  AND json_extract(resource_attributes, '$."service.name"') = 'qwen'
+                  AND json_extract(attributes, '$."event.name"') = 'qwen-code.api_request'
+                """,
+                (today,),
+            ).fetchone()
+        return {"count": row[0] if row else 0}
 
     def to_rows(self, raw: Any) -> list[UsageRow]:
         request_count = raw.get("count", 0)
@@ -82,11 +55,9 @@ class QwenProvider(UsageProvider):
         return [UsageRow(identifier="Qwen (daily)", pct_used=pct_used, reset_at=tomorrow)]
 
     def should_anchor(self, rows: list[UsageRow]) -> bool:
-        """Qwen daily limit resets automatically at UTC midnight — no anchoring."""
         return False
 
     def notify_always(self, rows: list[UsageRow]) -> None:
-        """Fire when daily limit is fresh (0 requests used)."""
         daily_row = next((r for r in rows if "daily" in r.identifier), None)
         if daily_row and daily_row.pct_used == 0:
             self.send_ntfy(

@@ -58,27 +58,6 @@ def providers_list(
         typer.echo(f"{provider.provider}\t{provider.display_name}\t{provider.source}")
 
 
-@app.command("serve")
-def serve(
-    port: Annotated[int, typer.Option("--port", help="The port to listen on.")] = 4318,
-    host: Annotated[str, typer.Option("--host", help="The host to bind to.")] = "0.0.0.0",
-) -> None:
-    """Start the OTLP sink server to collect OpenRouter traces.
-    Requires OPENROUTER_SINK_TOKEN to be set in the environment.
-    """
-    import os
-
-    import uvicorn
-    from usage_limits.server import app as server_app
-
-    if not os.environ.get("OPENROUTER_SINK_TOKEN"):
-        typer.secho("Error: OPENROUTER_SINK_TOKEN is not set.", fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=1)
-
-    typer.echo(f"Starting OTLP sink on {host}:{port}...")
-    uvicorn.run(server_app, host=host, port=port)
-
-
 @app.callback(invoke_without_command=True)
 def app_main(
     ctx: typer.Context,
@@ -160,6 +139,10 @@ def amp_main() -> None:
 
 def antigravity_main() -> None:
     _provider_alias("antigravity", supports_anchor=False)
+
+
+def gemini_main() -> None:
+    _provider_alias("gemini", supports_anchor=False)
 
 
 def ollama_main() -> None:

@@ -22,9 +22,7 @@ dependencies = [
     "rich>=13.0",
     "beautifulsoup4>=4.12",
     "typer>=0.21",
-    "fastapi>=0.135.1",
-    "uvicorn>=0.41.0",
-    "opentelemetry-proto>=1.40.0",
+    "otlp-collector @ git+https://github.com/dzackgarza/otlp-collector.git",
 ]
 
 [project.urls]
@@ -49,11 +47,15 @@ usage-amp         = "usage_limits.cli:amp_main"
 usage-antigravity = "usage_limits.cli:antigravity_main"
 usage-openrouter  = "usage_limits.cli:openrouter_main"
 usage-qwen        = "usage_limits.cli:qwen_main"
+usage-gemini      = "usage_limits.cli:gemini_main"
 usage-ollama      = "usage_limits.cli:ollama_main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/usage_limits"]
@@ -73,6 +75,14 @@ warn_unused_configs = true
 explicit_package_bases = true
 mypy_path = "src"
 
+[[tool.mypy.overrides]]
+module = ["otlp_collector", "otlp_collector.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--tb=short -q"
+
+[tool.deptry]
+known_first_party = ["usage_limits"]

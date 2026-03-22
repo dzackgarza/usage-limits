@@ -16,6 +16,8 @@ from usage_limits.providers import (
     AntigravityProvider,
     ClaudeProvider,
     CodexProvider,
+    CopilotProvider,
+    GeminiProvider,
     OllamaProvider,
     OpenRouterProvider,
     QwenProvider,
@@ -34,6 +36,8 @@ FIRST_PARTY_PROVIDER_CLASSES: tuple[type[UsageProvider], ...] = (
     AntigravityProvider,
     ClaudeProvider,
     CodexProvider,
+    CopilotProvider,
+    GeminiProvider,
     OllamaProvider,
     OpenRouterProvider,
     QwenProvider,
@@ -159,7 +163,5 @@ def collect_all(
 ) -> UsageCollection:
     """Collect a normalized snapshot for one or more providers."""
     selected = providers or [provider.provider for provider in list_providers()]
-    snapshots = [
-        collect_provider(provider, notify=notify, anchor=anchor) for provider in selected
-    ]
+    snapshots = [collect_provider(provider, notify=notify, anchor=anchor) for provider in selected]
     return UsageCollection(providers=snapshots)

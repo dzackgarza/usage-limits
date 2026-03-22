@@ -1,0 +1,14 @@
+[Unit]
+Description=Usage Limits OTLP Sink
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/opencode-plugins/usage-limits
+EnvironmentFile=-%h/.config/usage-limits/sink.env
+ExecStart=/bin/bash -c 'source ~/.pathrc && exec uv run otlp-collector --port 4318'
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
