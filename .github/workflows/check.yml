@@ -1,34 +1,12 @@
 name: Check
-
-on:
+'on':
   push:
-    branches: ["main"]
+    branches:
+    - main
   pull_request:
-    branches: ["main"]
-
+    branches:
+    - main
 jobs:
   check:
-    runs-on: ubuntu-latest
-    # Opt into Node.js 24 early to avoid deprecation warnings
-    # See: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-
-      - name: Set up Python
-        run: uv python install
-
-      - name: Install dependencies
-        run: uv sync --all-groups
-
-      - name: Run checks
-        run: |
-          uv run ruff check .
-          uv run mypy -p usage_limits
-          uv run pytest
+    uses: dzackgarza/opencode-plugins/.github/workflows/python-cli-ci.yml@main
+    secrets: inherit
