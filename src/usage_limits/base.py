@@ -252,21 +252,3 @@ class UsageProvider(ABC):
         except requests.RequestException:
             pass
         return False
-
-    def _state_file(self, name: str) -> Path:
-        """Return the path to a named provider state file."""
-        return self._state_path / f"{name}.json"
-
-    def load_state(self, name: str) -> dict[str, Any]:
-        """Load a named JSON state file."""
-        path = self._state_file(name)
-        if path.exists():
-            try:
-                return json.loads(path.read_text())  # type: ignore[no-any-return]
-            except (json.JSONDecodeError, OSError):
-                pass
-        return {}
-
-    def save_state(self, name: str, state: dict[str, Any]) -> None:
-        """Persist a named JSON state file."""
-        self._state_file(name).write_text(json.dumps(state, indent=2))

@@ -19,4 +19,5 @@ def test_list_providers_exposes_first_party_provider_order() -> None:
         "qwen",
     ]
     assert providers[1].display_name == "Antigravity"
+    assert providers[0].module == "usage_limits.providers.amp"
     assert providers[7].source == "builtin"

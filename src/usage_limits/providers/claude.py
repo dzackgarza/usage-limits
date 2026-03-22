@@ -34,10 +34,6 @@ class ClaudeProvider(UsageProvider):
     ntfy_server = "http://localhost"
     API_ENDPOINT = "https://api.anthropic.com/api/oauth/usage"
     BETA_HEADER = "oauth-2025-04-20"
-    TOKEN_ENDPOINT = "https://api.anthropic.com/oauth2/token"
-    # Claude Code OAuth client credentials (from Claude Code source)
-    CLIENT_ID = "claude-code-cli"
-    CLIENT_SECRET = ""  # PKCE flow, no secret needed
 
     def __init__(self) -> None:
         super().__init__()

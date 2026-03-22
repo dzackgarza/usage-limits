@@ -18,7 +18,7 @@ def test_notify_always_fires_on_fresh_daily_limit() -> None:
     provider = OpenRouterProvider()
     sent: list[tuple[str, str]] = []
 
-    def capture(title: str, message: str, **kwargs: object) -> tuple[bool, None]:
+    def capture(title: str, message: str, **_kwargs: object) -> tuple[bool, None]:
         sent.append((title, message))
         return True, None
 
@@ -40,7 +40,7 @@ def test_notify_always_skips_when_usage_exists() -> None:
     provider = OpenRouterProvider()
     sent: list[tuple[str, str]] = []
 
-    def capture(title: str, message: str, **kwargs: object) -> tuple[bool, None]:
+    def capture(title: str, message: str, **_kwargs: object) -> tuple[bool, None]:
         sent.append((title, message))
         return True, None
 
