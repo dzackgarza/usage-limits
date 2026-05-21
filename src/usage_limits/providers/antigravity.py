@@ -4,12 +4,23 @@ from __future__ import annotations
 
 import json
 import subprocess
-import sys
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import TypedDict, cast
 
 from usage_limits.base import UsageProvider
 from usage_limits.table import ModelAvailability, UsageRow
+
+
+class AntigravityModel(TypedDict):
+    label: str
+    modelId: str
+    remainingPercentage: float | None
+    isExhausted: bool
+    resetTime: str | None
+
+
+class AntigravityRaw(TypedDict):
+    models: list[AntigravityModel]
 
 
 class AntigravityProvider(UsageProvider):
@@ -24,64 +35,32 @@ class AntigravityProvider(UsageProvider):
     def provider_name(self) -> str:
         return "Antigravity"
 
-    def fetch_raw(self) -> dict[str, Any]:
-        """Run antigravity-usage via npx and parse its JSON response."""
-        command = [
-            "npx",
-            "--yes",
-            "antigravity-usage",
-            "quota",
-            "--all-models",
-            "--refresh",
-            "--json",
-        ]
-        try:
-            result = subprocess.run(command, capture_output=True, text=True, timeout=30)
-        except FileNotFoundError:
-            print(
-                "Error: npx not found. Install Node.js / npm before collecting Antigravity quotas.",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-        except subprocess.TimeoutExpired:
-            print("Error: antigravity-usage timed out.", file=sys.stderr)
-            sys.exit(1)
+    def fetch_raw(self) -> AntigravityRaw:
+        result = subprocess.run(
+            ["npx", "--yes", "antigravity-usage", "quota", "--all-models", "--refresh", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=True,
+        )
+        return cast(AntigravityRaw, json.loads(result.stdout))
 
-        if result.returncode != 0:
-            stderr = result.stderr.strip().lower()
-            if "not logged in" in stderr:
-                print("Error: Not logged in. Run 'antigravity-usage login'.", file=sys.stderr)
-            else:
-                print(result.stderr.strip() or "Error: antigravity-usage failed.", file=sys.stderr)
-            sys.exit(1)
-
-        try:
-            return cast(dict[str, Any], json.loads(result.stdout))
-        except json.JSONDecodeError as error:
-            print(f"Error: Invalid antigravity-usage JSON: {error}", file=sys.stderr)
-            sys.exit(1)
-
-    def to_rows(self, raw: Any) -> list[UsageRow]:
-        """Convert per-model quota data into normalized rows."""
+    def to_rows(self, raw: AntigravityRaw) -> list[UsageRow]:
         rows: list[UsageRow] = []
-        for model in raw.get("models", []):
-            label = model.get("label", model.get("modelId", "unknown"))
-            remaining_percentage = model.get("remainingPercentage")
-            is_exhausted = model.get("isExhausted", False)
+        for model in raw["models"]:
+            label = model["label"]
+            remaining_percentage = model["remainingPercentage"]
+            is_exhausted = model["isExhausted"]
             if is_exhausted or remaining_percentage is None:
                 pct_used = 100.0
             else:
                 pct_used = (1.0 - remaining_percentage) * 100.0
 
-            reset_at = None
-            reset_time = model.get("resetTime")
+            reset_time = model["resetTime"]
             if reset_time:
-                try:
-                    reset_at = datetime.fromisoformat(reset_time.replace("Z", "+00:00")).astimezone(
-                        UTC
-                    )
-                except ValueError:
-                    reset_at = None
+                reset_at = datetime.fromisoformat(reset_time.replace("Z", "+00:00")).astimezone(UTC)
+            else:
+                reset_at = None
 
             rows.append(
                 UsageRow(
@@ -93,7 +72,6 @@ class AntigravityProvider(UsageProvider):
         return rows
 
     def availability(self, rows: list[UsageRow]) -> list[ModelAvailability]:
-        """Group model-level quotas into the Antigravity availability buckets."""
         buckets: list[tuple[str, tuple[str, ...]]] = [
             ("Flash (All)", ("flash",)),
             ("Pro (2.5)", ("2.5 pro",)),
@@ -122,11 +100,9 @@ class AntigravityProvider(UsageProvider):
         return availability_rows
 
     def should_anchor(self, rows: list[UsageRow]) -> bool:
-        """Anchoring is handled by the external antigravity tooling."""
         return False
 
     def notify_always(self, rows: list[UsageRow]) -> None:
-        """Notify when all tracked Antigravity models are effectively fresh."""
         if rows and all(row.pct_used < 1.0 for row in rows):
             self.send_ntfy(
                 "Antigravity Quota Fresh",

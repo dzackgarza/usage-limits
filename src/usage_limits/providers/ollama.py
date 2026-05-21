@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
-import os
 import re
-import sys
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, TypedDict
 
 import requests
 from bs4 import BeautifulSoup
 
 from usage_limits.base import UsageProvider
 from usage_limits.table import UsageRow
+
+
+class OllamaRaw(TypedDict):
+    html: str
 
 
 class OllamaProvider(UsageProvider):
@@ -26,50 +28,20 @@ class OllamaProvider(UsageProvider):
 
     def __init__(self) -> None:
         super().__init__()
-        self.cookie = os.environ.get("OLLAMA_SESSION_COOKIE")
 
     def provider_name(self) -> str:
         return "Ollama"
 
-    def _chrome_cookies(self) -> str | None:
-        """Extract ollama.com cookies from the Chromium cookie store.
+    def _chrome_cookies(self) -> str:
+        from browser_cookie3 import chromium
 
-        Uses browser-cookie3 to read the encrypted cookie database.
-        Returns a semicolon-separated ``name=value`` string or ``None``.
-        """
-        try:
-            from browser_cookie3 import chromium  # type: ignore[import-untyped]
-
-            cookies = list(chromium(domain_name="ollama.com"))
-            if not cookies:
-                return None
-            return "; ".join(f"{c.name}={c.value}" for c in cookies)
-        except Exception:
-            return None
+        cookies = list(chromium(domain_name="ollama.com"))
+        return "; ".join(f"{c.name}={c.value}" for c in cookies)
 
     def get_session_cookie(self) -> str:
-        """Get the ollama.com session cookie string.
-
-        Checks, in order:
-        1. The ``OLLAMA_SESSION_COOKIE`` environment variable.
-        2. The Chromium browser cookie store (via ``browser-cookie3``).
-        """
-        if self.cookie:
-            return self.cookie
-
-        chrome_cookie = self._chrome_cookies()
-        if chrome_cookie:
-            return chrome_cookie
-
-        print(
-            "Error: OLLAMA_SESSION_COOKIE not set.\n"
-            "Add it to ~/.envrc and run 'direnv allow' or export it manually.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        return self._chrome_cookies()
 
     def parse_cookie_string(self, cookie_str: str) -> dict[str, str]:
-        """Parse a semicolon-separated cookie string into a dict."""
         cookies: dict[str, str] = {}
         for part in cookie_str.split(";"):
             part = part.strip()
@@ -78,8 +50,7 @@ class OllamaProvider(UsageProvider):
                 cookies[key.strip()] = value.strip()
         return cookies
 
-    def fetch_raw(self) -> dict[str, Any]:
-        """Fetch usage from the Ollama Cloud settings page."""
+    def fetch_raw(self) -> OllamaRaw:
         cookie_str = self.get_session_cookie()
         cookies = self.parse_cookie_string(cookie_str)
 
@@ -93,33 +64,14 @@ class OllamaProvider(UsageProvider):
             timeout=30,
             allow_redirects=False,
         )
-
-        if response.status_code in (301, 302, 303, 307, 308):
-            location = response.headers.get("Location", "unknown")
-            print(
-                f"Error: Session cookie expired. Got redirect to: {location}",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-
-        if "signin" in response.text.lower() and "ollama.com" in response.text.lower():
-            print(
-                "Error: Session cookie expired or invalid. The response contains a login page.\n"
-                "Get a fresh cookie from your browser's DevTools.",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-
         response.raise_for_status()
         return {"html": response.text}
 
-    def to_rows(self, raw: Any) -> list[UsageRow]:
-        """Parse the settings page HTML into UsageRow list."""
-        html = raw.get("html", "")
+    def to_rows(self, raw: OllamaRaw) -> list[UsageRow]:
+        html = raw["html"]
         soup = BeautifulSoup(html, "html.parser")
         rows: list[UsageRow] = []
 
-        # Map Ollama's labels to standard 5h/7d naming (matching Claude/Codex)
         label_mapping = {
             "session usage": "5h",
             "weekly usage": "7d",
@@ -138,90 +90,37 @@ class OllamaProvider(UsageProvider):
             if not flex_container:
                 continue
 
-            percentage: float | None = None
             percentage_text = flex_container.find(string=re.compile(r".*%\s*used.*", re.I))
-            if percentage_text:
-                text = str(percentage_text).strip()
-                match = re.search(r"(\d+(?:\.\d+)?)\s*%\s*used", text, re.I)
-                if match:
-                    percentage = float(match.group(1))
+            assert percentage_text is not None
+            text = str(percentage_text).strip()
+            match = re.search(r"(\d+(?:\.\d+)?)\s*%\s*used", text, re.I)
+            assert match is not None
+            percentage = float(match.group(1))
 
             wrapper = flex_container.find_parent("div")
-            reset_elem = None
-            if wrapper:
-                reset_elem = wrapper.find("div", class_=re.compile(r".*local-time.*"))
-            reset_at = self._parse_reset_element(reset_elem)
+            reset_elem = (
+                wrapper.find("div", class_=re.compile(r".*local-time.*")) if wrapper else None
+            )
+            reset_at = _parse_reset_element(reset_elem)
 
-            window_name = label_mapping.get(label_text.lower(), label_text.split()[0])
+            window_name = label_mapping[label_text.lower()]
             rows.append(
                 UsageRow(
                     identifier=f"Ollama ({window_name})",
-                    pct_used=percentage if percentage is not None else 0.0,
+                    pct_used=percentage,
                     reset_at=reset_at,
                 )
             )
 
         return rows
 
-    def _parse_reset_element(self, elem: Any) -> datetime | None:
-        """Extract reset time from a local-time div.
-
-        Prefers the exact ``data-time`` attribute; falls back to parsing the
-        fuzzy text (e.g. "Resets in 5 hours").
-        """
-        if elem is None:
-            return None
-
-        data_time = elem.get("data-time") if hasattr(elem, "get") else None
-        if data_time:
-            try:
-                return datetime.fromisoformat(data_time.replace("Z", "+00:00"))
-            except (ValueError, TypeError):
-                pass
-
-        text = elem.get_text(strip=True) if hasattr(elem, "get_text") else str(elem)
-        return self._parse_reset_text(text)
-
-    def _parse_reset_text(self, text: str | None) -> datetime | None:
-        """Fallback: parse fuzzy text like 'Resets in 5 hours'."""
-        if not text:
-            return None
-        text_lower = text.lower().strip()
-        match = re.search(r"resets in (\d+)\s*(second|minute|hour|day|week)s?", text_lower)
-        if not match:
-            return None
-        value = int(match.group(1))
-        unit = match.group(2)
-        now = datetime.now(UTC)
-        deltas = {
-            "second": timedelta(seconds=value),
-            "minute": timedelta(minutes=value),
-            "hour": timedelta(hours=value),
-            "day": timedelta(days=value),
-            "week": timedelta(weeks=value),
-        }
-        return now + deltas[unit]
-
     def should_anchor(self, rows: list[UsageRow]) -> bool:
-        """Anchor when the 5h window has no reset_at and is not exhausted.
-
-        | 5h          | 7d          | Anchor? |
-        |-------------|-------------|---------|
-        | no reset    | no reset    | Yes     |
-        | no reset    | active      | Yes     |
-        | no reset    | exhausted   | No      |
-        | active      | no reset    | Yes     |
-        | active      | active      | No      |
-        | active      | exhausted   | No      |
-        | exhausted   | any         | No      |
-        """
         five_hour = next((r for r in rows if "5h" in r.identifier), None)
         if not five_hour or five_hour.is_exhausted:
             return False
         return five_hour.reset_at is None or any(r.reset_at is None for r in rows)
 
     def notify_always(self, rows: list[UsageRow]) -> None:
-        """Fire when the 5h window is fresh (< 50% used)."""
         for row in (r for r in rows if "5h" in r.identifier):
             if row.pct_used < 50:
                 self.send_ntfy(
@@ -232,5 +131,36 @@ class OllamaProvider(UsageProvider):
                 return
 
     def anchor_command(self) -> list[str]:
-        """Anchor the 5h window by running a minimal cloud inference request."""
         return ["ollama", "run", "glm-4.6:cloud", "hi"]
+
+
+def _parse_reset_element(elem: Any) -> datetime | None:
+    if elem is None:
+        return None
+
+    data_time = elem.get("data-time") if hasattr(elem, "get") else None
+    if data_time:
+        return datetime.fromisoformat(data_time.replace("Z", "+00:00"))
+
+    text = elem.get_text(strip=True) if hasattr(elem, "get_text") else str(elem)
+    return _parse_reset_text(text)
+
+
+def _parse_reset_text(text: str) -> datetime | None:
+    if not text:
+        return None
+    text_lower = text.lower().strip()
+    match = re.search(r"resets in (\d+)\s*(second|minute|hour|day|week)s?", text_lower)
+    if not match:
+        return None
+    value = int(match.group(1))
+    unit = match.group(2)
+    now = datetime.now(UTC)
+    deltas = {
+        "second": timedelta(seconds=value),
+        "minute": timedelta(minutes=value),
+        "hour": timedelta(hours=value),
+        "day": timedelta(days=value),
+        "week": timedelta(weeks=value),
+    }
+    return now + deltas[unit]

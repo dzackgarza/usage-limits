@@ -22,9 +22,64 @@ notifications (via `ntfy`) when limits are reached.
 - Follow standard Python conventions (PEP 8).
 - Use `ruff` for all formatting and linting.
 - Prefer type hints for all function signatures and class members.
+- **Define TypedDicts for every data shape that crosses a boundary** (API response, file
+  read, subprocess output).
+  Never use `dict[str, Any]` for structured data.
+  Every key access must be typed.
+- **Never suppress type errors** with `# type: ignore`. If mypy reports an error, fix
+  the type definition.
+  Use `cast()` at JSON-decoding boundaries (`json.loads`, `resp.json()`) to assert the
+  expected shape — this is an explicit programmer assertion, not a suppression.
 - Providers should inherit from `UsageProvider` in `src/usage_limits/base.py`.
 - New providers should be added to `src/usage_limits/providers/` and registered in
   `src/usage_limits/registry.py`.
+
+## Error and Failure Philosophy
+
+**The only valid failure mode is an uncaught exception.** Every rule below follows from
+this.
+
+### Do not interpret failures for the user
+
+Do not `print("Error: ...")` + `sys.exit(1)`. Do not catch exceptions to produce
+"helpful" messages. Do not try to guess what went wrong.
+
+A 403 means "I don't know why."
+It does not mean "log in again" — next week the API might return 403 for a different
+reason, and the interpretation will be wrong.
+The user reads the raw exception and figures it out.
+If they can't, the tool needs better documentation, not better error guessing.
+
+### Do not catch exceptions
+
+No try/except blocks.
+Let every exception propagate as a raw traceback.
+The traceback tells the user exactly what failed, where, and with what data.
+
+The only exception is `try/except` for genuinely expected control flow (e.g., re-raising
+non-target status codes), never for wrapping or explaining errors.
+
+### Do not check existence before access
+
+Do not `if path.exists(): read()` — just `read()` and let `FileNotFoundError` propagate.
+Do not `if key in dict:` before `dict[key]` — just index and let `KeyError` propagate.
+The exception tells the user exactly what resource is missing.
+
+### Do not use fallback defaults
+
+Every `.get(key, default)` that could produce data indistinguishable from a real value
+is fraud. Use hard key access (`dict[key]`) everywhere.
+If the key is missing, `KeyError` propagates — the user sees the exact field name that
+the API no longer returns.
+
+`assert x is not None` is acceptable when a value is expected to exist but the type is
+nullable — it crashes with a clear assertion failure at the exact point of violation.
+
+### Do not retry or recover
+
+If a token is expired, a network request fails, or a 401 is returned — propagate the
+error. Do not attempt re-auth, retry, or any recovery logic.
+The user runs the tool again after fixing the issue.
 
 ## Testing Requirements
 
@@ -70,6 +125,11 @@ The only acceptable failure mode is visible failure.
 | `pct_used=0.0` as default | A fresh quota window and a broken parser are indistinguishable — both produce 0%. |
 | `{"count": 0}` when state file doesn't exist | User sees "0 requests used" and thinks the tool is working. The tool is disconnected. |
 | Hand-constructed `UsageRow` in provider tests | Proves the renderer works, proves nothing about the provider. Skips the entire data-collection boundary. |
+| `try/except` that prints a custom message | Catches the real error, replaces it with a guess that will go stale. The real traceback is always more informative. |
+| `# type: ignore` | Hides a real type error instead of fixing the type definition. |
+| `print("Error: ..."); sys.exit(1)` | Interprets the failure for the user. The interpretation will be wrong when the API changes. |
+| Retry/re-auth logic on HTTP 401 | Attempts recovery from a stale credential instead of propagating the error. The user should run `login` and try again. |
+| `dict[str, Any]` for structured data | Every key access is untyped — a missing key becomes a runtime KeyError instead of a type-checker error. |
 
 ### What constitutes a provider test
 
@@ -82,7 +142,7 @@ A valid test for provider `Foo` must:
 3. Call `FooProvider().to_rows(raw)` and assert the resulting `UsageRow` fields match
    expected values — exact `pct_used`, exact `reset_at`, exact `identifier`.
 4. Test at least one failure mode: missing credentials, malformed response, timeout, or
-   exhausted quota — asserted by `sys.exit` or exception type, not error message string.
+   exhausted quota — asserted by exception type, not error message string.
 
 ### Audit procedure for existing tests
 
