@@ -25,13 +25,21 @@ class AntigravityProvider(UsageProvider):
         return "Antigravity"
 
     def fetch_raw(self) -> dict[str, Any]:
-        """Run the antigravity-usage CLI and parse its JSON response."""
-        command = ["antigravity-usage", "quota", "--all-models", "--refresh", "--json"]
+        """Run antigravity-usage via npx and parse its JSON response."""
+        command = [
+            "npx",
+            "--yes",
+            "antigravity-usage",
+            "quota",
+            "--all-models",
+            "--refresh",
+            "--json",
+        ]
         try:
             result = subprocess.run(command, capture_output=True, text=True, timeout=30)
         except FileNotFoundError:
             print(
-                "Error: antigravity-usage not found. Install it before collecting quotas.",
+                "Error: npx not found. Install Node.js / npm before collecting Antigravity quotas.",
                 file=sys.stderr,
             )
             sys.exit(1)
