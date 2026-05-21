@@ -1,0 +1,65 @@
+<div class="flex flex-col space-y-6">
+  <h2 class="text-xl font-medium flex items-center space-x-2">
+    <span>Cloud usage</span>
+    <span
+      class="text-xs font-normal px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600 capitalize"
+      >pro</span
+    >
+  </h2>
+  <p class="text-xs text-neutral-500 mb-4">
+    Cloud models and capabilities such as web search contribute to session and weekly
+    limits.
+  </p>
+
+  <div>
+    <div class="flex justify-between mb-2">
+      <span class="text-sm text-neutral-400">Session usage</span>
+      <span class="text-sm text-neutral-500">0% used</span>
+    </div>
+    <div class="usage-meter" data-usage-meter="">
+      <div aria-hidden="true" class="usage-meter__bubble" data-usage-bubble="">
+        <span class="usage-meter__bubble-model" data-usage-model=""></span>
+        <span class="usage-meter__bubble-requests" data-usage-requests=""></span>
+      </div>
+      <div
+        aria-label="Session usage 42.5% used"
+        class="usage-meter__track"
+        data-usage-track=""
+      >
+        <div class="usage-meter__fill" style="width: 100%; background: #d4d4d4"></div>
+      </div>
+    </div>
+    <div
+      class="text-xs text-neutral-500 mt-1 local-time"
+      data-time="2030-01-15T12:00:00Z"
+    >
+      Resets in 3 days
+    </div>
+  </div>
+
+  <div>
+    <div class="flex justify-between mb-2">
+      <span class="text-sm">Weekly usage</span>
+      <span class="text-sm text-red-500">100% used</span>
+    </div>
+    <div class="usage-meter" data-usage-meter="">
+      <div aria-hidden="true" class="usage-meter__bubble" data-usage-bubble="">
+        <span class="usage-meter__bubble-model" data-usage-model=""></span>
+        <span class="usage-meter__bubble-requests" data-usage-requests=""></span>
+      </div>
+      <div
+        aria-label="Weekly usage 100% used"
+        class="usage-meter__track"
+        data-usage-track=""
+      >
+        <div class="usage-meter__fill" style="width: 100%"></div>
+      </div>
+    </div>
+    <div
+      class="text-xs text-neutral-500 mt-1 local-time"
+      data-time="2030-01-15T12:00:00Z"
+    >
+      Resets in 3 days
+    </div>
+  </div>
+</div>
