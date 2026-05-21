@@ -55,11 +55,13 @@ notifications (via `ntfy`) when limits are reached.
 Crashing with a visible error is always correct.
 Producing plausible-looking output from a broken parser is fraud.**
 
-Any fallback, default, silent recovery, or synthetic data that could be mistaken for
-real usage data is forbidden.
-If `fetch_raw` fails, if `to_rows` can't find a required key, if the API response format
-changes — the provider must fail visibly (raise, `sys.exit(1)`, or produce an error
-snapshot). It must not construct rows from defaults.
+**Every piece of code must assert that the resource it needs exists, and fail
+immediately if it does not.
+Fallbacks, defaults, silent recovery, and synthetic data are never acceptable.** If
+`fetch_raw` needs a file, the file must be present.
+If `to_rows` needs a key, the key must be in the dict.
+If an API is required, the endpoint must respond.
+The only acceptable failure mode is visible failure.
 
 | Pattern | Why it's an instance of the principle |
 | --- | --- |
