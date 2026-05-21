@@ -1,11 +1,18 @@
-"""Antigravity usage limits provider."""
+"""Antigravity usage limits provider.
+
+Known upstream quirk (antigravity-usage CLI):
+Anthropic models (Claude Sonnet, Opus, GPT-OSS) stopped including
+``remainingPercentage`` and report ``isExhausted: false`` even when
+they are fully exhausted. We treat a missing ``remainingPercentage``
+as 100% used regardless of the ``isExhausted`` field.
+"""
 
 from __future__ import annotations
 
 import json
 import subprocess
 from datetime import UTC, datetime
-from typing import TypedDict, cast
+from typing import NotRequired, TypedDict, cast
 
 from usage_limits.base import UsageProvider
 from usage_limits.table import ModelAvailability, UsageRow
@@ -14,7 +21,7 @@ from usage_limits.table import ModelAvailability, UsageRow
 class AntigravityModel(TypedDict):
     label: str
     modelId: str
-    remainingPercentage: float | None
+    remainingPercentage: NotRequired[float]  # absent → tool bug → treat as exhausted
     isExhausted: bool
     resetTime: str | None
 
@@ -49,9 +56,9 @@ class AntigravityProvider(UsageProvider):
         rows: list[UsageRow] = []
         for model in raw["models"]:
             label = model["label"]
-            remaining_percentage = model["remainingPercentage"]
+            remaining_percentage = model.get("remainingPercentage")  # absent = tool bug = exhausted
             is_exhausted = model["isExhausted"]
-            if is_exhausted or remaining_percentage is None:
+            if remaining_percentage is None or is_exhausted:
                 pct_used = 100.0
             else:
                 pct_used = (1.0 - remaining_percentage) * 100.0
