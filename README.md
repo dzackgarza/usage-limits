@@ -33,9 +33,13 @@ Uniform quota collection and rendering for CLI- and API-backed LLM providers.
 - **OpenCode**: Scrapes `opencode.ai/workspace/{id}/go` for Go subscription usage.
   Uses Chromium session cookie extracted via `browser-cookie3`.
 - **OpenRouter**: Reads a local traces file written by a separate telemetry pipeline
-  (`~/.local/state/openrouter_usage/traces.json`). This file must be populated by an
-  external mechanism that records OpenRouter request counts — see the telemetry setup
-  guide if you want OpenRouter coverage.
+  (`~/.local/state/openrouter_usage/traces.json`). The file must be a flat JSON object
+  mapping ISO date strings to daily request counts:
+  ```json
+  {"2026-05-20": 42, "2026-05-21": 15}
+  ```
+  This file must be populated by an external mechanism that records OpenRouter request
+  counts — see the telemetry setup guide if you want OpenRouter coverage.
 
 ## Discontinued Providers
 
