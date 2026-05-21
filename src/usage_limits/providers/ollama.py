@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import re
-from datetime import UTC, datetime, timedelta
-from typing import Any, TypedDict
+from datetime import datetime
+from typing import TypedDict
 
 import requests
 from bs4 import BeautifulSoup
@@ -68,45 +67,31 @@ class OllamaProvider(UsageProvider):
         return {"html": response.text}
 
     def to_rows(self, raw: OllamaRaw) -> list[UsageRow]:
-        html = raw["html"]
-        soup = BeautifulSoup(html, "html.parser")
+        soup = BeautifulSoup(raw["html"], "html.parser")
         rows: list[UsageRow] = []
 
-        label_mapping = {
-            "session usage": "5h",
-            "weekly usage": "7d",
-        }
-
-        for label_text in ["Session usage", "Weekly usage"]:
-            label_elem = soup.find(
-                string=lambda x, lt=label_text: bool(x and lt.lower() in x.lower())
-            )
-            if not label_elem:
+        for track in soup.find_all("div", attrs={"aria-label": True}):
+            aria = str(track["aria-label"])
+            if not aria.startswith(("Session usage ", "Weekly usage ")):
                 continue
 
-            flex_container = label_elem.find_parent(
-                "div", class_=lambda x: x and "flex" in x and "justify-between" in x
-            )
-            if not flex_container:
-                continue
+            name, _, pct_str = aria.split(None, 2)
+            percentage = float(pct_str.rstrip("%"))
 
-            percentage_text = flex_container.find(string=re.compile(r".*%\s*used.*", re.I))
-            assert percentage_text is not None
-            text = str(percentage_text).strip()
-            match = re.search(r"(\d+(?:\.\d+)?)\s*%\s*used", text, re.I)
-            assert match is not None
-            percentage = float(match.group(1))
+            meter_div = track.parent
+            assert meter_div is not None
+            wrapper = meter_div.parent
+            assert wrapper is not None
+            reset_div = wrapper.find("div", attrs={"data-time": True})
+            reset_at: datetime | None = None
+            if reset_div is not None:
+                data_time = str(reset_div["data-time"])
+                reset_at = datetime.fromisoformat(data_time.replace("Z", "+00:00"))
 
-            wrapper = flex_container.find_parent("div")
-            reset_elem = (
-                wrapper.find("div", class_=re.compile(r".*local-time.*")) if wrapper else None
-            )
-            reset_at = _parse_reset_element(reset_elem)
-
-            window_name = label_mapping[label_text.lower()]
+            window = "5h" if name.lower() == "session" else "7d"
             rows.append(
                 UsageRow(
-                    identifier=f"Ollama ({window_name})",
+                    identifier=f"Ollama ({window})",
                     pct_used=percentage,
                     reset_at=reset_at,
                 )
@@ -132,35 +117,3 @@ class OllamaProvider(UsageProvider):
 
     def anchor_command(self) -> list[str]:
         return ["ollama", "run", "glm-4.6:cloud", "hi"]
-
-
-def _parse_reset_element(elem: Any) -> datetime | None:
-    if elem is None:
-        return None
-
-    data_time = elem.get("data-time") if hasattr(elem, "get") else None
-    if data_time:
-        return datetime.fromisoformat(data_time.replace("Z", "+00:00"))
-
-    text = elem.get_text(strip=True) if hasattr(elem, "get_text") else str(elem)
-    return _parse_reset_text(text)
-
-
-def _parse_reset_text(text: str) -> datetime | None:
-    if not text:
-        return None
-    text_lower = text.lower().strip()
-    match = re.search(r"resets in (\d+)\s*(second|minute|hour|day|week)s?", text_lower)
-    if not match:
-        return None
-    value = int(match.group(1))
-    unit = match.group(2)
-    now = datetime.now(UTC)
-    deltas = {
-        "second": timedelta(seconds=value),
-        "minute": timedelta(minutes=value),
-        "hour": timedelta(hours=value),
-        "day": timedelta(days=value),
-        "week": timedelta(weeks=value),
-    }
-    return now + deltas[unit]
