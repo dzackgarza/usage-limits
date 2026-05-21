@@ -31,16 +31,42 @@ class OllamaProvider(UsageProvider):
     def provider_name(self) -> str:
         return "Ollama"
 
+    def _chrome_cookies(self) -> str | None:
+        """Extract ollama.com cookies from the Chromium cookie store.
+
+        Uses browser-cookie3 to read the encrypted cookie database.
+        Returns a semicolon-separated ``name=value`` string or ``None``.
+        """
+        try:
+            from browser_cookie3 import chromium  # type: ignore[import-untyped]
+
+            cookies = list(chromium(domain_name="ollama.com"))
+            if not cookies:
+                return None
+            return "; ".join(f"{c.name}={c.value}" for c in cookies)
+        except Exception:
+            return None
+
     def get_session_cookie(self) -> str:
-        """Get session cookie from environment."""
-        if not self.cookie:
-            print(
-                "Error: OLLAMA_SESSION_COOKIE not set.\n"
-                "Add it to ~/.envrc and run 'direnv allow' or export it manually.",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-        return self.cookie
+        """Get the ollama.com session cookie string.
+
+        Checks, in order:
+        1. The ``OLLAMA_SESSION_COOKIE`` environment variable.
+        2. The Chromium browser cookie store (via ``browser-cookie3``).
+        """
+        if self.cookie:
+            return self.cookie
+
+        chrome_cookie = self._chrome_cookies()
+        if chrome_cookie:
+            return chrome_cookie
+
+        print(
+            "Error: OLLAMA_SESSION_COOKIE not set.\n"
+            "Add it to ~/.envrc and run 'direnv allow' or export it manually.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     def parse_cookie_string(self, cookie_str: str) -> dict[str, str]:
         """Parse a semicolon-separated cookie string into a dict."""

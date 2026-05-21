@@ -25,6 +25,7 @@ dependencies = [
     "fastapi>=0.135.1",
     "uvicorn>=0.41.0",
     "opentelemetry-proto>=1.40.0",
+    "browser-cookie3>=0.20",
 ]
 
 [project.urls]
