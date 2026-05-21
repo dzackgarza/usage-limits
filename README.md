@@ -13,7 +13,7 @@ Uniform quota collection and rendering for CLI- and API-backed LLM providers.
 | **Codex** | ✅ | 5h, 7d | WHAM API | `~/.codex/auth.json` |
 | **Ollama** | ✅ | 5h, 7d | HTML Scrape | Chromium cookie (`ollama.com`) |
 | **OpenCode** | ✅ | 5h, 7d, 30d | HTML Scrape | Chromium cookie (`opencode.ai`) |
-| **OpenRouter** | ✅ | Daily | OpenRouter API | `OPENROUTER_API_KEY` env |
+| **OpenRouter** | ✅ | Daily | Local traces | `~/.local/state/openrouter_usage/traces.json` |
 
 ## How It Works
 
@@ -32,7 +32,18 @@ Uniform quota collection and rendering for CLI- and API-backed LLM providers.
   extracted via `browser-cookie3`.
 - **OpenCode**: Scrapes `opencode.ai/workspace/{id}/go` for Go subscription usage.
   Uses Chromium session cookie extracted via `browser-cookie3`.
-- **OpenRouter**: Rest API authenticated via `OPENROUTER_API_KEY` environment variable.
+- **OpenRouter**: Reads a local traces file written by a separate telemetry pipeline
+  (`~/.local/state/openrouter_usage/traces.json`). This file must be populated by an
+  external mechanism that records OpenRouter request counts — see the telemetry setup
+  guide if you want OpenRouter coverage.
+
+## Discontinued Providers
+
+The following providers were previously supported but their free tiers have been
+discontinued and the providers removed:
+
+- **Amp**: Free tier discontinued.
+- **Qwen**: Free tier discontinued.
 
 ## Usage
 
