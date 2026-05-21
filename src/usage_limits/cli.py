@@ -17,6 +17,7 @@ __all__ = [
     "codex_main",
     "main",
     "ollama_main",
+    "opencode_main",
     "openrouter_main",
 ]
 
@@ -159,6 +160,10 @@ def antigravity_main() -> None:
 
 def ollama_main() -> None:
     _provider_alias("ollama", supports_anchor=True)
+
+
+def opencode_main() -> None:
+    _provider_alias("opencode", supports_anchor=False)
 
 
 def openrouter_main() -> None:

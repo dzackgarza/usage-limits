@@ -6,6 +6,7 @@ from usage_limits.providers.antigravity import AntigravityProvider
 from usage_limits.providers.claude import ClaudeProvider
 from usage_limits.providers.codex import CodexProvider
 from usage_limits.providers.ollama import OllamaProvider
+from usage_limits.providers.opencode import OpenCodeProvider
 from usage_limits.providers.openrouter import OpenRouterProvider
 
 __all__ = [
@@ -13,5 +14,6 @@ __all__ = [
     "ClaudeProvider",
     "CodexProvider",
     "OllamaProvider",
+    "OpenCodeProvider",
     "OpenRouterProvider",
 ]

@@ -49,6 +49,7 @@ usage-codex       = "usage_limits.cli:codex_main"
 usage-antigravity = "usage_limits.cli:antigravity_main"
 usage-openrouter  = "usage_limits.cli:openrouter_main"
 usage-ollama      = "usage_limits.cli:ollama_main"
+usage-opencode    = "usage_limits.cli:opencode_main"
 
 [build-system]
 requires = ["hatchling"]
