@@ -44,17 +44,11 @@ claude *ARGS:
 codex *ARGS:
     uv run usage-codex {{ARGS}}
 
-amp *ARGS:
-    uv run usage-amp {{ARGS}}
-
 antigravity *ARGS:
     uv run usage-antigravity {{ARGS}}
 
 openrouter *ARGS:
     uv run usage-openrouter {{ARGS}}
-
-qwen *ARGS:
-    uv run usage-qwen {{ARGS}}
 
 ollama *ARGS:
     uv run usage-ollama {{ARGS}}

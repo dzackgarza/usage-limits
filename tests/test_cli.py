@@ -16,10 +16,9 @@ def test_module_cli_lists_registered_providers_as_json() -> None:
     )
     payload = json.loads(result.stdout)
 
-    assert [entry["provider"] for entry in payload[:4]] == [
-        "amp",
+    assert [entry["provider"] for entry in payload[:3]] == [
         "antigravity",
         "claude",
         "codex",
     ]
-    assert payload[0]["display_name"] == "Amp"
+    assert payload[0]["display_name"] == "Antigravity"

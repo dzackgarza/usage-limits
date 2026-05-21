@@ -12,13 +12,11 @@ from usage_limits.contracts import (
     UsageCollection,
 )
 from usage_limits.providers import (
-    AmpProvider,
     AntigravityProvider,
     ClaudeProvider,
     CodexProvider,
     OllamaProvider,
     OpenRouterProvider,
-    QwenProvider,
 )
 
 __all__ = [
@@ -30,13 +28,11 @@ __all__ = [
 
 
 FIRST_PARTY_PROVIDER_CLASSES: tuple[type[UsageProvider], ...] = (
-    AmpProvider,
     AntigravityProvider,
     ClaudeProvider,
     CodexProvider,
     OllamaProvider,
     OpenRouterProvider,
-    QwenProvider,
 )
 
 FIRST_PARTY_PROVIDERS: dict[str, type[UsageProvider]] = {
@@ -159,7 +155,5 @@ def collect_all(
 ) -> UsageCollection:
     """Collect a normalized snapshot for one or more providers."""
     selected = providers or [provider.provider for provider in list_providers()]
-    snapshots = [
-        collect_provider(provider, notify=notify, anchor=anchor) for provider in selected
-    ]
+    snapshots = [collect_provider(provider, notify=notify, anchor=anchor) for provider in selected]
     return UsageCollection(providers=snapshots)

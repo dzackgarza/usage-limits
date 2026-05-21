@@ -11,7 +11,6 @@ from usage_limits.registry import collect_all, collect_provider, list_providers
 from usage_limits.rendering import render_collection, render_provider_snapshot
 
 __all__ = [
-    "amp_main",
     "antigravity_main",
     "app",
     "claude_main",
@@ -19,7 +18,6 @@ __all__ = [
     "main",
     "ollama_main",
     "openrouter_main",
-    "qwen_main",
 ]
 
 
@@ -69,6 +67,7 @@ def serve(
     import os
 
     import uvicorn
+
     from usage_limits.server import app as server_app
 
     if not os.environ.get("OPENROUTER_SINK_TOKEN"):
@@ -154,10 +153,6 @@ def codex_main() -> None:
     _provider_alias("codex", supports_anchor=True)
 
 
-def amp_main() -> None:
-    _provider_alias("amp", supports_anchor=False)
-
-
 def antigravity_main() -> None:
     _provider_alias("antigravity", supports_anchor=False)
 
@@ -168,10 +163,6 @@ def ollama_main() -> None:
 
 def openrouter_main() -> None:
     _provider_alias("openrouter", supports_anchor=False)
-
-
-def qwen_main() -> None:
-    _provider_alias("qwen", supports_anchor=False)
 
 
 def main() -> None:

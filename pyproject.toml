@@ -46,10 +46,8 @@ dev = [
 usage-limits      = "usage_limits.cli:app"
 usage-claude      = "usage_limits.cli:claude_main"
 usage-codex       = "usage_limits.cli:codex_main"
-usage-amp         = "usage_limits.cli:amp_main"
 usage-antigravity = "usage_limits.cli:antigravity_main"
 usage-openrouter  = "usage_limits.cli:openrouter_main"
-usage-qwen        = "usage_limits.cli:qwen_main"
 usage-ollama      = "usage_limits.cli:ollama_main"
 
 [build-system]
