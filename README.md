@@ -8,43 +8,45 @@ Uniform quota collection and rendering for CLI- and API-backed LLM providers.
 
 | Provider | Status | Window(s) | Mechanism | Reliance |
 | :--- | :--- | :--- | :--- | :--- |
-| **Amp** | ✅ | Continual | `amp usage` | Local CLI |
 | **Antigravity** | ✅ | Dynamic | `antigravity-usage quota` | Local CLI |
 | **Claude** | ✅ | 5h, 7d | OAuth API | `~/.claude/.credentials.json` |
 | **Codex** | ✅ | 5h, 7d | WHAM API | `~/.codex/auth.json` |
-| **Ollama** | ✅ | 5h, 7d | HTML Scrape | `OLLAMA_SESSION_COOKIE` |
-| **Qwen** | ✅ | Daily | Local Logs | `~/qwen-logs/*.json` |
-| **OpenRouter** | 🛠️ | Daily | *Not Implemented* | Tracking mechanism needed |
+| **Ollama** | ✅ | 5h, 7d | HTML Scrape | Chromium cookie (`ollama.com`) |
+| **OpenCode** | ✅ | 5h, 7d, 30d | HTML Scrape | Chromium cookie (`opencode.ai`) |
+| **OpenRouter** | ✅ | Daily | OpenRouter API | `OPENROUTER_API_KEY` env |
 
 ## How It Works
 
 ### First-Party CLI Wrappers
-- **Amp**: Credits replenish at a fixed rate up to $10.00. Collection parses `amp usage` text.
-- **Antigravity**: Multi-model quotas (Flash, Pro, Claude, GPT-OSS). Collection parses `antigravity-usage --json`.
+
+- **Antigravity**: Multi-model quotas (Flash, Pro, Claude, GPT-OSS). Collection parses
+  `antigravity-usage --json`.
 
 ### Web & OAuth APIs
-- **Claude Code**: Anthropic OAuth API. Relies on the JSON credentials file created by `claude login`.
-- **Codex**: ChatGPT WHAM (Usage) API. Relies on the JSON auth file created by `codex login`.
-- **Ollama Cloud**: Scrapes `ollama.com/settings`. Requires `OLLAMA_SESSION_COOKIE` exported in your environment.
 
-### Local Observability
-- **Qwen Code**: Free tier allows 1000 requests/day (UTC reset).
-  - Requires enabling OpenAI logging in `~/.qwen/settings.json`:
-    ```json
-    { "model": { "enableOpenAILogging": true, "openAILoggingDir": "~/qwen-logs" } }
-    ```
-  - Collection counts files matching `openai-YYYY-MM-DD*.json` for the current UTC day.
+- **Claude Code**: Anthropic OAuth API. Relies on the JSON credentials file created by
+  `claude login`.
+- **Codex**: ChatGPT WHAM (Usage) API. Relies on the JSON auth file created by
+  `codex login`.
+- **Ollama Cloud**: Scrapes `ollama.com/settings`. Uses Chromium session cookie
+  extracted via `browser-cookie3`.
+- **OpenCode**: Scrapes `opencode.ai/workspace/{id}/go` for Go subscription usage.
+  Uses Chromium session cookie extracted via `browser-cookie3`.
+- **OpenRouter**: Rest API authenticated via `OPENROUTER_API_KEY` environment variable.
 
 ## Usage
 
 ### Simple Collection
-By default, `usage-limits` collects data for all supported providers and renders a Rich table.
+
+By default, `usage-limits` collects data for all supported providers and renders a Rich
+table.
 
 ```bash
 usage-limits
 ```
 
 ### JSON Output
+
 For programmatic use or custom filtering via `jq`, use the `-j` / `--json` flag.
 
 ```bash
@@ -52,9 +54,11 @@ usage-limits --json | jq '.providers[] | {p: .provider, a: .availability}'
 ```
 
 ### Options
+
 - `-p, --provider <slug>`: Collect only specified provider(s).
 - `-n, --notify`: Send notifications (via local `ntfy` topic).
-- `-a, --anchor`: Allow providers to "anchor" (warm up) windows (e.g., running `claude` or `ollama` with a trivial prompt).
+- `-a, --anchor`: Allow providers to "anchor" (warm up) windows (e.g., running `claude`
+  or `ollama` with a trivial prompt).
 
 ## Setup
 
