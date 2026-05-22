@@ -60,19 +60,17 @@ class UsageProvider(ABC):
         return {}
 
     def _available_now(self, rows: list[UsageRow]) -> bool:
-        """Default availability check for 5h/7d window providers."""
+        """Usable if the shortest (5h) window is not exhausted.
+
+        Longer windows (7d, 30d) being exhausted does not block usage —
+        only the 5h rolling window gates immediate availability.
+        """
         five_hour = next((row for row in rows if "5h" in row.identifier), None)
-        seven_day = next((row for row in rows if "7d" in row.identifier), None)
-        if seven_day and seven_day.is_exhausted:
-            return False
         return not (five_hour and five_hour.is_exhausted)
 
     def _available_when(self, rows: list[UsageRow]) -> datetime | None:
-        """Default next-available timestamp for 5h/7d window providers."""
+        """Next-available timestamp: when the 5h window resets."""
         five_hour = next((row for row in rows if "5h" in row.identifier), None)
-        seven_day = next((row for row in rows if "7d" in row.identifier), None)
-        if seven_day and seven_day.is_exhausted and seven_day.reset_at:
-            return seven_day.reset_at
         if five_hour and five_hour.is_exhausted and five_hour.reset_at:
             return five_hour.reset_at
         return None
