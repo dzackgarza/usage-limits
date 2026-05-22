@@ -16,6 +16,7 @@ __all__ = [
     "claude_main",
     "codex_main",
     "copilot_main",
+    "cursor_main",
     "kiro_main",
     "main",
     "ollama_main",
@@ -192,6 +193,10 @@ def windsurf_main() -> None:
 
 def copilot_main() -> None:
     _provider_alias("copilot", supports_anchor=False)
+
+
+def cursor_main() -> None:
+    _provider_alias("cursor", supports_anchor=False)
 
 
 def qoder_main() -> None:

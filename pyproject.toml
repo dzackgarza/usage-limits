@@ -53,6 +53,7 @@ usage-opencode    = "usage_limits.cli:opencode_main"
 usage-kiro        = "usage_limits.cli:kiro_main"
 usage-windsurf    = "usage_limits.cli:windsurf_main"
 usage-copilot     = "usage_limits.cli:copilot_main"
+usage-cursor      = "usage_limits.cli:cursor_main"
 usage-qoder       = "usage_limits.cli:qoder_main"
 
 [build-system]
