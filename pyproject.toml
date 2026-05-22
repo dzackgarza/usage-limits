@@ -73,6 +73,13 @@ warn_unused_configs = true
 explicit_package_bases = true
 mypy_path = "src"
 
+[[tool.mypy.overrides]]
+module = [
+    "browser_cookie3",
+    "google.protobuf.*",
+]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--tb=short -q"
