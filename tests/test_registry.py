@@ -16,4 +16,7 @@ def test_list_providers_exposes_first_party_provider_order() -> None:
         "openrouter",
     ]
     assert providers[0].display_name == "Antigravity"
+    assert providers[4].active is True
+    assert providers[5].provider == "openrouter"
+    assert providers[5].active is False
     assert providers[5].source == "builtin"

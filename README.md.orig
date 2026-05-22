@@ -38,14 +38,14 @@ Uniform quota collection and rendering for CLI- and API-backed LLM providers.
 These providers are not collected by default but can be used explicitly with
 `usage-limits --provider <slug>`:
 
-- **OpenRouter**: Reads a local traces file written by a separate telemetry pipeline
-  (`~/.local/state/openrouter_usage/traces.json`). The file must be a flat JSON object
-  mapping ISO date strings to daily request counts:
+- **OpenRouter**: Reads a local traces file written by a separate telemetry
+  pipeline (`~/.local/state/openrouter_usage/traces.json`). The file must be a
+  flat JSON object mapping ISO date strings to daily request counts:
   ```json
   {"2026-05-20": 42, "2026-05-21": 15}
   ```
-  This file must be populated by an external mechanism that records OpenRouter request
-  counts.
+  This file must be populated by an external mechanism that records OpenRouter
+  request counts.
 
 ## Discontinued Providers
 

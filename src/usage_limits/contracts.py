@@ -106,5 +106,6 @@ class RegisteredProvider(BaseModel):
     display_name: str
     module: str
     source: Literal["builtin", "entry_point"] = "builtin"
+    active: bool = True
 
     model_config = ConfigDict(frozen=True)

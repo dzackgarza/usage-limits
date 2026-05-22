@@ -75,8 +75,9 @@ class OllamaProvider(UsageProvider):
             if not aria.startswith(("Session usage ", "Weekly usage ")):
                 continue
 
-            name, _, pct_str = aria.split(None, 2)
-            percentage = float(pct_str.rstrip("%"))
+            parts = aria.split()
+            name = parts[0]
+            percentage = float(parts[2].rstrip("%"))
 
             meter_div = track.parent
             assert meter_div is not None

@@ -64,6 +64,9 @@ def _provider_classes() -> dict[str, type[UsageProvider]]:
     return providers
 
 
+INACTIVE_PROVIDERS: frozenset[str] = frozenset({"openrouter"})
+
+
 def list_providers() -> list[RegisteredProvider]:
     """List builtin and external providers."""
     providers = [
@@ -72,6 +75,7 @@ def list_providers() -> list[RegisteredProvider]:
             display_name=provider_class.name,
             module=provider_class.__module__,
             source="builtin",
+            active=provider_class.slug not in INACTIVE_PROVIDERS,
         )
         for provider_class in FIRST_PARTY_PROVIDER_CLASSES
     ]
@@ -156,6 +160,6 @@ def collect_all(
     anchor: bool = False,
 ) -> UsageCollection:
     """Collect a normalized snapshot for one or more providers."""
-    selected = providers or [provider.provider for provider in list_providers()]
+    selected = providers or [provider.provider for provider in list_providers() if provider.active]
     snapshots = [collect_provider(provider, notify=notify, anchor=anchor) for provider in selected]
     return UsageCollection(providers=snapshots)
