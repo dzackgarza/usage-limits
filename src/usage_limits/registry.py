@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from importlib.metadata import entry_points
 
+import requests
+
 from usage_limits.base import UsageProvider
 from usage_limits.contracts import (
     ProviderError,
@@ -126,11 +128,26 @@ def _error_type(error: BaseException) -> str:
     return error.__class__.__name__.lower()
 
 
+def _is_rate_limited(error: BaseException) -> bool:
+    return (
+        isinstance(error, requests.HTTPError)
+        and error.response is not None
+        and error.response.status_code == 429
+    )
+
+
 def _error_snapshot(
     provider_class: type[UsageProvider],
     error: BaseException,
 ) -> ProviderSnapshot:
     """Build a normalized error snapshot for a failed provider."""
+    if _is_rate_limited(error):
+        return ProviderSnapshot(
+            provider=provider_class.slug,
+            display_name=provider_class.name,
+            status="rate_limited",
+            errors=[ProviderError(type="rate_limited", message="Rate limited (HTTP 429) — status unknown")],
+        )
     return ProviderSnapshot(
         provider=provider_class.slug,
         display_name=provider_class.name,
