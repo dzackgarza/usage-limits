@@ -10,6 +10,7 @@ from usage_limits.providers.kiro import KiroProvider
 from usage_limits.providers.ollama import OllamaProvider
 from usage_limits.providers.opencode import OpenCodeProvider
 from usage_limits.providers.openrouter import OpenRouterProvider
+from usage_limits.providers.qoder import QoderProvider
 from usage_limits.providers.windsurf import WindsurfProvider
 
 __all__ = [
@@ -21,5 +22,6 @@ __all__ = [
     "OllamaProvider",
     "OpenCodeProvider",
     "OpenRouterProvider",
+    "QoderProvider",
     "WindsurfProvider",
 ]

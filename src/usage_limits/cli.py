@@ -21,6 +21,7 @@ __all__ = [
     "ollama_main",
     "opencode_main",
     "openrouter_main",
+    "qoder_main",
     "windsurf_main",
 ]
 
@@ -191,6 +192,10 @@ def windsurf_main() -> None:
 
 def copilot_main() -> None:
     _provider_alias("copilot", supports_anchor=False)
+
+
+def qoder_main() -> None:
+    _provider_alias("qoder", supports_anchor=False)
 
 
 def main() -> None:
