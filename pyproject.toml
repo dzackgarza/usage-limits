@@ -50,6 +50,9 @@ usage-antigravity = "usage_limits.cli:antigravity_main"
 usage-openrouter  = "usage_limits.cli:openrouter_main"
 usage-ollama      = "usage_limits.cli:ollama_main"
 usage-opencode    = "usage_limits.cli:opencode_main"
+usage-kiro        = "usage_limits.cli:kiro_main"
+usage-windsurf    = "usage_limits.cli:windsurf_main"
+usage-copilot     = "usage_limits.cli:copilot_main"
 
 [build-system]
 requires = ["hatchling"]
@@ -72,12 +75,6 @@ warn_return_any = true
 warn_unused_configs = true
 explicit_package_bases = true
 mypy_path = "src"
-
-[[tool.mypy.overrides]]
-module = [
-    "browser_cookie3",
-    "google.protobuf.*",
-]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

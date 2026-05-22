@@ -1,0 +1,16 @@
+{
+  "userStatus": {
+    "planStatus": {
+      "availablePromptCredits": 100,
+      "usedPromptCredits": 50,
+      "availableFlowCredits": 200,
+      "usedFlowCredits": 100,
+      "planInfo": {
+        "planName": "Pro",
+        "planEnd": {
+          "seconds": 1716384000
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "login": "dzackgarza",
+  "copilot_plan": "individual",
+  "access_type_sku": "free_faculty_quota",
+  "quota_reset_date": "2026-06-22T00:00:00Z",
+  "quota_reset_date_utc": "2026-06-22T00:00:00Z",
+  "quota_snapshots": {
+    "chat": {
+      "overage_count": 0,
+      "overage_permitted": false,
+      "percent_remaining": 100.0,
+      "quota_id": "chat",
+      "quota_remaining": 0,
+      "unlimited": true,
+      "timestamp_utc": "2026-05-22T12:00:00Z",
+      "has_quota": false,
+      "quota_reset_at": 0,
+      "token_based_billing": false,
+      "remaining": 0,
+      "entitlement": 0
+    },
+    "completions": {
+      "overage_count": 0,
+      "overage_permitted": false,
+      "percent_remaining": 100.0,
+      "quota_id": "completions",
+      "quota_remaining": 0,
+      "unlimited": true,
+      "timestamp_utc": "2026-05-22T12:00:00Z",
+      "has_quota": false,
+      "quota_reset_at": 0,
+      "token_based_billing": false,
+      "remaining": 0,
+      "entitlement": 0
+    },
+    "premium_interactions": {
+      "overage_count": 300,
+      "overage_permitted": false,
+      "percent_remaining": 0.0,
+      "quota_id": "premium_interactions",
+      "quota_remaining": 0,
+      "unlimited": false,
+      "timestamp_utc": "2026-05-22T12:00:00Z",
+      "has_quota": true,
+      "quota_reset_at": 1782086400,
+      "token_based_billing": false,
+      "remaining": 0,
+      "entitlement": 300
+    }
+  },
+  "endpoints": {
+    "api": "https://api.github.com",
+    "origin_tracker": "https://origin-trackerapi.github.com",
+    "proxy": "https://proxy.githubcopilot.com",
+    "telemetry": "https://telemetry.githubcopilot.com"
+  }
+}

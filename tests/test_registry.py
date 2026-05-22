@@ -7,16 +7,22 @@ from usage_limits.registry import list_providers
 
 def test_list_providers_exposes_first_party_provider_order() -> None:
     providers = list_providers()
-    assert [provider.provider for provider in providers[:6]] == [
+    assert [provider.provider for provider in providers[:7]] == [
         "antigravity",
         "claude",
         "codex",
+        "copilot",
+        "kiro",
         "ollama",
         "opencode",
-        "openrouter",
     ]
     assert providers[0].display_name == "Antigravity"
     assert providers[4].active is True
-    assert providers[5].provider == "openrouter"
-    assert providers[5].active is False
-    assert providers[5].source == "builtin"
+    assert providers[5].provider == "ollama"
+    assert providers[5].active is True
+    assert providers[6].provider == "opencode"
+    assert providers[6].active is True
+    # Check openrouter is inactive
+    openrouter_idx = next(i for i, p in enumerate(providers) if p.provider == "openrouter")
+    assert providers[openrouter_idx].active is False
+    assert providers[openrouter_idx].source == "builtin"
