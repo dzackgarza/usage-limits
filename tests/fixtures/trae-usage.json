@@ -1,0 +1,73 @@
+{
+  "code": 0,
+  "user_entitlement_pack_list": [
+    {
+      "product_type": 0,
+      "status": 1,
+      "entitlement_base_info": {
+        "product_type": 0,
+        "quota": {
+          "basic_usage_limit": 50.0,
+          "bonus_usage_limit": 0.0
+        },
+        "end_time": 1748044800,
+        "product_extra": {
+          "subscription_extra": null
+        }
+      },
+      "usage": {
+        "basic_usage_amount": 25.0,
+        "bonus_usage_amount": 0.0,
+        "is_flash_consuming": false,
+        "pay_go_amount": 0.0
+      },
+      "next_billing_time": 0
+    },
+    {
+      "product_type": 1,
+      "status": 1,
+      "entitlement_base_info": {
+        "product_type": 1,
+        "quota": {
+          "basic_usage_limit": 200.0,
+          "bonus_usage_limit": 50.0
+        },
+        "end_time": 1750636800,
+        "product_extra": {
+          "subscription_extra": {
+            "period_type": 2
+          }
+        }
+      },
+      "usage": {
+        "basic_usage_amount": 120.0,
+        "bonus_usage_amount": 10.0,
+        "is_flash_consuming": false,
+        "pay_go_amount": 0.0
+      },
+      "next_billing_time": 1750636800
+    },
+    {
+      "product_type": 3,
+      "status": 1,
+      "entitlement_base_info": {
+        "product_type": 3,
+        "quota": {
+          "basic_usage_limit": 100.0,
+          "bonus_usage_limit": 0.0
+        },
+        "end_time": 1748044800,
+        "product_extra": {
+          "subscription_extra": null
+        }
+      },
+      "usage": {
+        "basic_usage_amount": 50.0,
+        "bonus_usage_amount": 0.0,
+        "is_flash_consuming": false,
+        "pay_go_amount": 0.0
+      },
+      "next_billing_time": 0
+    }
+  ]
+}

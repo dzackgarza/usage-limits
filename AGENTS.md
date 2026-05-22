@@ -166,3 +166,20 @@ Keep the first two. Delete the rest.
 - `src/usage_limits/registry.py`: Provider registration and discovery.
 - `src/usage_limits/table.py`: Table rendering logic.
 - `src/usage_limits/providers/`: Individual service implementations.
+
+## Target Providers
+
+The following providers are required. Checkmarks indicate implemented + tested.
+
+| Provider | Status | Technique |
+|----------|:------:|-----------|
+| Antigravity | ✅ | builtin |
+| Claude Code | ✅ | builtin |
+| Codex | ✅ | builtin |
+| Copilot | ✅ | `gh auth token` → `GET /copilot_internal/user` |
+| Windsurf | ✅ | SQLite `state.vscdb` → `GetUserStatus` API |
+| Kiro | ✅ | builtin |
+| Cursor | ✅ | SQLite `state.vscdb` → JWT → usage-summary API |
+| Gemini CLI | ❌ | CLI hangs; will be deprecated soon |
+| Qoder | ✅ | SQLite `state.vscdb` → `secret://aicoding.auth.*` keys |
+| Trae | ✅ | SQLite `storage.json` → `Cloud-IDE-JWT` → ent_usage API |

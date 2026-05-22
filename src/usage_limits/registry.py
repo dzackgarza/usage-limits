@@ -24,6 +24,7 @@ from usage_limits.providers import (
     OpenCodeProvider,
     OpenRouterProvider,
     QoderProvider,
+    TraeProvider,
     WindsurfProvider,
 )
 
@@ -46,6 +47,7 @@ FIRST_PARTY_PROVIDER_CLASSES: tuple[type[UsageProvider], ...] = (
     OpenCodeProvider,
     OpenRouterProvider,
     QoderProvider,
+    TraeProvider,
     WindsurfProvider,
 )
 
