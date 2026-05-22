@@ -60,20 +60,13 @@ class UsageProvider(ABC):
         return {}
 
     def _available_now(self, rows: list[UsageRow]) -> bool:
-        """Usable if the shortest (5h) window is not exhausted.
-
-        Longer windows (7d, 30d) being exhausted does not block usage —
-        only the 5h rolling window gates immediate availability.
-        """
-        five_hour = next((row for row in rows if "5h" in row.identifier), None)
-        return not (five_hour and five_hour.is_exhausted)
+        """Usable only when no window is exhausted."""
+        return not any(row.is_exhausted for row in rows)
 
     def _available_when(self, rows: list[UsageRow]) -> datetime | None:
-        """Next-available timestamp: when the 5h window resets."""
-        five_hour = next((row for row in rows if "5h" in row.identifier), None)
-        if five_hour and five_hour.is_exhausted and five_hour.reset_at:
-            return five_hour.reset_at
-        return None
+        """Earliest time all exhausted windows will have reset."""
+        reset_times = [row.reset_at for row in rows if row.is_exhausted and row.reset_at is not None]
+        return max(reset_times) if reset_times else None
 
     def availability(self, rows: list[UsageRow]) -> list[ModelAvailability]:
         """Return normalized provider availability entries."""
