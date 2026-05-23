@@ -8,7 +8,7 @@ Uniform quota collection and rendering for CLI- and API-backed LLM providers.
 
 | Provider | Status | Mechanism |
 | :--- | :--- | :--- |
-| **Antigravity** | ✅ | Google Cloud Code API (OAuth2 refresh) |
+| **Antigravity** | ✅ | Google Cloud Code API via cockpit-tools credentials (`~/.antigravity_cockpit/credentials.json`) |
 | **Claude Code** | ✅ | Anthropic OAuth API (`~/.claude/.credentials.json`) |
 | **Codex** | ✅ | ChatGPT WHAM API (`~/.codex/auth.json`) |
 | **Copilot** | ✅ | `gh auth token` → GitHub Copilot internal API |
@@ -35,9 +35,12 @@ These providers are registered but not collected by default:
 Providers that expose a first-party usage API are called directly with credentials
 obtained from local state files or OAuth refresh flows.
 
-- **Antigravity**: Reads cockpit-tools OAuth credentials, refreshes the access token via
-  Google's OAuth2 endpoint, then calls the Cloud Code `loadCodeAssist` and
+- **Antigravity**: Requires [cockpit-tools](https://github.com/jlcodes99/cockpit-tools)
+  to be installed and logged in with at least one Google account.
+  Reads credentials from `~/.antigravity_cockpit/credentials.json`, refreshes the access
+  token via Google's OAuth2 endpoint, then calls the Cloud Code `loadCodeAssist` and
   `fetchAvailableModels` APIs directly.
+  Supports multiple accounts — usage rows are tagged with the account email.
   Supports multi-model quotas (Flash, Pro, Claude, GPT-OSS).
 - **Claude Code**: Anthropic OAuth API. Relies on the JSON credentials file created by
   `claude login`.
@@ -78,6 +81,21 @@ The caching layer:
 - Caches fetch failures themselves — if a provider is rate-limited, the error is
   persisted so subsequent calls within the TTL window skip the API entirely instead of
   retrying immediately.
+
+## Prerequisites
+
+- **Antigravity provider**: [cockpit-tools](https://github.com/jlcodes99/cockpit-tools)
+  must be installed and you must be logged in to at least one Google account via the
+  cockpit-tools UI. The provider reads all accounts from
+  `~/.antigravity_cockpit/credentials.json` and reports quota for each.
+  `ANTIGRAVITY_OAUTH_CLIENT_ID` and `ANTIGRAVITY_OAUTH_CLIENT_SECRET` must be set in
+  `.envrc`.
+- **Claude Code**: Requires `claude login` to have produced
+  `~/.claude/.credentials.json`.
+- **Codex**: Requires `codex login`.
+- **Copilot**: Requires `gh auth login`.
+- **Ollama Cloud / OpenCode**: Requires Chromium session cookies for the respective
+  domains.
 
 ## Usage
 
