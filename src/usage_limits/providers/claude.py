@@ -34,6 +34,7 @@ class ClaudeProvider(UsageProvider):
     slug = "claude"
     name = "Claude Code"
     state_dir = "claude_usage"
+    cache_ttl_seconds = 300
     ntfy_topic = "usage-updates"
     ntfy_server = "http://localhost"
 

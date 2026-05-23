@@ -66,9 +66,7 @@ def providers_list(
 @app.command("serve")
 def serve(
     port: Annotated[int, typer.Option("--port", help="The port to listen on.")] = 4318,
-    host: Annotated[
-        str, typer.Option("--host", help="The host to bind to.")
-    ] = "0.0.0.0",
+    host: Annotated[str, typer.Option("--host", help="The host to bind to.")] = "0.0.0.0",
 ) -> None:
     """Start the OTLP sink server to collect OpenRouter traces.
     Requires OPENROUTER_SINK_TOKEN to be set in the environment.
@@ -80,9 +78,7 @@ def serve(
     from usage_limits.server import app as server_app
 
     if not os.environ.get("OPENROUTER_SINK_TOKEN"):
-        typer.secho(
-            "Error: OPENROUTER_SINK_TOKEN is not set.", fg=typer.colors.RED, err=True
-        )
+        typer.secho("Error: OPENROUTER_SINK_TOKEN is not set.", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1)
 
     typer.echo(f"Starting OTLP sink on {host}:{port}...")
@@ -94,9 +90,7 @@ def app_main(
     ctx: typer.Context,
     provider: Annotated[
         list[str] | None,
-        typer.Option(
-            "--provider", "-p", help="Provider slug(s) to collect (default: all)."
-        ),
+        typer.Option("--provider", "-p", help="Provider slug(s) to collect (default: all)."),
     ] = None,
     json_output: Annotated[
         bool,
@@ -142,9 +136,7 @@ def _provider_alias(
         ] = False,
         anchor: Annotated[
             bool,
-            typer.Option(
-                "--anchor", "-a", help="Allow providers to anchor idle windows."
-            ),
+            typer.Option("--anchor", "-a", help="Allow providers to anchor idle windows."),
         ] = False,
     ) -> None:
         provider_snapshot = collect_provider(

@@ -56,12 +56,7 @@ class WindsurfProvider(UsageProvider):
     def __init__(self) -> None:
         super().__init__()
         self.state_db = (
-            Path.home()
-            / ".config"
-            / "Windsurf"
-            / "User"
-            / "globalStorage"
-            / "state.vscdb"
+            Path.home() / ".config" / "Windsurf" / "User" / "globalStorage" / "state.vscdb"
         )
 
     def provider_name(self) -> str:
@@ -70,9 +65,7 @@ class WindsurfProvider(UsageProvider):
     def get_credentials(self) -> WindsurfCredentials:
         conn = sqlite3.connect(self.state_db)
         cursor = conn.cursor()
-        cursor.execute(
-            'SELECT value FROM ItemTable WHERE key = "windsurfAuthStatus"'
-        )
+        cursor.execute('SELECT value FROM ItemTable WHERE key = "windsurfAuthStatus"')
         row = cursor.fetchone()
         conn.close()
 
@@ -150,9 +143,7 @@ class WindsurfProvider(UsageProvider):
         # Daily quota
         daily_remaining = plan_status["dailyQuotaRemainingPercent"]
         daily_used = 100 - daily_remaining
-        daily_reset = datetime.fromtimestamp(
-            int(plan_status["dailyQuotaResetAtUnix"]), tz=UTC
-        )
+        daily_reset = datetime.fromtimestamp(int(plan_status["dailyQuotaResetAtUnix"]), tz=UTC)
         rows.append(
             UsageRow(
                 identifier="Windsurf (Daily Quota)",
@@ -164,9 +155,7 @@ class WindsurfProvider(UsageProvider):
         # Weekly quota
         weekly_remaining = plan_status["weeklyQuotaRemainingPercent"]
         weekly_used = 100 - weekly_remaining
-        weekly_reset = datetime.fromtimestamp(
-            int(plan_status["weeklyQuotaResetAtUnix"]), tz=UTC
-        )
+        weekly_reset = datetime.fromtimestamp(int(plan_status["weeklyQuotaResetAtUnix"]), tz=UTC)
         rows.append(
             UsageRow(
                 identifier="Windsurf (Weekly Quota)",

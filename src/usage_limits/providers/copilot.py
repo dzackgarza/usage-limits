@@ -90,10 +90,7 @@ class CopilotProvider(UsageProvider):
         rows: list[UsageRow] = []
 
         for quota_id, snapshot in snapshots.items():
-            if snapshot["unlimited"]:
-                pct_used = 0.0
-            else:
-                pct_used = 100.0 - snapshot["percent_remaining"]
+            pct_used = 0.0 if snapshot["unlimited"] else 100.0 - snapshot["percent_remaining"]
 
             label = quota_id.replace("_", " ").title()
             rows.append(

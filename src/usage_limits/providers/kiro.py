@@ -90,9 +90,7 @@ class KiroProvider(UsageProvider):
         """Get profileArn from the state table in the kiro-cli database."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT value FROM state WHERE key = 'api.codewhisperer.profile'"
-        )
+        cursor.execute("SELECT value FROM state WHERE key = 'api.codewhisperer.profile'")
         row = cursor.fetchone()
         conn.close()
 
@@ -124,9 +122,7 @@ class KiroProvider(UsageProvider):
         # Check if token is expired
         expires_at_str = data.get("expires_at")
         if expires_at_str:
-            expires_at = datetime.fromisoformat(
-                expires_at_str.replace("Z", "+00:00")
-            )
+            expires_at = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00"))
             now = datetime.now(tz=UTC)
             if now >= expires_at:
                 # Token expired, refresh it
@@ -203,9 +199,7 @@ class KiroProvider(UsageProvider):
                 bonus_total = free_trial["usageLimit"]
                 bonus_used = free_trial["currentUsage"]
                 bonus_pct = (bonus_used / bonus_total * 100) if bonus_total > 0 else 0.0
-                bonus_reset = datetime.fromtimestamp(
-                    free_trial["freeTrialExpiry"], tz=UTC
-                )
+                bonus_reset = datetime.fromtimestamp(free_trial["freeTrialExpiry"], tz=UTC)
 
                 rows.append(
                     UsageRow(

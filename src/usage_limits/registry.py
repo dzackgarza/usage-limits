@@ -52,8 +52,7 @@ FIRST_PARTY_PROVIDER_CLASSES: tuple[type[UsageProvider], ...] = (
 )
 
 FIRST_PARTY_PROVIDERS: dict[str, type[UsageProvider]] = {
-    provider_class.slug: provider_class
-    for provider_class in FIRST_PARTY_PROVIDER_CLASSES
+    provider_class.slug: provider_class for provider_class in FIRST_PARTY_PROVIDER_CLASSES
 }
 
 
@@ -113,9 +112,7 @@ def get_provider_class(provider: str) -> type[UsageProvider]:
     providers = _provider_classes()
     if provider not in providers:
         available = ", ".join(sorted(providers))
-        raise ValueError(
-            f"Unknown provider {provider!r}. Available providers: {available}"
-        )
+        raise ValueError(f"Unknown provider {provider!r}. Available providers: {available}")
     return providers[provider]
 
 
@@ -197,11 +194,6 @@ def collect_all(
     anchor: bool = False,
 ) -> UsageCollection:
     """Collect a normalized snapshot for one or more providers."""
-    selected = providers or [
-        provider.provider for provider in list_providers() if provider.active
-    ]
-    snapshots = [
-        collect_provider(provider, notify=notify, anchor=anchor)
-        for provider in selected
-    ]
+    selected = providers or [provider.provider for provider in list_providers() if provider.active]
+    snapshots = [collect_provider(provider, notify=notify, anchor=anchor) for provider in selected]
     return UsageCollection(providers=snapshots)

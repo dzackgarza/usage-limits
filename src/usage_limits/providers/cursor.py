@@ -70,12 +70,7 @@ class CursorProvider(UsageProvider):
     def __init__(self) -> None:
         super().__init__()
         self.state_db = (
-            Path.home()
-            / ".config"
-            / "Cursor"
-            / "User"
-            / "globalStorage"
-            / "state.vscdb"
+            Path.home() / ".config" / "Cursor" / "User" / "globalStorage" / "state.vscdb"
         )
 
     def provider_name(self) -> str:
@@ -84,9 +79,7 @@ class CursorProvider(UsageProvider):
     def get_access_token(self) -> str:
         conn = sqlite3.connect(self.state_db)
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT value FROM ItemTable WHERE key = 'cursorAuth/accessToken'"
-        )
+        cursor.execute("SELECT value FROM ItemTable WHERE key = 'cursorAuth/accessToken'")
         row = cursor.fetchone()
         conn.close()
         token: str = row[0]

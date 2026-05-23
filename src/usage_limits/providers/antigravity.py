@@ -183,7 +183,12 @@ class AntigravityProvider(UsageProvider):
             if label.startswith(("chat_", "tab_", "gemini-")):
                 continue
             # Skip deprecated models
-            deprecated = {"Gemini 2.5 Pro", "Gemini 3 Flash", "Gemini 3.1 Flash Lite", "Gemini 3.1 Flash Image"}
+            deprecated = {
+                "Gemini 2.5 Pro",
+                "Gemini 3 Flash",
+                "Gemini 3.1 Flash Lite",
+                "Gemini 3.1 Flash Image",
+            }
             if label in deprecated:
                 continue
             # Skip duplicates (keep first seen)
