@@ -1,0 +1,144 @@
+{
+  "models": [
+    {
+      "label": "Claude Sonnet 4.6 (Thinking)",
+      "modelId": "MODEL_PLACEHOLDER_M35",
+      "isExhausted": false,
+      "resetTime": "2026-05-21T17:22:13Z",
+      "timeUntilResetMs": 3763402,
+      "isAutocompleteOnly": false,
+      "accountEmail": "alpha@example.com"
+    },
+    {
+      "label": "Claude Opus 4.6 (Thinking)",
+      "modelId": "MODEL_PLACEHOLDER_M26",
+      "isExhausted": false,
+      "resetTime": "2026-05-21T17:22:13Z",
+      "timeUntilResetMs": 3763402,
+      "isAutocompleteOnly": false,
+      "accountEmail": "alpha@example.com"
+    },
+    {
+      "label": "GPT-OSS 120B (Medium)",
+      "modelId": "MODEL_OPENAI_GPT_OSS_120B_MEDIUM",
+      "isExhausted": false,
+      "resetTime": "2026-05-21T17:22:13Z",
+      "timeUntilResetMs": 3763402,
+      "isAutocompleteOnly": false,
+      "accountEmail": "alpha@example.com"
+    },
+    {
+      "label": "Gemini 3.5 Flash (High)",
+      "modelId": "MODEL_PLACEHOLDER_M133",
+      "remainingPercentage": 0.6,
+      "isExhausted": false,
+      "resetTime": "2026-05-28T09:39:04Z",
+      "timeUntilResetMs": 580774402,
+      "isAutocompleteOnly": false,
+      "accountEmail": "alpha@example.com"
+    },
+    {
+      "label": "Gemini 3.5 Flash (Medium)",
+      "modelId": "MODEL_PLACEHOLDER_M20",
+      "remainingPercentage": 0.6,
+      "isExhausted": false,
+      "resetTime": "2026-05-28T09:39:04Z",
+      "timeUntilResetMs": 580774402,
+      "isAutocompleteOnly": false,
+      "accountEmail": "alpha@example.com"
+    },
+    {
+      "label": "Gemini 3.1 Pro (High)",
+      "modelId": "MODEL_PLACEHOLDER_M16",
+      "remainingPercentage": 0.6,
+      "isExhausted": false,
+      "resetTime": "2026-05-28T09:39:04Z",
+      "timeUntilResetMs": 580774402,
+      "isAutocompleteOnly": false,
+      "accountEmail": "alpha@example.com"
+    },
+    {
+      "label": "Gemini 3.1 Pro (Low)",
+      "modelId": "MODEL_PLACEHOLDER_M36",
+      "remainingPercentage": 0.6,
+      "isExhausted": false,
+      "resetTime": "2026-05-28T09:39:04Z",
+      "timeUntilResetMs": 580774402,
+      "isAutocompleteOnly": false,
+      "accountEmail": "alpha@example.com"
+    },
+    {
+      "label": "Claude Sonnet 4.6 (Thinking)",
+      "modelId": "MODEL_PLACEHOLDER_M35",
+      "isExhausted": false,
+      "resetTime": "2026-05-21T17:22:13Z",
+      "timeUntilResetMs": 3763402,
+      "isAutocompleteOnly": false,
+      "accountEmail": "beta@example.com"
+    },
+    {
+      "label": "Claude Opus 4.6 (Thinking)",
+      "modelId": "MODEL_PLACEHOLDER_M26",
+      "isExhausted": false,
+      "resetTime": "2026-05-21T17:22:13Z",
+      "timeUntilResetMs": 3763402,
+      "isAutocompleteOnly": false,
+      "accountEmail": "beta@example.com"
+    },
+    {
+      "label": "GPT-OSS 120B (Medium)",
+      "modelId": "MODEL_OPENAI_GPT_OSS_120B_MEDIUM",
+      "isExhausted": false,
+      "resetTime": "2026-05-21T17:22:13Z",
+      "timeUntilResetMs": 3763402,
+      "isAutocompleteOnly": false,
+      "accountEmail": "beta@example.com"
+    },
+    {
+      "label": "Gemini 3.5 Flash (High)",
+      "modelId": "MODEL_PLACEHOLDER_M133",
+      "remainingPercentage": 0.6,
+      "isExhausted": false,
+      "resetTime": "2026-05-28T09:39:04Z",
+      "timeUntilResetMs": 580774402,
+      "isAutocompleteOnly": false,
+      "accountEmail": "beta@example.com"
+    },
+    {
+      "label": "Gemini 3.5 Flash (Medium)",
+      "modelId": "MODEL_PLACEHOLDER_M20",
+      "remainingPercentage": 0.6,
+      "isExhausted": false,
+      "resetTime": "2026-05-28T09:39:04Z",
+      "timeUntilResetMs": 580774402,
+      "isAutocompleteOnly": false,
+      "accountEmail": "beta@example.com"
+    },
+    {
+      "label": "Gemini 3.1 Pro (High)",
+      "modelId": "MODEL_PLACEHOLDER_M16",
+      "remainingPercentage": 0.6,
+      "isExhausted": false,
+      "resetTime": "2026-05-28T09:39:04Z",
+      "timeUntilResetMs": 580774402,
+      "isAutocompleteOnly": false,
+      "accountEmail": "beta@example.com"
+    },
+    {
+      "label": "Gemini 3.1 Pro (Low)",
+      "modelId": "MODEL_PLACEHOLDER_M36",
+      "remainingPercentage": 0.6,
+      "isExhausted": false,
+      "resetTime": "2026-05-28T09:39:04Z",
+      "timeUntilResetMs": 580774402,
+      "isAutocompleteOnly": false,
+      "accountEmail": "beta@example.com"
+    }
+  ],
+  "promptCredits": {
+    "available": 500,
+    "monthly": 50000,
+    "usedPercentage": 0.99,
+    "remainingPercentage": 0.01
+  }
+}

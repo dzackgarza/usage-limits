@@ -1,5 +1,4 @@
 {
-  "method": "local",
   "models": [
     {
       "label": "Claude Sonnet 4.6 (Thinking)",
@@ -7,7 +6,8 @@
       "isExhausted": false,
       "resetTime": "2026-05-21T17:22:13Z",
       "timeUntilResetMs": 3763402,
-      "isAutocompleteOnly": false
+      "isAutocompleteOnly": false,
+      "accountEmail": "test@example.com"
     },
     {
       "label": "Claude Opus 4.6 (Thinking)",
@@ -15,7 +15,8 @@
       "isExhausted": false,
       "resetTime": "2026-05-21T17:22:13Z",
       "timeUntilResetMs": 3763402,
-      "isAutocompleteOnly": false
+      "isAutocompleteOnly": false,
+      "accountEmail": "test@example.com"
     },
     {
       "label": "GPT-OSS 120B (Medium)",
@@ -23,7 +24,8 @@
       "isExhausted": false,
       "resetTime": "2026-05-21T17:22:13Z",
       "timeUntilResetMs": 3763402,
-      "isAutocompleteOnly": false
+      "isAutocompleteOnly": false,
+      "accountEmail": "test@example.com"
     },
     {
       "label": "Gemini 3.5 Flash (High)",
@@ -32,7 +34,8 @@
       "isExhausted": false,
       "resetTime": "2026-05-28T09:39:04Z",
       "timeUntilResetMs": 580774402,
-      "isAutocompleteOnly": false
+      "isAutocompleteOnly": false,
+      "accountEmail": "test@example.com"
     },
     {
       "label": "Gemini 3.5 Flash (Medium)",
@@ -41,7 +44,8 @@
       "isExhausted": false,
       "resetTime": "2026-05-28T09:39:04Z",
       "timeUntilResetMs": 580774402,
-      "isAutocompleteOnly": false
+      "isAutocompleteOnly": false,
+      "accountEmail": "test@example.com"
     },
     {
       "label": "Gemini 3.1 Pro (High)",
@@ -50,7 +54,8 @@
       "isExhausted": false,
       "resetTime": "2026-05-28T09:39:04Z",
       "timeUntilResetMs": 580774402,
-      "isAutocompleteOnly": false
+      "isAutocompleteOnly": false,
+      "accountEmail": "test@example.com"
     },
     {
       "label": "Gemini 3.1 Pro (Low)",
@@ -59,7 +64,8 @@
       "isExhausted": false,
       "resetTime": "2026-05-28T09:39:04Z",
       "timeUntilResetMs": 580774402,
-      "isAutocompleteOnly": false
+      "isAutocompleteOnly": false,
+      "accountEmail": "test@example.com"
     }
   ],
   "promptCredits": {
