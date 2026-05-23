@@ -6,69 +6,89 @@ Uniform quota collection and rendering for CLI- and API-backed LLM providers.
 
 ## Current Provider Coverage
 
-| Provider | Status | Window(s) | Mechanism | Reliance |
-| :--- | :--- | :--- | :--- | :--- |
-| **Antigravity** | ✅ | Dynamic | `antigravity-usage quota` | Local CLI |
-| **Claude** | ✅ | 5h, 7d | OAuth API | `~/.claude/.credentials.json` |
-| **Codex** | ✅ | 5h, 7d | WHAM API | `~/.codex/auth.json` |
-| **Ollama** | ✅ | 5h, 7d | HTML Scrape | Chromium cookie (`ollama.com`) |
-| **OpenCode** | ✅ | 5h, 7d, 30d | HTML Scrape | Chromium cookie (`opencode.ai`) |
-| **OpenRouter** | Inactive | Daily | Local traces | `~/.local/state/openrouter_usage/traces.json` |
+| Provider | Status | Mechanism |
+| :--- | :--- | :--- |
+| **Antigravity** | ✅ | Google Cloud Code API (OAuth2 refresh) |
+| **Claude Code** | ✅ | Anthropic OAuth API (`~/.claude/.credentials.json`) |
+| **Codex** | ✅ | ChatGPT WHAM API (`~/.codex/auth.json`) |
+| **Copilot** | ✅ | `gh auth token` → GitHub Copilot internal API |
+| **Cursor** | ✅ | SQLite `state.vscdb` → JWT → Cursor usage-summary API |
+| **Kiro** | ✅ | SQLite `data.sqlite3` → OAuth → Kiro usage API |
+| **Ollama Cloud** | ✅ | Chromium session cookie → HTML scrape |
+| **OpenCode** | ✅ | Chromium session cookie → workspace API → HTML scrape |
+| **Qoder** | ✅ | SQLite `state.vscdb` → secret keys → Qoder credit API |
+| **Trae** | ✅ | SQLite `storage.json` → JWT → Trae usage API |
+| **Windsurf** | ✅ | SQLite `state.vscdb` → Windsurf user-status API |
+
+### Inactive
+
+These providers are registered but not collected by default:
+
+| Provider | Mechanism |
+| :--- | :--- |
+| **OpenRouter** | Local traces file (`~/.local/state/openrouter_usage/traces.json`) |
 
 ## How It Works
 
-### First-Party CLI Wrappers
+### OAuth / First-Party API
 
-- **Antigravity**: Multi-model quotas (Flash, Pro, Claude, GPT-OSS). Collection parses
-  `antigravity-usage --json`.
+Providers that expose a first-party usage API are called directly with
+credentials obtained from local state files or OAuth refresh flows.
 
-### Web & OAuth APIs
+- **Antigravity**: Reads cockpit-tools OAuth credentials, refreshes the
+  access token via Google's OAuth2 endpoint, then calls the Cloud Code
+  `loadCodeAssist` and `fetchAvailableModels` APIs directly. Supports
+  multi-model quotas (Flash, Pro, Claude, GPT-OSS).
+- **Claude Code**: Anthropic OAuth API. Relies on the JSON credentials
+  file created by `claude login`.
+- **Codex**: ChatGPT WHAM (Usage) API. Relies on the JSON auth file
+  created by `codex login`.
+- **Copilot**: Uses `gh auth token` for GitHub authentication, then calls
+  the Copilot internal user API.
 
-- **Claude Code**: Anthropic OAuth API. Relies on the JSON credentials file created by
-  `claude login`.
-- **Codex**: ChatGPT WHAM (Usage) API. Relies on the JSON auth file created by
-  `codex login`.
-- **Ollama Cloud**: Scrapes `ollama.com/settings`. Uses Chromium session cookie
-  extracted via `browser-cookie3`.
-- **OpenCode**: Scrapes `opencode.ai/workspace/{id}/go` for Go subscription usage.
-  Uses Chromium session cookie extracted via `browser-cookie3`.
+### SQLite-Backed Credentials
 
-### Inactive Providers
+Several IDE-based providers store credentials in local SQLite databases
+that are read and exchanged for API tokens.
 
-These providers are not collected by default but can be used explicitly with
-`usage-limits --provider <slug>`:
+- **Cursor, Windsurf, Qoder**: Read `state.vscdb` (VS Code global storage)
+  to extract session tokens or secret material, then call the respective
+  usage APIs.
+- **Kiro**: Reads `data.sqlite3` from the Kiro CLI state directory.
+- **Trae**: Reads `storage.json` from the Trae global storage directory.
 
-- **OpenRouter**: Reads a local traces file written by a separate telemetry
-  pipeline (`~/.local/state/openrouter_usage/traces.json`). The file must be a
-  flat JSON object mapping ISO date strings to daily request counts:
-  ```json
-  {"2026-05-20": 42, "2026-05-21": 15}
-  ```
-  This file must be populated by an external mechanism that records OpenRouter
-  request counts.
+### Cookie-Based Scraping
 
-## Discontinued Providers
+Platforms that do not expose a usage API are scraped via Chromium session
+cookies extracted with `browser_cookie3`.
 
-The following providers were previously supported but their free tiers have been
-discontinued and the providers removed:
+- **Ollama Cloud**: Scrapes `ollama.com/settings`.
+- **OpenCode**: Discovers the workspace ID from `opencode.ai`, then scrapes
+  the subscription page.
 
-- **Amp**: Free tier discontinued.
-- **Qwen**: Free tier discontinued.
+## Caching
+
+All providers have a per-provider TTL on cached fetch results (default 0 —
+no caching). Claude Code is configured with a 300s TTL.
+
+The caching layer:
+- Writes every successful `fetch_raw` result to a JSON cache file in the
+  provider's state directory.
+- Falls back to stale cached data when a live fetch fails (transient errors,
+  rate limits).
+- Caches fetch failures themselves — if a provider is rate-limited, the
+  error is persisted so subsequent calls within the TTL window skip the API
+  entirely instead of retrying immediately.
 
 ## Usage
 
 ### Simple Collection
-
-By default, `usage-limits` collects data for all supported providers and renders a Rich
-table.
 
 ```bash
 usage-limits
 ```
 
 ### JSON Output
-
-For programmatic use or custom filtering via `jq`, use the `-j` / `--json` flag.
 
 ```bash
 usage-limits --json | jq '.providers[] | {p: .provider, a: .availability}'
@@ -77,6 +97,7 @@ usage-limits --json | jq '.providers[] | {p: .provider, a: .availability}'
 ### Options
 
 - `-p, --provider <slug>`: Collect only specified provider(s).
+- `-j, --json`: JSON output.
 - `-n, --notify`: Send notifications (via local `ntfy` topic).
 - `-a, --anchor`: Allow providers to "anchor" (warm up) windows (e.g., running `claude`
   or `ollama` with a trivial prompt).
@@ -96,7 +117,7 @@ The canonical JSON contract includes:
 - `providers`: List of provider snapshots.
 
 Each provider snapshot contains:
-- `status`: `ok` or `error`.
+- `status`: `ok` or `error` or `rate_limited`.
 - `rows`: List of usage rows (Identifier, % used, Reset time).
 - `availability`: High-level summary of model readiness.
 - `errors`: List of provider-specific error messages.

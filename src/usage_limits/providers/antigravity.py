@@ -31,11 +31,26 @@ CLOUDCODE_METADATA = {
 }
 GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 
-# Antigravity OAuth client (from antigravity-usage CLI defaults)
-ANTIGRAVITY_OAUTH_CLIENT_ID = (
-    "***REMOVED***"
-)
-ANTIGRAVITY_OAUTH_CLIENT_SECRET = "***REMOVED***"
+# Antigravity OAuth client — loaded from environment.
+# Set ANTIGRAVITY_OAUTH_CLIENT_ID and ANTIGRAVITY_OAUTH_CLIENT_SECRET in .envrc.
+
+
+def _oauth_client_id() -> str:
+    val = os.environ.get("ANTIGRAVITY_OAUTH_CLIENT_ID")
+    if val is None:
+        raise RuntimeError(
+            "ANTIGRAVITY_OAUTH_CLIENT_ID is not set. Add it to .envrc and run `direnv allow`."
+        )
+    return val
+
+
+def _oauth_client_secret() -> str:
+    val = os.environ.get("ANTIGRAVITY_OAUTH_CLIENT_SECRET")
+    if val is None:
+        raise RuntimeError(
+            "ANTIGRAVITY_OAUTH_CLIENT_SECRET is not set. Add it to .envrc and run `direnv allow`."
+        )
+    return val
 
 
 class AntigravityModel(TypedDict):
@@ -127,8 +142,8 @@ class AntigravityProvider(UsageProvider):
         resp = requests.post(
             GOOGLE_TOKEN_ENDPOINT,
             json={
-                "client_id": ANTIGRAVITY_OAUTH_CLIENT_ID,
-                "client_secret": ANTIGRAVITY_OAUTH_CLIENT_SECRET,
+                "client_id": _oauth_client_id(),
+                "client_secret": _oauth_client_secret(),
                 "refresh_token": refresh_token,
                 "grant_type": "refresh_token",
             },
