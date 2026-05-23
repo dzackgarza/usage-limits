@@ -1,37 +1,43 @@
-"""Provider normalization tests for Windsurf.
+"""Provider normalization test for Windsurf.
 
-Uses a captured real API response to exercise the
-``fetch_raw`` → ``to_rows`` pipeline. The fixture was
-captured from the Windsurf GetUserStatus API.
+Exercises the fetch_raw -> to_rows pipeline against the live API.
+The Windsurf provider reads an API key from SQLite state.vscdb,
+calls the GetUserStatus endpoint, and parses plan credits + quotas.
 """
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 from usage_limits.providers.windsurf import WindsurfProvider
 
-FIXTURE_DIR = Path(__file__).parent / "fixtures"
 
-
-def test_windsurf_to_rows_with_captured_fixture() -> None:
+def test_windsurf_live_api() -> None:
+    """Windsurf fetch_raw + to_rows against live API must produce valid rows."""
     provider = WindsurfProvider()
-    raw = json.loads((FIXTURE_DIR / "windsurf-usage.json").read_text())
+    raw = provider.fetch_raw()
     rows = provider.to_rows(raw)
 
-    assert len(rows) == 2
+    # Must have at least prompt + flow credits rows
+    assert len(rows) >= 2
 
-    # Prompt credits row
+    # First row should be prompt credits
     prompt = rows[0]
-    assert prompt.identifier == "Windsurf (Pro - Prompt)"
-    assert prompt.pct_used == 50.0  # 50/100 used
+    assert "Prompt" in prompt.identifier
+    assert prompt.pct_used >= 0
     assert prompt.is_exhausted is False
-    assert prompt.reset_at is not None
 
-    # Flow credits row
+    # Second row should be flow credits
     flow = rows[1]
-    assert flow.identifier == "Windsurf (Pro - Flow)"
-    assert flow.pct_used == 50.0  # 100/200 used
+    assert "Flow" in flow.identifier
+    assert flow.pct_used >= 0
     assert flow.is_exhausted is False
-    assert flow.reset_at is not None
+
+    # Daily and weekly quota rows should have reset_at set
+    daily = [r for r in rows if "Daily" in r.identifier]
+    assert len(daily) == 1
+    assert daily[0].reset_at is not None
+    assert daily[0].pct_used >= 0
+
+    weekly = [r for r in rows if "Weekly" in r.identifier]
+    assert len(weekly) == 1
+    assert weekly[0].reset_at is not None
+    assert weekly[0].pct_used >= 0

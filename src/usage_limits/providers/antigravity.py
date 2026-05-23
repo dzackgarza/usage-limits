@@ -1,6 +1,9 @@
 """Antigravity usage limits provider.
 
-Known upstream quirk (antigravity-usage CLI):
+Reads Google OAuth credentials from cockpit-tools credentials.json,
+refreshes the access token, and calls the Google Cloud Code API directly.
+
+Known upstream quirk:
 Anthropic models (Claude Sonnet, Opus, GPT-OSS) stopped including
 ``remainingPercentage`` and report ``isExhausted: false`` even when
 they are fully exhausted. We treat a missing ``remainingPercentage``
@@ -10,18 +13,35 @@ as 100% used regardless of the ``isExhausted`` field.
 from __future__ import annotations
 
 import json
-import subprocess
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import NotRequired, TypedDict, cast
+
+import requests
 
 from usage_limits.base import UsageProvider
 from usage_limits.table import ModelAvailability, UsageRow
+
+COCKPIT_CREDENTIALS_PATH = Path.home() / ".antigravity_cockpit" / "credentials.json"
+CLOUDCODE_BASE_URL = "https://cloudcode-pa.googleapis.com"
+CLOUDCODE_METADATA = {
+    "ideType": "ANTIGRAVITY",
+    "platform": "PLATFORM_UNSPECIFIED",
+    "pluginType": "GEMINI",
+}
+GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
+
+# Antigravity OAuth client (from antigravity-usage CLI defaults)
+ANTIGRAVITY_OAUTH_CLIENT_ID = (
+    "***REMOVED***"
+)
+ANTIGRAVITY_OAUTH_CLIENT_SECRET = "***REMOVED***"
 
 
 class AntigravityModel(TypedDict):
     label: str
     modelId: str
-    remainingPercentage: NotRequired[float]  # absent → tool bug → treat as exhausted
+    remainingPercentage: NotRequired[float]  # absent -> tool bug -> treat as exhausted
     isExhausted: bool
     resetTime: str | None
 
@@ -30,8 +50,59 @@ class AntigravityRaw(TypedDict):
     models: list[AntigravityModel]
 
 
+class CockpitAccount(TypedDict):
+    email: str
+    accessToken: str
+    refreshToken: str
+    expiresAt: str
+    projectId: str
+
+
+class CockpitCredentials(TypedDict):
+    accounts: dict[str, CockpitAccount]
+
+
+class TokenResponse(TypedDict):
+    access_token: str
+    expires_in: int
+    token_type: str
+
+
+class LoadCodeAssistResponse(TypedDict, total=False):
+    codeAssistEnabled: bool
+    planInfo: dict[str, object]
+    availablePromptCredits: float
+    cloudaicompanionProject: str | dict[str, str]
+    currentTier: dict[str, str]
+    paidTier: dict[str, str]
+    allowedTiers: list[dict[str, str]]
+
+
+class ModelQuotaInfo(TypedDict, total=False):
+    remainingFraction: float
+    resetTime: str
+    isExhausted: bool
+
+
+class ModelInfo(TypedDict, total=False):
+    displayName: str
+    model: str
+    label: str
+    quotaInfo: ModelQuotaInfo
+    maxTokens: int
+    recommended: bool
+    supportsImages: bool
+    supportsThinking: bool
+    modelProvider: str
+
+
+class FetchAvailableModelsResponse(TypedDict, total=False):
+    models: dict[str, ModelInfo]
+    defaultAgentModelId: str
+
+
 class AntigravityProvider(UsageProvider):
-    """Antigravity usage checker backed by the antigravity-usage CLI."""
+    """Antigravity usage checker backed by Google Cloud Code API."""
 
     slug = "antigravity"
     name = "Antigravity"
@@ -42,15 +113,102 @@ class AntigravityProvider(UsageProvider):
     def provider_name(self) -> str:
         return "Antigravity"
 
-    def fetch_raw(self) -> AntigravityRaw:
-        result = subprocess.run(
-            ["npx", "--yes", "antigravity-usage", "quota", "--all-models", "--refresh", "--json"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            check=True,
+    def _get_access_token(self) -> str:
+        """Read and refresh Google OAuth token from cockpit-tools credentials."""
+        with open(COCKPIT_CREDENTIALS_PATH) as f:
+            creds = cast(CockpitCredentials, json.load(f))
+
+        # Get the first account (user's primary)
+        email = next(iter(creds["accounts"]))
+        account = creds["accounts"][email]
+
+        refresh_token = account["refreshToken"]
+
+        resp = requests.post(
+            GOOGLE_TOKEN_ENDPOINT,
+            json={
+                "client_id": ANTIGRAVITY_OAUTH_CLIENT_ID,
+                "client_secret": ANTIGRAVITY_OAUTH_CLIENT_SECRET,
+                "refresh_token": refresh_token,
+                "grant_type": "refresh_token",
+            },
         )
-        return cast(AntigravityRaw, json.loads(result.stdout))
+        token_data = cast(TokenResponse, resp.json())
+        return token_data["access_token"]
+
+    def fetch_raw(self) -> AntigravityRaw:
+        token = self._get_access_token()
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "User-Agent": "antigravity",
+        }
+
+        # Step 1: Load code assist (gets plan info, project ID)
+        resp = requests.post(
+            f"{CLOUDCODE_BASE_URL}/v1internal:loadCodeAssist",
+            headers=headers,
+            json={"metadata": CLOUDCODE_METADATA},
+        )
+        code_assist = cast(LoadCodeAssistResponse, resp.json())
+
+        # Extract project ID
+        project_info = code_assist.get("cloudaicompanionProject")
+        project_id: str | None = None
+        if isinstance(project_info, str):
+            project_id = project_info
+        elif isinstance(project_info, dict):
+            project_id = project_info.get("id")
+
+        # Step 2: Fetch available models (gets per-model quota)
+        body: dict[str, object] = {}
+        if project_id:
+            body["project"] = project_id
+
+        resp = requests.post(
+            f"{CLOUDCODE_BASE_URL}/v1internal:fetchAvailableModels",
+            headers=headers,
+            json=body,
+        )
+        models_data = cast(FetchAvailableModelsResponse, resp.json())
+
+        # Convert to the raw format that to_rows expects
+        # Deduplicate by label and filter out deprecated/experimental models
+        seen_labels: set[str] = set()
+        raw_models: list[AntigravityModel] = []
+        for model_id, info in models_data.get("models", {}).items():
+            label = info.get("label", info.get("displayName", model_id))
+
+            # Skip internal/experimental models
+            if label.startswith(("chat_", "tab_", "gemini-")):
+                continue
+            # Skip deprecated models
+            deprecated = {"Gemini 2.5 Pro", "Gemini 3 Flash", "Gemini 3.1 Flash Lite", "Gemini 3.1 Flash Image"}
+            if label in deprecated:
+                continue
+            # Skip duplicates (keep first seen)
+            if label in seen_labels:
+                continue
+            seen_labels.add(label)
+
+            quota = info.get("quotaInfo", {})
+            reset_time = quota.get("resetTime")
+            is_exhausted = quota.get("isExhausted", False)
+
+            model: AntigravityModel = {
+                "label": label,
+                "modelId": model_id,
+                "isExhausted": is_exhausted,
+                "resetTime": reset_time,
+            }
+
+            remaining = quota.get("remainingFraction")
+            if remaining is not None:
+                model["remainingPercentage"] = remaining
+
+            raw_models.append(model)
+
+        return cast(AntigravityRaw, {"models": raw_models})
 
     def to_rows(self, raw: AntigravityRaw) -> list[UsageRow]:
         rows: list[UsageRow] = []

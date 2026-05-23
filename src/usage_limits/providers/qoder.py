@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 import json
-import sqlite3
+from pathlib import Path
 from typing import TypedDict, cast
+
+import requests
 
 from usage_limits.base import UsageProvider
 from usage_limits.table import UsageRow
+
+QODER_OPENAPI_BASE_URL = "https://openapi.qoder.sh"
+CREDIT_USAGE_PATH = "/api/v2/quota/usage"
+
+COCKPIT_ACCOUNTS_DIR = Path.home() / ".antigravity_cockpit" / "qoder_accounts"
 
 
 class QoderQuotaBucket(TypedDict, total=False):
@@ -23,30 +30,18 @@ class QoderCreditUsage(TypedDict, total=False):
     addOnQuota: QoderQuotaBucket
     totalUsagePercentage: float
     expiresAt: float
-    plan_tier_name: str
-
-
-class QoderUserInfo(TypedDict, total=False):
-    email: str
-    name: str
-    id: str
-    userTag: str
-
-
-class QoderUserPlan(TypedDict, total=False):
-    plan: str
-    tier: str
-    plan_tier_name: str
 
 
 class QoderCredentials(TypedDict):
-    user_info: QoderUserInfo
-    user_plan: QoderUserPlan
+    token: str
+    email: str
+    user_id: str
+    plan_type: str
     credit_usage: QoderCreditUsage
 
 
 class QoderProvider(UsageProvider):
-    """Qoder usage checker (credits, user quota, add-on quota)."""
+    """Qoder usage checker (credits quota via OpenAPI)."""
 
     slug = "qoder"
     name = "Qoder"
@@ -54,66 +49,59 @@ class QoderProvider(UsageProvider):
     ntfy_topic = "usage-updates"
     ntfy_server = "http://localhost"
 
-    SECRET_USER_INFO_KEY = "secret://aicoding.auth.userInfo"
-    SECRET_USER_PLAN_KEY = "secret://aicoding.auth.userPlan"
-    SECRET_CREDIT_USAGE_KEY = "secret://aicoding.auth.creditUsage"
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.state_db = (
-            __import__("pathlib").Path.home()
-            / ".config"
-            / "Qoder"
-            / "User"
-            / "globalStorage"
-            / "state.vscdb"
-        )
-
     def provider_name(self) -> str:
         return "Qoder"
 
-    def get_credentials(self) -> QoderCredentials:
-        conn = sqlite3.connect(self.state_db)
-        cursor = conn.cursor()
-        cursor.execute(
-            'SELECT key, value FROM ItemTable WHERE key IN (?, ?, ?)',
-            [
-                self.SECRET_USER_INFO_KEY,
-                self.SECRET_USER_PLAN_KEY,
-                self.SECRET_CREDIT_USAGE_KEY,
-            ],
-        )
-        rows = cursor.fetchall()
-        conn.close()
+    def get_access_token(self) -> str:
+        """Read the access token from the cockpit-tools Qoder account store."""
+        json_files = sorted(COCKPIT_ACCOUNTS_DIR.glob("qoder_uid_*.json"))
+        account_file = json_files[0]
+        with open(account_file) as f:
+            account = json.load(f)
+        token = account["auth_user_info_raw"]["token"]
+        assert isinstance(token, str)
+        return token
 
-        data: dict[str, str] = {}
-        for key, value in rows:
-            data[key] = value
-
-        user_info = json.loads(data[self.SECRET_USER_INFO_KEY])
-        user_plan = json.loads(data[self.SECRET_USER_PLAN_KEY])
-        credit_usage = json.loads(data[self.SECRET_CREDIT_USAGE_KEY])
-
+    def get_account_meta(self) -> dict[str, str]:
+        """Read account metadata from the cockpit-tools Qoder account store."""
+        json_files = sorted(COCKPIT_ACCOUNTS_DIR.glob("qoder_uid_*.json"))
+        account_file = json_files[0]
+        with open(account_file) as f:
+            account = json.load(f)
         return {
-            "user_info": cast(QoderUserInfo, user_info),
-            "user_plan": cast(QoderUserPlan, user_plan),
-            "credit_usage": cast(QoderCreditUsage, credit_usage),
+            "email": account["email"],
+            "user_id": account["user_id"],
+            "plan_type": account["plan_type"],
         }
 
     def fetch_raw(self) -> QoderCredentials:
-        return self.get_credentials()
+        token = self.get_access_token()
+        meta = self.get_account_meta()
+
+        usage_url = f"{QODER_OPENAPI_BASE_URL}{CREDIT_USAGE_PATH}"
+        resp = requests.get(
+            usage_url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/json",
+            },
+            timeout=30,
+        )
+        resp.raise_for_status()
+        credit_usage = cast(QoderCreditUsage, resp.json())
+
+        return {
+            "token": token,
+            "email": meta["email"],
+            "user_id": meta["user_id"],
+            "plan_type": meta["plan_type"],
+            "credit_usage": credit_usage,
+        }
 
     def to_rows(self, raw: QoderCredentials) -> list[UsageRow]:
         credit_usage = raw["credit_usage"]
-        user_info = raw["user_info"]
-        user_plan = raw["user_plan"]
-
-        plan_name = (
-            user_plan.get("plan_tier_name")
-            or user_plan.get("plan")
-            or user_info.get("userTag")
-            or "Unknown"
-        )
+        email = raw["email"]
+        plan_type = raw["plan_type"]
 
         rows: list[UsageRow] = []
 
@@ -121,15 +109,14 @@ class QoderProvider(UsageProvider):
         user_quota = credit_usage["userQuota"]
         used = user_quota["used"]
         total = user_quota["total"]
-        if total > 0:
+        if isinstance(total, (int, float)) and total > 0:
             pct_used = (used / total) * 100
         else:
             pct_used = user_quota.get("percentage", 0.0)
 
-        email = user_info.get("email", "unknown")
         rows.append(
             UsageRow(
-                identifier=f"Qoder ({plan_name} - {email})",
+                identifier=f"Qoder ({plan_type} - {email})",
                 pct_used=pct_used,
                 reset_at=None,
             )
@@ -140,7 +127,7 @@ class QoderProvider(UsageProvider):
         if add_on_quota:
             addon_used = add_on_quota.get("used", 0)
             addon_total = add_on_quota.get("total", 0)
-            if addon_total > 0:
+            if isinstance(addon_total, (int, float)) and addon_total > 0:
                 addon_pct = (addon_used / addon_total) * 100
             else:
                 addon_pct = add_on_quota.get("percentage", 0.0)

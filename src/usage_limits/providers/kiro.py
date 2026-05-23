@@ -13,12 +13,14 @@ import requests
 from usage_limits.base import UsageProvider
 from usage_limits.table import UsageRow
 
+KIRO_REFRESH_ENDPOINT = "https://prod.us-east-1.auth.desktop.kiro.dev/refreshToken"
+
 
 class KiroCredentials(TypedDict):
     access_token: str
     refresh_token: str
     provider: str
-    profile_arn: str
+    profile_arn: str | None
 
 
 class KiroUsageBreakdown(TypedDict):
@@ -70,7 +72,8 @@ class KiroProvider(UsageProvider):
     def provider_name(self) -> str:
         return "Kiro"
 
-    def get_credentials(self) -> KiroCredentials:
+    def _read_db(self) -> dict[str, Any]:
+        """Read raw token data from the kiro-cli SQLite database."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute("SELECT value FROM auth_kv WHERE key = 'kirocli:social:token'")
@@ -81,7 +84,79 @@ class KiroProvider(UsageProvider):
             raise FileNotFoundError(f"No credentials found in {self.db_path}")
 
         data: dict[str, Any] = json.loads(row[0])
-        return cast(KiroCredentials, data)
+        return data
+
+    def _get_profile_arn(self) -> str:
+        """Get profileArn from the state table in the kiro-cli database."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT value FROM state WHERE key = 'api.codewhisperer.profile'"
+        )
+        row = cursor.fetchone()
+        conn.close()
+
+        if row is None:
+            raise FileNotFoundError("No profile found in kiro-cli state table")
+
+        profile: dict[str, Any] = json.loads(row[0])
+        arn: str = profile["arn"]
+        return arn
+
+    def _refresh_token(self, refresh_token: str) -> dict[str, Any]:
+        """Refresh the access token using the refresh_token endpoint."""
+        resp = requests.post(
+            KIRO_REFRESH_ENDPOINT,
+            json={"refreshToken": refresh_token},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data: dict[str, Any] = resp.json()
+        return data
+
+    def get_credentials(self) -> KiroCredentials:
+        data = self._read_db()
+
+        access_token = data["access_token"]
+        refresh_token = data["refresh_token"]
+        provider = data["provider"]
+
+        # Check if token is expired
+        expires_at_str = data.get("expires_at")
+        if expires_at_str:
+            expires_at = datetime.fromisoformat(
+                expires_at_str.replace("Z", "+00:00")
+            )
+            now = datetime.now(tz=UTC)
+            if now >= expires_at:
+                # Token expired, refresh it
+                new_token_data = self._refresh_token(refresh_token)
+                access_token = new_token_data["accessToken"]
+
+                # Update the database with new token
+                data["access_token"] = access_token
+                data["expires_at"] = new_token_data.get("expiresAt", expires_at_str)
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                cursor.execute(
+                    "UPDATE auth_kv SET value = ? WHERE key = 'kirocli:social:token'",
+                    [json.dumps(data)],
+                )
+                conn.commit()
+                conn.close()
+
+        # profileArn is None in the token JSON, read from state table
+        profile_arn = self._get_profile_arn()
+
+        return cast(
+            KiroCredentials,
+            {
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "provider": provider,
+                "profile_arn": profile_arn,
+            },
+        )
 
     def fetch_raw(self) -> KiroUsageResponse:
         creds = self.get_credentials()

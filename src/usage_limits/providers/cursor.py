@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 from typing import TypedDict, cast
 
@@ -13,45 +15,49 @@ from usage_limits.base import UsageProvider
 from usage_limits.table import UsageRow
 
 
-class CursorUsageSummary(TypedDict):
-    membershipType: str
-    gpt4: CursorModelUsage
-    gpt35: CursorModelUsage
-    codex: CursorModelUsage
-    o1: CursorModelUsage
-    sonnet: CursorModelUsage
-    o3Pro: CursorModelUsage
-    gemini: CursorModelUsage
-    geminiPro: CursorModelUsage
-    aurora: CursorModelUsage
-    cursorPro: CursorModelUsage
-    cursorPremPlus: CursorModelUsage
-    cursorPremUlt: CursorModelUsage
+class CursorPlanUsage(TypedDict):
+    enabled: bool
+    used: int
+    limit: int
+    remaining: int
+    breakdown: CursorPlanBreakdown
+    autoPercentUsed: int
+    apiPercentUsed: int
+    totalPercentUsed: int
 
 
-class CursorModelUsage(TypedDict):
-    numRequests: int
-    maxRequestUsage: int | str
+class CursorPlanBreakdown(TypedDict):
+    included: int
+    bonus: int
+    total: int
+
+
+class CursorOnDemandUsage(TypedDict):
+    enabled: bool
+    used: int
+    limit: int | None
+    remaining: int | None
+
+
+class CursorIndividualUsage(TypedDict):
+    plan: CursorPlanUsage
+    onDemand: CursorOnDemandUsage
 
 
 class CursorUsageResponse(TypedDict):
+    billingCycleStart: str
+    billingCycleEnd: str
     membershipType: str
-    gpt4: CursorModelUsage
-    gpt35: CursorModelUsage
-    codex: CursorModelUsage
-    o1: CursorModelUsage
-    sonnet: CursorModelUsage
-    o3Pro: CursorModelUsage
-    gemini: CursorModelUsage
-    geminiPro: CursorModelUsage
-    aurora: CursorModelUsage
-    cursorPro: CursorModelUsage
-    cursorPremPlus: CursorModelUsage
-    cursorPremUlt: CursorModelUsage
+    limitType: str
+    isUnlimited: bool
+    autoModelSelectedDisplayMessage: str
+    namedModelSelectedDisplayMessage: str
+    individualUsage: CursorIndividualUsage
+    teamUsage: dict[str, object]
 
 
 class CursorProvider(UsageProvider):
-    """Cursor usage checker (per-model request quotas)."""
+    """Cursor usage checker (aggregate plan usage)."""
 
     slug = "cursor"
     name = "Cursor"
@@ -83,7 +89,8 @@ class CursorProvider(UsageProvider):
         )
         row = cursor.fetchone()
         conn.close()
-        return row[0]
+        token: str = row[0]
+        return token
 
     def fetch_raw(self) -> CursorUsageResponse:
         access_token = self.get_access_token()
@@ -91,12 +98,9 @@ class CursorProvider(UsageProvider):
         # Build WorkosCursorSessionToken cookie
         # accessToken is a JWT, extract sub to get user_id
         jwt_payload = access_token.split(".")[1]
-        import base64
-
-        # Add padding
         jwt_payload += "=" * (4 - len(jwt_payload) % 4)
         decoded = json.loads(base64.b64decode(jwt_payload))
-        sub = decoded.get("sub", "")
+        sub = decoded["sub"]
         user_id = sub.split("|")[-1] if "|" in sub else sub
 
         cookie = f"WorkosCursorSessionToken={user_id}%3A%3A{access_token}"
@@ -115,40 +119,46 @@ class CursorProvider(UsageProvider):
 
     def to_rows(self, raw: CursorUsageResponse) -> list[UsageRow]:
         membership = raw["membershipType"]
+        usage = raw["individualUsage"]
         rows: list[UsageRow] = []
 
-        model_keys = [
-            "gpt4",
-            "gpt35",
-            "codex",
-            "o1",
-            "sonnet",
-            "o3Pro",
-            "gemini",
-            "geminiPro",
-            "aurora",
-            "cursorPro",
-            "cursorPremPlus",
-            "cursorPremUlt",
-        ]
+        # Plan usage — always report even when limit is 0
+        plan = usage["plan"]
+        plan_limit = plan["limit"]
+        plan_used = plan["used"]
 
-        for model_key in model_keys:
-            if model_key not in raw:
-                continue
+        if isinstance(plan_limit, int) and plan_limit > 0:
+            pct_used = (plan_used / plan_limit) * 100
+        else:
+            # For free plans with limit=0, use totalPercentUsed from the API
+            pct_used = plan["totalPercentUsed"]
 
-            model_data = raw[model_key]
-            num_requests = model_data["numRequests"]
-            max_usage = model_data["maxRequestUsage"]
+        billing_end = raw.get("billingCycleEnd")
+        reset_at = None
+        if billing_end:
+            reset_at = datetime.fromisoformat(billing_end.replace("Z", "+00:00"))
 
-            if isinstance(max_usage, int) and max_usage > 0:
-                pct_used = (num_requests / max_usage) * 100
-                rows.append(
-                    UsageRow(
-                        identifier=f"Cursor ({membership} - {model_key})",
-                        pct_used=pct_used,
-                        reset_at=None,
-                    )
+        rows.append(
+            UsageRow(
+                identifier=f"Cursor ({membership} - Plan)",
+                pct_used=pct_used,
+                reset_at=reset_at,
+            )
+        )
+
+        # On-demand usage (only when limit > 0)
+        on_demand = usage["onDemand"]
+        on_demand_limit = on_demand["limit"]
+        on_demand_used = on_demand["used"]
+        if isinstance(on_demand_limit, int) and on_demand_limit > 0:
+            pct_used = (on_demand_used / on_demand_limit) * 100
+            rows.append(
+                UsageRow(
+                    identifier=f"Cursor ({membership} - On Demand)",
+                    pct_used=pct_used,
+                    reset_at=None,
                 )
+            )
 
         return rows
 

@@ -41,3 +41,28 @@ def test_antigravity_to_rows_with_captured_fixture() -> None:
     # Verify identifiers include the label from the API
     assert "Antigravity: Claude Sonnet 4.6 (Thinking)" in [r.identifier for r in rows]
     assert "Antigravity: Gemini 3.5 Flash (High)" in [r.identifier for r in rows]
+
+
+def test_antigravity_fetch_raw_returns_data() -> None:
+    """Live API test: fetch_raw must return real quota data, not raise."""
+    provider = AntigravityProvider()
+    raw = provider.fetch_raw()
+
+    # Must have models key with at least one model
+    assert "models" in raw
+    assert len(raw["models"]) >= 1
+
+    # Each model must have required fields
+    for model in raw["models"]:
+        assert "label" in model
+        assert "modelId" in model
+        assert "isExhausted" in model
+        assert "resetTime" in model
+
+    # Parse the raw data through to_rows and verify output
+    rows = provider.to_rows(raw)
+    assert len(rows) >= 1
+
+    for row in rows:
+        assert row.identifier.startswith("Antigravity: ")
+        assert 0.0 <= row.pct_used <= 100.0

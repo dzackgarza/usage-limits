@@ -26,6 +26,7 @@ dependencies = [
     "uvicorn>=0.41.0",
     "opentelemetry-proto>=1.40.0",
     "browser-cookie3>=0.20",
+    "cryptography>=42.0",
 ]
 
 [project.urls]

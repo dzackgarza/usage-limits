@@ -83,7 +83,13 @@ class UsageTable:
     def render(self, rows: list[UsageRow], title: str = "Usage Limits") -> None:
         """Render the usage table inside a titled panel."""
         if not rows:
-            self.console.print("[yellow]No data available[/yellow]")
+            self.console.print(
+                Panel(
+                    f"[yellow]{title}: no usage data[/yellow]",
+                    border_style="yellow",
+                )
+            )
+            self.console.print()
             return
 
         self.console.print(Panel(f"[bold]{title}[/bold]", border_style="cyan"))
