@@ -6,7 +6,7 @@ import json
 import subprocess
 import tempfile
 from abc import ABC, abstractmethod
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -24,9 +24,6 @@ class UsageProvider(ABC):
     slug: str
     name: str
     state_dir: str
-    cache_ttl_seconds: int = 0
-    """How long (in seconds) a cached ``fetch_raw()`` response is considered fresh.
-    0 means the cache expires immediately — every call re-fetches."""
     ntfy_topic: str = "usage-updates"
     ntfy_server: str = "http://localhost"
 
@@ -68,9 +65,7 @@ class UsageProvider(ABC):
 
     def _available_when(self, rows: list[UsageRow]) -> datetime | None:
         """Earliest time all exhausted windows will have reset."""
-        reset_times = [
-            row.reset_at for row in rows if row.is_exhausted and row.reset_at is not None
-        ]
+        reset_times = [row.reset_at for row in rows if row.is_exhausted and row.reset_at is not None]
         return max(reset_times) if reset_times else None
 
     def availability(self, rows: list[UsageRow]) -> list[ModelAvailability]:
@@ -86,18 +81,16 @@ class UsageProvider(ABC):
         ]
 
     def collect_raw_and_rows(self, *, anchor: bool = False) -> tuple[Any, list[UsageRow]]:
-        """Fetch provider data (with caching) and optionally anchor the active window."""
-        raw, last_updated = self._fetch_with_cache()
-
+        """Fetch provider data and optionally anchor the active window."""
+        raw = self.fetch_raw()
         rows = self.to_rows(raw)
 
         if anchor and self.should_anchor(rows):
             command = self.anchor_command()
             if command and self._anchor_window(command):
-                raw, last_updated = self._fetch_with_cache(force=True)
+                raw = self.fetch_raw()
                 rows = self.to_rows(raw)
 
-        self._last_updated = last_updated
         return raw, rows
 
     def collect_snapshot(
@@ -111,16 +104,13 @@ class UsageProvider(ABC):
         if notify:
             self.notify_always(rows)
             self._handle_notifications(rows)
-        meta = self.metadata(raw, rows)
-        if self._last_updated is not None:
-            meta["last_updated"] = self._last_updated.isoformat()
         return ProviderSnapshot(
             provider=self.slug,
             display_name=self.name,
             status="ok",
             rows=rows,
             availability=self.availability(rows),
-            metadata=meta,
+            metadata=self.metadata(raw, rows),
         )
 
     def render(self, rows: list[UsageRow], title: str | None = None) -> None:
@@ -271,46 +261,3 @@ class UsageProvider(ABC):
     def save_state(self, name: str, state: dict[str, Any]) -> None:
         """Persist a named JSON state file."""
         self._state_file(name).write_text(json.dumps(state, indent=2))
-
-    # ------------------------------------------------------------------
-    # Caching
-    # ------------------------------------------------------------------
-
-    _last_updated: datetime | None = None
-
-    def _get_cache_path(self) -> Path:
-        """Path to the fetch-result cache file."""
-        return self._state_file("_fetch_cache")
-
-    def _read_cache(self) -> tuple[Any, datetime] | None:
-        """Return (raw, last_updated) if a fresh cache entry exists, else None."""
-        if self.cache_ttl_seconds <= 0:
-            return None
-        path = self._get_cache_path()
-        if not path.exists():
-            return None
-        data = json.loads(path.read_text())
-        last_updated = datetime.fromisoformat(data["last_updated"])
-        if (datetime.now(UTC) - last_updated).total_seconds() >= self.cache_ttl_seconds:
-            return None  # stale
-        return data["raw"], last_updated
-
-    def _write_cache(self, raw: Any) -> datetime:
-        """Persist raw fetch data with the current timestamp. Returns ``now``."""
-        now = datetime.now(UTC)
-        self._get_cache_path().write_text(json.dumps({"raw": raw, "last_updated": now.isoformat()}))
-        return now
-
-    def _fetch_with_cache(self, *, force: bool = False) -> tuple[Any, datetime]:
-        """Return (raw, last_updated), reading from cache when possible.
-
-        When *force* is true the cache is bypassed and a live fetch is
-        performed (used after anchoring a window).
-        """
-        if not force:
-            cached = self._read_cache()
-            if cached is not None:
-                return cached
-        raw = self.fetch_raw()
-        last_updated = self._write_cache(raw) if self.cache_ttl_seconds > 0 else datetime.now(UTC)
-        return raw, last_updated
