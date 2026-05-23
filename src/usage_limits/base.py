@@ -282,35 +282,121 @@ class UsageProvider(ABC):
         """Path to the fetch-result cache file."""
         return self._state_file("_fetch_cache")
 
-    def _read_cache(self) -> tuple[Any, datetime] | None:
-        """Return (raw, last_updated) if a fresh cache entry exists, else None."""
-        if self.cache_ttl_seconds <= 0:
-            return None
+    def _read_cache(self, *, ignore_ttl: bool = False) -> tuple[Any, datetime] | None:
+        """Return (raw, last_updated) if a cache entry with data exists, else None.
+
+        Returns None for entries that only contain an error (raw is None) —
+        those are handled by ``_reject_cached_failure``.
+
+        When *ignore_ttl* is true the TTL freshness check is skipped —
+        used to fall back to stale data when a live fetch fails.
+        """
         path = self._get_cache_path()
         if not path.exists():
             return None
         data = json.loads(path.read_text())
         last_updated = datetime.fromisoformat(data["last_updated"])
-        if (datetime.now(UTC) - last_updated).total_seconds() >= self.cache_ttl_seconds:
+        if (
+            not ignore_ttl
+            and (datetime.now(UTC) - last_updated).total_seconds() >= self.cache_ttl_seconds
+        ):
             return None  # stale
-        return data["raw"], last_updated
+        raw = data.get("raw")
+        if raw is None:
+            return None  # cached error, no data to return
+        return raw, last_updated
 
     def _write_cache(self, raw: Any) -> datetime:
-        """Persist raw fetch data with the current timestamp. Returns ``now``."""
+        """Persist raw fetch data with the current timestamp, clearing any prior error.
+
+        Returns ``now``.
+        """
         now = datetime.now(UTC)
         self._get_cache_path().write_text(json.dumps({"raw": raw, "last_updated": now.isoformat()}))
         return now
 
+    def _write_cache_error(self, exc: BaseException) -> datetime:
+        """Persist a fetch failure and preserve any existing raw data for stale fallback.
+
+        ``last_updated`` is set to the attempt time so
+        ``_reject_cached_failure`` can suppress retries within TTL.
+        Returns ``now``.
+        """
+        now = datetime.now(UTC)
+        path = self._get_cache_path()
+
+        # Preserve prior raw data so stale fallback still works
+        raw: Any = None
+        if path.exists():
+            try:
+                prior = json.loads(path.read_text())
+                raw = prior.get("raw")
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        entry: dict[str, Any] = {}
+        if raw is not None:
+            entry["raw"] = raw
+        else:
+            entry["raw"] = None
+        entry["error_type"] = type(exc).__name__
+        entry["error_message"] = str(exc)
+        entry["last_updated"] = now.isoformat()
+        if isinstance(exc, requests.HTTPError) and exc.response is not None:
+            entry["error_status_code"] = exc.response.status_code
+        path.write_text(json.dumps(entry))
+        return now
+
+    def _reject_cached_failure(self) -> None:
+        """If a cached fetch failure exists within TTL, raise to avoid retry.
+
+        The raised exception carries ``response.status_code == 429`` so
+        ``registry._is_rate_limited`` classifies it correctly regardless
+        of the original error type.
+        """
+        path = self._get_cache_path()
+        if not path.exists():
+            return
+        try:
+            data = json.loads(path.read_text())
+        except (json.JSONDecodeError, OSError):
+            return
+        if "error_type" not in data:
+            return
+        last_updated = datetime.fromisoformat(data["last_updated"])
+        if (datetime.now(UTC) - last_updated).total_seconds() < self.cache_ttl_seconds:
+            resp = requests.Response()
+            resp.status_code = 429
+            raise requests.HTTPError(
+                data.get("error_message", "Cached fetch failure"),
+                response=resp,
+            )
+
     def _fetch_with_cache(self, *, force: bool = False) -> tuple[Any, datetime]:
         """Return (raw, last_updated), reading from cache when possible.
 
-        When *force* is true the cache is bypassed and a live fetch is
-        performed (used after anchoring a window).
+        Order of preference:
+        1. Fresh cache (within TTL) if not *force*
+        2. Cached-failure guard — raise without retry if within TTL
+        3. Live fetch — always persists to cache on success
+        4. Cache fetch failure — persists error so #2 triggers next time
+        5. Stale cache — served when the live fetch fails
+        6. Propagate exception — when no cache/data exists at all
         """
         if not force:
             cached = self._read_cache()
             if cached is not None:
                 return cached
-        raw = self.fetch_raw()
-        last_updated = self._write_cache(raw) if self.cache_ttl_seconds > 0 else datetime.now(UTC)
+            self._reject_cached_failure()
+
+        try:
+            raw = self.fetch_raw()
+        except BaseException as exc:
+            self._write_cache_error(exc)
+            cached = self._read_cache(ignore_ttl=True)
+            if cached is not None:
+                return cached
+            raise
+
+        last_updated = self._write_cache(raw)
         return raw, last_updated
