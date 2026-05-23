@@ -13,6 +13,7 @@ as 100% used regardless of the ``isExhausted`` field.
 from __future__ import annotations
 
 import json
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import NotRequired, TypedDict, cast
@@ -59,6 +60,7 @@ class AntigravityModel(TypedDict):
     remainingPercentage: NotRequired[float]  # absent -> tool bug -> treat as exhausted
     isExhausted: bool
     resetTime: str | None
+    accountEmail: str
 
 
 class AntigravityRaw(TypedDict):
@@ -128,32 +130,36 @@ class AntigravityProvider(UsageProvider):
     def provider_name(self) -> str:
         return "Antigravity"
 
-    def _get_access_token(self) -> str:
-        """Read and refresh Google OAuth token from cockpit-tools credentials."""
+    def _get_all_access_tokens(self) -> dict[str, str]:
+        """Read and refresh Google OAuth tokens for ALL accounts.
+
+        Returns a dict mapping email → fresh access_token.
+        """
         with open(COCKPIT_CREDENTIALS_PATH) as f:
             creds = cast(CockpitCredentials, json.load(f))
 
-        # Get the first account (user's primary)
-        email = next(iter(creds["accounts"]))
-        account = creds["accounts"][email]
+        tokens: dict[str, str] = {}
+        for email, account in creds["accounts"].items():
+            resp = requests.post(
+                GOOGLE_TOKEN_ENDPOINT,
+                json={
+                    "client_id": _oauth_client_id(),
+                    "client_secret": _oauth_client_secret(),
+                    "refresh_token": account["refreshToken"],
+                    "grant_type": "refresh_token",
+                },
+            )
+            token_data = cast(TokenResponse, resp.json())
+            tokens[email] = token_data["access_token"]
 
-        refresh_token = account["refreshToken"]
+        return tokens
 
-        resp = requests.post(
-            GOOGLE_TOKEN_ENDPOINT,
-            json={
-                "client_id": _oauth_client_id(),
-                "client_secret": _oauth_client_secret(),
-                "refresh_token": refresh_token,
-                "grant_type": "refresh_token",
-            },
-        )
-        token_data = cast(TokenResponse, resp.json())
-        return token_data["access_token"]
+    def _fetch_models_for_account(self, email: str, token: str) -> list[AntigravityModel]:
+        """Fetch and parse model quota data for a single account.
 
-    def fetch_raw(self) -> AntigravityRaw:
-        token = self._get_access_token()
-        headers = {
+        Each returned model dict includes ``accountEmail``.
+        """
+        headers: dict[str, str] = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
             "User-Agent": "antigravity",
@@ -190,7 +196,7 @@ class AntigravityProvider(UsageProvider):
         # Convert to the raw format that to_rows expects
         # Deduplicate by label and filter out deprecated/experimental models
         seen_labels: set[str] = set()
-        raw_models: list[AntigravityModel] = []
+        models: list[AntigravityModel] = []
         for model_id, info in models_data.get("models", {}).items():
             label = info.get("label", info.get("displayName", model_id))
 
@@ -206,7 +212,7 @@ class AntigravityProvider(UsageProvider):
             }
             if label in deprecated:
                 continue
-            # Skip duplicates (keep first seen)
+            # Skip duplicates within this account (keep first seen)
             if label in seen_labels:
                 continue
             seen_labels.add(label)
@@ -220,20 +226,35 @@ class AntigravityProvider(UsageProvider):
                 "modelId": model_id,
                 "isExhausted": is_exhausted,
                 "resetTime": reset_time,
+                "accountEmail": email,
             }
 
             remaining = quota.get("remainingFraction")
             if remaining is not None:
                 model["remainingPercentage"] = remaining
 
-            raw_models.append(model)
+            models.append(model)
 
-        return cast(AntigravityRaw, {"models": raw_models})
+        return models
+
+    def fetch_raw(self) -> AntigravityRaw:
+        tokens = self._get_all_access_tokens()
+        all_models: list[AntigravityModel] = []
+        for email, token in tokens.items():
+            all_models.extend(self._fetch_models_for_account(email, token))
+        return cast(AntigravityRaw, {"models": all_models})
 
     @staticmethod
     def _model_sort_key(identifier: str) -> tuple[int, int, str]:
         """Sort key: all Gemini (Flash before Pro) first, then Claude, then GPT OSS."""
-        label = identifier.removeprefix("Antigravity: ").lower()
+        # Strip "Antigravity (email): " or "Antigravity: " prefix
+        label = identifier
+        if label.startswith("Antigravity ("):
+            close = label.index(")")
+            label = label[close + 3 :]  # skip ") : "
+        elif label.startswith("Antigravity: "):
+            label = label[len("Antigravity: ") :]
+        label = label.lower()
         if "gemini" in label or label.startswith(("flash", "pro", "2.5", "3")):
             # Flash (0) before Pro (1)
             sub = 0 if "flash" in label else 1
@@ -248,6 +269,7 @@ class AntigravityProvider(UsageProvider):
         rows: list[UsageRow] = []
         for model in raw["models"]:
             label = model["label"]
+            email = model["accountEmail"]
             remaining_percentage = model.get("remainingPercentage")  # absent = tool bug = exhausted
             is_exhausted = model["isExhausted"]
             if remaining_percentage is None or is_exhausted:
@@ -263,7 +285,7 @@ class AntigravityProvider(UsageProvider):
 
             rows.append(
                 UsageRow(
-                    identifier=f"Antigravity: {label}",
+                    identifier=f"Antigravity ({email}): {label}",
                     pct_used=pct_used,
                     reset_at=reset_at,
                 )
