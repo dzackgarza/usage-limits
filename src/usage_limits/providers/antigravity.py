@@ -215,6 +215,20 @@ class AntigravityProvider(UsageProvider):
 
         return cast(AntigravityRaw, {"models": raw_models})
 
+    @staticmethod
+    def _model_sort_key(identifier: str) -> tuple[int, int, str]:
+        """Sort key: all Gemini (Flash before Pro) first, then Claude, then GPT OSS."""
+        label = identifier.removeprefix("Antigravity: ").lower()
+        if "gemini" in label or label.startswith(("flash", "pro", "2.5", "3")):
+            # Flash (0) before Pro (1)
+            sub = 0 if "flash" in label else 1
+            return 0, sub, label
+        if "claude" in label:
+            return 1, 0, label
+        if "gpt-oss" in label or "gpt oss" in label:
+            return 2, 0, label
+        return 3, 0, label
+
     def to_rows(self, raw: AntigravityRaw) -> list[UsageRow]:
         rows: list[UsageRow] = []
         for model in raw["models"]:
@@ -239,6 +253,8 @@ class AntigravityProvider(UsageProvider):
                     reset_at=reset_at,
                 )
             )
+
+        rows.sort(key=lambda r: self._model_sort_key(r.identifier))
         return rows
 
     def availability(self, rows: list[UsageRow]) -> list[ModelAvailability]:
