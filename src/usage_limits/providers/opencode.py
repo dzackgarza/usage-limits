@@ -1,4 +1,10 @@
-"""OpenCode Zen / Go usage limits provider."""
+"""OpenCode Go / Zen usage limits providers.
+
+* OpenCodeGoProvider — fetches /workspace/{id}/go (the free tier)
+* OpenCodeZenProvider — probes a free model via the Zen API to determine
+  availability.  200 → 0% (available), 429 → 100% (quota exhausted),
+  any other status crashes with the raw traceback.
+"""
 
 from __future__ import annotations
 
@@ -17,6 +23,10 @@ class OpenCodeRaw(TypedDict):
     html: str
 
 
+class OpenCodeZenRaw(TypedDict):
+    available: bool
+
+
 WINDOW_MAP: dict[str, str] = {
     "Rolling Usage": "5h",
     "Weekly Usage": "7d",
@@ -24,12 +34,12 @@ WINDOW_MAP: dict[str, str] = {
 }
 
 
-class OpenCodeProvider(UsageProvider):
-    """OpenCode Zen/Go usage checker via console cookie scraping."""
+class OpenCodeGoProvider(UsageProvider):
+    """OpenCode Go (free tier) usage checker via console cookie scraping."""
 
-    slug = "opencode"
-    name = "OpenCode"
-    state_dir = "opencode_usage"
+    slug = "opencode-go"
+    name = "OpenCode Go"
+    state_dir = "opencode_go"
     ntfy_topic = "usage-updates"
     ntfy_server = "http://localhost"
 
@@ -37,7 +47,7 @@ class OpenCodeProvider(UsageProvider):
         super().__init__()
 
     def provider_name(self) -> str:
-        return "OpenCode"
+        return "OpenCode Go"
 
     def _chrome_cookies(self) -> str:
         from browser_cookie3 import chromium
@@ -130,6 +140,66 @@ class OpenCodeProvider(UsageProvider):
 
     def notify_always(self, rows: list[UsageRow]) -> None:
         pass
+
+
+class OpenCodeZenProvider(UsageProvider):
+    """OpenCode Zen availability checker.
+
+    Probes a free model via the open Zen inference endpoint (no auth required).
+    429 → unavailable (100% used); 200 → available (0% used).
+    Any other status or error is a hard crash — no masking.
+    """
+
+    slug = "opencode-zen"
+    name = "OpenCode Zen"
+    state_dir = "opencode_zen"
+    ntfy_topic = "usage-updates"
+    ntfy_server = "http://localhost"
+
+    API_BASE = "https://opencode.ai/zen/v1"
+    PROBE_MODEL = "deepseek-v4-flash-free"
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    def provider_name(self) -> str:
+        return "OpenCode Zen"
+
+    def fetch_raw(self) -> OpenCodeZenRaw:
+        resp = requests.post(
+            f"{self.API_BASE}/chat/completions",
+            headers={"Content-Type": "application/json"},
+            json={
+                "model": self.PROBE_MODEL,
+                "messages": [{"role": "user", "content": "hi"}],
+                "max_tokens": 1,
+            },
+            timeout=30,
+        )
+        if resp.status_code == 429:
+            return {"available": False}
+        resp.raise_for_status()
+        return {"available": True}
+
+    def to_rows(self, raw: OpenCodeZenRaw) -> list[UsageRow]:
+        pct = 0.0 if raw["available"] else 100.0
+        return [
+            UsageRow(
+                identifier="OpenCode Zen",
+                pct_used=pct,
+                reset_at=None,
+            )
+        ]
+
+    def should_anchor(self, rows: list[UsageRow]) -> bool:
+        return False
+
+    def notify_always(self, rows: list[UsageRow]) -> None:
+        pass
+
+
+# Backward-compat alias
+OpenCodeProvider = OpenCodeGoProvider
 
 
 def _parse_reset_text(text: str) -> datetime | None:
