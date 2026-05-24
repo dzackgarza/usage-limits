@@ -49,16 +49,45 @@ class ClaudeProvider(UsageProvider):
         data: dict[str, Any] = json.loads(self.cred_file.read_text())
         return cast(ClaudeCredentials, data["claudeAiOauth"])
 
+    def _reset_rate_limit(self) -> bool:
+        """Run a minimal Claude CLI turn to reset the rate-limit window.
+
+        Runs in a temp directory with empty setting sources to minimize
+        token overhead. Only attempts once.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = subprocess.run(
+                [
+                    "claude",
+                    "--setting-sources",
+                    "",
+                    "-p",
+                    "Say hello and nothing more, do not take any other actions",
+                ],
+                cwd=tmpdir,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            return result.returncode == 0
+
     def fetch_raw(self) -> ClaudeUsageResponse:
         creds = self.get_credentials()
-        resp = requests.get(
-            "https://api.anthropic.com/api/oauth/usage",
-            headers={
-                "Authorization": f"Bearer {creds['accessToken']}",
-                "anthropic-beta": "oauth-2025-04-20",
-            },
-            timeout=30,
-        )
+
+        def _call() -> requests.Response:
+            return requests.get(
+                "https://api.anthropic.com/api/oauth/usage",
+                headers={
+                    "Authorization": f"Bearer {creds['accessToken']}",
+                    "anthropic-beta": "oauth-2025-04-20",
+                },
+                timeout=30,
+            )
+
+        resp = _call()
+        if resp.status_code == 429:
+            self._reset_rate_limit()
+            resp = _call()
         resp.raise_for_status()
         return cast(ClaudeUsageResponse, resp.json())
 
