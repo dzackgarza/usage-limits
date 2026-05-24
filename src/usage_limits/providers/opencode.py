@@ -143,11 +143,11 @@ class OpenCodeGoProvider(UsageProvider):
 
 
 class OpenCodeZenProvider(UsageProvider):
-    """OpenCode Zen availability checker.
+    """OpenCode Zen health check.
 
-    Probes a free model via the open Zen inference endpoint (no auth required).
-    429 → unavailable (100% used); 200 → available (0% used).
-    Any other status or error is a hard crash — no masking.
+    Pings the free inference endpoint. A real response means the service
+    is available — show 100%. Any error (timeout, 5xx, 4xx) propagates.
+    No auth required.
     """
 
     slug = "opencode-zen"
@@ -176,17 +176,14 @@ class OpenCodeZenProvider(UsageProvider):
             },
             timeout=30,
         )
-        if resp.status_code == 429:
-            return {"available": False}
         resp.raise_for_status()
         return {"available": True}
 
     def to_rows(self, raw: OpenCodeZenRaw) -> list[UsageRow]:
-        pct = 0.0 if raw["available"] else 100.0
         return [
             UsageRow(
                 identifier="OpenCode Zen",
-                pct_used=pct,
+                pct_used=100.0,
                 reset_at=None,
             )
         ]
