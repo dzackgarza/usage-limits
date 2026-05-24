@@ -1,9 +1,8 @@
 """OpenCode Go / Zen usage limits providers.
 
 * OpenCodeGoProvider — fetches /workspace/{id}/go (the free tier)
-* OpenCodeZenProvider — probes a free model via the Zen API to determine
-  availability.  200 → 0% (available), 429 → 100% (quota exhausted),
-  any other status crashes with the raw traceback.
+* OpenCodeZenProvider — pings the free inference endpoint; a real response
+  means the service is available (100%). No auth required.
 """
 
 from __future__ import annotations
