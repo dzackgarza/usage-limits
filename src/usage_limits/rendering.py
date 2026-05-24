@@ -30,6 +30,18 @@ def render_provider_snapshot(
         active_console.print()
         return
 
+    if snapshot.status == "rate_limited":
+        message = "\n".join(error.message for error in snapshot.errors) or "Rate limited."
+        active_console.print(
+            Panel(
+                message,
+                title=f"{snapshot.display_name} ({snapshot.provider})",
+                border_style="yellow",
+            )
+        )
+        active_console.print()
+        return
+
     UsageTable(console=active_console).render(snapshot.rows, title=snapshot.display_name)
 
 
