@@ -4,8 +4,7 @@ Exercises the fetch_raw -> to_rows pipeline against the live API.
 The Cursor provider reads an access token from SQLite state.vscdb,
 calls the usage-summary endpoint, and parses aggregate usage data.
 
-Note: Free/unlimited plans have limit=0, producing 0 rows.
-This is correct behavior — no quotas to track.
+Free plans have limit=0 — the provider treats this as exhausted (100%).
 """
 
 from __future__ import annotations
@@ -34,3 +33,9 @@ def test_cursor_live_api() -> None:
     assert plan_row.identifier is not None
     assert plan_row.pct_used >= 0
     assert isinstance(plan_row.is_exhausted, bool)
+
+    # When the API reports limit=0, pct_used must be 100 (exhausted)
+    limit = raw["individualUsage"]["plan"]["limit"]
+    if isinstance(limit, int) and limit == 0:
+        assert plan_row.pct_used == 100.0
+        assert plan_row.is_exhausted is True

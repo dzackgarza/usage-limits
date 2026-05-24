@@ -115,7 +115,7 @@ class CursorProvider(UsageProvider):
         usage = raw["individualUsage"]
         rows: list[UsageRow] = []
 
-        # Plan usage — always report even when limit is 0
+        # Plan usage — always report
         plan = usage["plan"]
         plan_limit = plan["limit"]
         plan_used = plan["used"]
@@ -123,8 +123,8 @@ class CursorProvider(UsageProvider):
         if isinstance(plan_limit, int) and plan_limit > 0:
             pct_used = (plan_used / plan_limit) * 100
         else:
-            # For free plans with limit=0, use totalPercentUsed from the API
-            pct_used = plan["totalPercentUsed"]
+            # limit=0 means no quota (free/exhausted), not undefined
+            pct_used = 100.0
 
         billing_end = raw.get("billingCycleEnd")
         reset_at = None
