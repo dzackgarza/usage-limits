@@ -13,7 +13,6 @@ as 100% used regardless of the ``isExhausted`` field.
 from __future__ import annotations
 
 import json
-import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import NotRequired, TypedDict, cast
@@ -32,26 +31,11 @@ CLOUDCODE_METADATA = {
 }
 GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 
-# Antigravity OAuth client — loaded from environment.
-# Set ANTIGRAVITY_OAUTH_CLIENT_ID and ANTIGRAVITY_OAUTH_CLIENT_SECRET in .envrc.
-
-
-def _oauth_client_id() -> str:
-    val = os.environ.get("ANTIGRAVITY_OAUTH_CLIENT_ID")
-    if val is None:
-        raise RuntimeError(
-            "ANTIGRAVITY_OAUTH_CLIENT_ID is not set. Add it to .envrc and run `direnv allow`."
-        )
-    return val
-
-
-def _oauth_client_secret() -> str:
-    val = os.environ.get("ANTIGRAVITY_OAUTH_CLIENT_SECRET")
-    if val is None:
-        raise RuntimeError(
-            "ANTIGRAVITY_OAUTH_CLIENT_SECRET is not set. Add it to .envrc and run `direnv allow`."
-        )
-    return val
+# OAuth client from cockpit-tools (public — hardcoded in jlcodes99/cockpit-tools
+# src-tauri/src/modules/oauth.rs). These are not secrets; the actual credential
+# is the refresh token in ~/.antigravity_cockpit/credentials.json.
+_OAUTH_CLIENT_ID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+_OAUTH_CLIENT_SECRET = "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"
 
 
 class AntigravityModel(TypedDict):
@@ -143,8 +127,8 @@ class AntigravityProvider(UsageProvider):
             resp = requests.post(
                 GOOGLE_TOKEN_ENDPOINT,
                 json={
-                    "client_id": _oauth_client_id(),
-                    "client_secret": _oauth_client_secret(),
+                    "client_id": _OAUTH_CLIENT_ID,
+                    "client_secret": _OAUTH_CLIENT_SECRET,
                     "refresh_token": account["refreshToken"],
                     "grant_type": "refresh_token",
                 },
