@@ -19,7 +19,7 @@ from typing import NotRequired, TypedDict, cast
 
 import requests
 
-from usage_limits.base import UsageProvider
+from usage_limits.base import ProviderAccount
 from usage_limits.table import ModelAvailability, UsageRow
 
 COCKPIT_CREDENTIALS_PATH = Path.home() / ".antigravity_cockpit" / "credentials.json"
@@ -102,8 +102,12 @@ class FetchAvailableModelsResponse(TypedDict, total=False):
     defaultAgentModelId: str
 
 
-class AntigravityProvider(UsageProvider):
-    """Antigravity usage checker backed by Google Cloud Code API."""
+class AntigravityAccount(ProviderAccount):
+    """Antigravity usage checker for a single account.
+
+    One instance per credential email. Use ``resolve_accounts()`` to
+    create instances for all known credentials.
+    """
 
     slug = "antigravity"
     name = "Antigravity"
@@ -111,38 +115,29 @@ class AntigravityProvider(UsageProvider):
     ntfy_topic = "usage-updates"
     ntfy_server = "http://localhost"
 
+    def __init__(self, account_id: str) -> None:
+        super().__init__(account_id=account_id)
+
     def provider_name(self) -> str:
         return "Antigravity"
 
-    def _get_all_access_tokens(self) -> dict[str, str]:
-        """Read and refresh Google OAuth tokens for ALL accounts.
+    def _get_access_token(self) -> str:
+        """Get a fresh access token for ``self.account_id``."""
+        creds = cast(CockpitCredentials, json.loads(COCKPIT_CREDENTIALS_PATH.read_text()))
+        account = creds["accounts"][self.account_id]
+        resp = requests.post(
+            GOOGLE_TOKEN_ENDPOINT,
+            json={
+                "client_id": _OAUTH_CLIENT_ID,
+                "client_secret": _OAUTH_CLIENT_SECRET,
+                "refresh_token": account["refreshToken"],
+                "grant_type": "refresh_token",
+            },
+        )
+        return cast(TokenResponse, resp.json())["access_token"]
 
-        Returns a dict mapping email → fresh access_token.
-        """
-        with open(COCKPIT_CREDENTIALS_PATH) as f:
-            creds = cast(CockpitCredentials, json.load(f))
-
-        tokens: dict[str, str] = {}
-        for email, account in creds["accounts"].items():
-            resp = requests.post(
-                GOOGLE_TOKEN_ENDPOINT,
-                json={
-                    "client_id": _OAUTH_CLIENT_ID,
-                    "client_secret": _OAUTH_CLIENT_SECRET,
-                    "refresh_token": account["refreshToken"],
-                    "grant_type": "refresh_token",
-                },
-            )
-            token_data = cast(TokenResponse, resp.json())
-            tokens[email] = token_data["access_token"]
-
-        return tokens
-
-    def _fetch_models_for_account(self, email: str, token: str) -> list[AntigravityModel]:
-        """Fetch and parse model quota data for a single account.
-
-        Each returned model dict includes ``accountEmail``.
-        """
+    def _fetch_models(self, token: str) -> list[AntigravityModel]:
+        """Fetch and parse model quota data for this account."""
         headers: dict[str, str] = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
@@ -210,7 +205,7 @@ class AntigravityProvider(UsageProvider):
                 "modelId": model_id,
                 "isExhausted": is_exhausted,
                 "resetTime": reset_time,
-                "accountEmail": email,
+                "accountEmail": self.account_id,
             }
 
             remaining = quota.get("remainingFraction")
@@ -222,25 +217,15 @@ class AntigravityProvider(UsageProvider):
         return models
 
     def fetch_raw(self) -> AntigravityRaw:
-        tokens = self._get_all_access_tokens()
-        all_models: list[AntigravityModel] = []
-        for email, token in tokens.items():
-            all_models.extend(self._fetch_models_for_account(email, token))
-        return cast(AntigravityRaw, {"models": all_models})
+        token = self._get_access_token()
+        models = self._fetch_models(token)
+        return cast(AntigravityRaw, {"models": models})
 
     @staticmethod
     def _model_sort_key(identifier: str) -> tuple[int, int, str]:
         """Sort key: all Gemini (Flash before Pro) first, then Claude, then GPT OSS."""
-        # Strip "Antigravity (email): " or "Antigravity: " prefix
-        label = identifier
-        if label.startswith("Antigravity ("):
-            close = label.index(")")
-            label = label[close + 3 :]  # skip ") : "
-        elif label.startswith("Antigravity: "):
-            label = label[len("Antigravity: ") :]
-        label = label.lower()
+        label = identifier.lower()
         if "gemini" in label or label.startswith(("flash", "pro", "2.5", "3")):
-            # Flash (0) before Pro (1)
             sub = 0 if "flash" in label else 1
             return 0, sub, label
         if "claude" in label:
@@ -253,7 +238,6 @@ class AntigravityProvider(UsageProvider):
         rows: list[UsageRow] = []
         for model in raw["models"]:
             label = model["label"]
-            email = model["accountEmail"]
             remaining_percentage = model.get("remainingPercentage")  # absent = tool bug = exhausted
             is_exhausted = model["isExhausted"]
             if remaining_percentage is None or is_exhausted:
@@ -269,7 +253,7 @@ class AntigravityProvider(UsageProvider):
 
             rows.append(
                 UsageRow(
-                    identifier=f"Antigravity ({email}): {label}",
+                    identifier=label,
                     pct_used=pct_used,
                     reset_at=reset_at,
                 )
@@ -316,3 +300,13 @@ class AntigravityProvider(UsageProvider):
                 "All Antigravity models are below 1% used.",
                 tags="white_check_mark,rocket",
             )
+
+    @classmethod
+    def resolve_accounts(cls) -> list[AntigravityAccount]:
+        """Return one ``AntigravityAccount`` per credential email."""
+        creds = cast(CockpitCredentials, json.loads(COCKPIT_CREDENTIALS_PATH.read_text()))
+        return [cls(email) for email in creds["accounts"]]
+
+
+# Backward-compat alias
+AntigravityProvider = AntigravityAccount

@@ -17,10 +17,9 @@ import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import pytest
 import requests
 
-from usage_limits.providers.antigravity import AntigravityProvider
+from usage_limits.providers.antigravity import AntigravityAccount
 from usage_limits.providers.claude import ClaudeProvider
 from usage_limits.registry import collect_provider
 
@@ -39,7 +38,9 @@ def test_cache_file_is_created_after_successful_fetch() -> None:
     so this assertion fails — no cache file is ever created for any
     provider.  The fix: always write the cache after a successful fetch.
     """
-    provider = AntigravityProvider()
+    accounts = AntigravityAccount.resolve_accounts()
+    assert len(accounts) >= 1
+    provider = accounts[0]
     cache_path = provider._get_cache_path()
 
     # Remove any stale cache from prior runs
@@ -141,8 +142,9 @@ def test_fresh_cache_hit_within_ttl() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Failure caching (option C): persist fetch failures so we do not retry
-# within TTL, and raise from cache when a recent failure exists.
+# Failure caching: persist fetch failures for stale-good-data fallback.
+# Errors are never served from cache — they always trigger a live fetch,
+# and on failure the stale good data is returned instead.
 # ---------------------------------------------------------------------------
 
 
@@ -181,49 +183,3 @@ def test_write_cache_error_preserves_stale_data() -> None:
     data = json.loads(cache_path.read_text())
     assert data["raw"] is not None, "raw data was wiped by error write"
     assert data["raw"]["five_hour"]["utilization"] == 5.0
-
-
-def test_reject_cached_failure_raises_within_ttl() -> None:
-    """``_reject_cached_failure`` must raise ``HTTPError`` when a cached
-    error exists and is within TTL, preventing an unnecessary API call."""
-    provider = ClaudeProvider()
-    cache_path = provider._get_cache_path()
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
-
-    error_dt = datetime.now(UTC) - timedelta(seconds=60)
-    cache_path.write_text(
-        json.dumps(
-            {
-                "raw": None,
-                "error_type": "HTTPError",
-                "error_message": "cached failure",
-                "last_updated": error_dt.isoformat(),
-            }
-        )
-    )
-
-    with pytest.raises(requests.HTTPError):
-        provider._reject_cached_failure()
-
-
-def test_reject_cached_failure_returns_on_ttl_expired() -> None:
-    """``_reject_cached_failure`` must return normally when the cached
-    error has exceeded TTL — the caller should retry ``fetch_raw``."""
-    provider = ClaudeProvider()
-    cache_path = provider._get_cache_path()
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
-
-    error_dt = datetime.now(UTC) - timedelta(minutes=10)
-    cache_path.write_text(
-        json.dumps(
-            {
-                "raw": None,
-                "error_type": "HTTPError",
-                "error_message": "stale cached failure",
-                "last_updated": error_dt.isoformat(),
-            }
-        )
-    )
-
-    # Should not raise — the error is stale
-    provider._reject_cached_failure()

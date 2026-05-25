@@ -397,3 +397,12 @@ class ProviderAccount(UsageProvider, ABC):
     ) -> ProviderSnapshot:
         snap = super().collect_snapshot(notify=notify, anchor=anchor)
         return snap.model_copy(update={"account": self.account_id})
+
+    @classmethod
+    def resolve_accounts(cls) -> list[ProviderAccount]:
+        """Return one ProviderAccount instance per known credential.
+
+        Single-account providers return ``[cls()]``.
+        Multi-account providers override to return one per account.
+        """
+        return [cls()]

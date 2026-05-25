@@ -9,22 +9,25 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from usage_limits.providers.antigravity import AntigravityProvider
+from usage_limits.base import ProviderAccount
+from usage_limits.providers.antigravity import AntigravityAccount
+from usage_limits.registry import collect_all
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 
 
 def test_antigravity_to_rows_single_account() -> None:
-    """to_rows produces rows tagged with the account email from a single-account fixture."""
-    provider = AntigravityProvider()
+    """to_rows produces rows with model-label identifiers for a single-account fixture."""
+    provider = AntigravityAccount(account_id="test@example.com")
     raw = json.loads((FIXTURE_DIR / "antigravity-quota.json").read_text())
     rows = provider.to_rows(raw)
 
     assert len(rows) == 7
 
-    # All rows belong to the test account
+    # Identifiers are model labels (no email prefix — account is on snapshot)
     for row in rows:
-        assert row.identifier.startswith("Antigravity (test@example.com): ")
+        assert not row.identifier.startswith("Antigravity")
+        assert row.identifier != ""
 
     # Models with remainingPercentage → calculated from (1 - remaining) * 100
     gemini = {r.identifier: r for r in rows if "Gemini" in r.identifier}
@@ -42,63 +45,78 @@ def test_antigravity_to_rows_single_account() -> None:
         assert e.is_exhausted is True
         assert e.reset_at is not None
 
-    # Verify identifiers include the account email and model label
+    # Verify identifiers include model labels only
     identifiers = [r.identifier for r in rows]
-    assert "Antigravity (test@example.com): Claude Sonnet 4.6 (Thinking)" in identifiers
-    assert "Antigravity (test@example.com): Gemini 3.5 Flash (High)" in identifiers
+    assert "Claude Sonnet 4.6 (Thinking)" in identifiers
+    assert "Gemini 3.5 Flash (High)" in identifiers
 
 
-def test_antigravity_to_rows_multi_account() -> None:
-    """to_rows correctly handles models from multiple accounts."""
-    provider = AntigravityProvider()
+def test_antigravity_to_rows_with_fixture_account() -> None:
+    """to_rows with a per-account fixture produces correct model data."""
+    provider = AntigravityAccount(account_id="alpha@example.com")
     raw = json.loads((FIXTURE_DIR / "antigravity-quota-multi.json").read_text())
-    rows = provider.to_rows(raw)
 
-    # Two accounts x 7 models each = 14 rows
-    assert len(rows) == 14
+    # Filter to this account's models only (as fetch_raw would)
+    account_models = [m for m in raw["models"] if m["accountEmail"] == "alpha@example.com"]
+    account_raw = {"models": account_models}
+    rows = provider.to_rows(account_raw)
 
-    # Check both accounts are represented
-    acct_a = [r for r in rows if "alpha@example.com" in r.identifier]
-    acct_b = [r for r in rows if "beta@example.com" in r.identifier]
-    assert len(acct_a) == 7
-    assert len(acct_b) == 7
+    assert len(rows) == 7
 
-    # Account A has 40% Gemini usage
-    for row in acct_a:
+    # Alpha account: Gemini are 40%, others are 100%
+    for row in rows:
         if "Gemini" in row.identifier:
             assert row.pct_used == 40.0
         else:
             assert row.pct_used == 100.0
 
-    # Account B has 100% Claude usage
-    for row in acct_b:
-        if "Claude" in row.identifier or "GPT" in row.identifier:
-            assert row.pct_used == 100.0
-
 
 def test_antigravity_fetch_raw_returns_data() -> None:
     """Live API test: fetch_raw must return real quota data, not raise."""
-    provider = AntigravityProvider()
+    # Use resolve_accounts to get the first account
+    accounts = AntigravityAccount.resolve_accounts()
+    assert len(accounts) >= 1
+    provider = accounts[0]
     raw = provider.fetch_raw()
 
     # Must have models key with at least one model
     assert "models" in raw
     assert len(raw["models"]) >= 1
 
-    # Each model must have required fields (including accountEmail)
+    # Each model must have required fields
     for model in raw["models"]:
         assert "label" in model
         assert "modelId" in model
         assert "isExhausted" in model
         assert "resetTime" in model
-        assert "accountEmail" in model
+        assert model.get("accountEmail") == provider.account_id
 
     # Parse the raw data through to_rows and verify output
     rows = provider.to_rows(raw)
     assert len(rows) >= 1
 
     for row in rows:
-        # Must have the "Antigravity (...): " prefix with email
-        assert row.identifier.startswith("Antigravity (")
-        assert "): " in row.identifier
+        # Identifiers are model labels only (no email prefix)
+        assert not row.identifier.startswith("Antigravity")
         assert 0.0 <= row.pct_used <= 100.0
+
+
+def test_antigravity_has_resolve_accounts_classmethod() -> None:
+    """AntigravityAccount must expose a resolve_accounts classmethod."""
+    assert hasattr(AntigravityAccount, "resolve_accounts")
+    accounts = AntigravityAccount.resolve_accounts()
+    assert len(accounts) >= 1
+    for acc in accounts:
+        assert isinstance(acc, ProviderAccount)
+        assert acc.account_id != ""
+        assert "@" in acc.account_id
+
+
+def test_antigravity_produces_per_account_snapshots() -> None:
+    """collect_all produces one snapshot per Antigravity account."""
+    collection = collect_all(providers=["antigravity"])
+    antigravity_snaps = [s for s in collection.providers if s.provider == "antigravity"]
+    assert len(antigravity_snaps) >= 1
+    for snap in antigravity_snaps:
+        assert snap.account is not None
+        assert "@" in snap.account

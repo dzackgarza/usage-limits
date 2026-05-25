@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from importlib.metadata import entry_points
 
 import requests
 
-from usage_limits.base import UsageProvider
+from usage_limits.base import ProviderAccount, UsageProvider
 from usage_limits.contracts import (
     ProviderError,
     ProviderSnapshot,
@@ -175,18 +176,61 @@ def _error_snapshot(
     )
 
 
+def _collect_single(
+    provider_class: type[UsageProvider],
+    *,
+    notify: bool = False,
+    anchor: bool = False,
+) -> ProviderSnapshot:
+    """Collect a snapshot from a single provider instance."""
+    try:
+        if issubclass(provider_class, ProviderAccount):
+            instances = provider_class.resolve_accounts()
+            if not instances:
+                raise RuntimeError(
+                    f"{provider_class.__name__}.resolve_accounts() returned empty list"
+                )
+            return instances[0].collect_snapshot(notify=notify, anchor=anchor)
+        return provider_class().collect_snapshot(notify=notify, anchor=anchor)
+    except BaseException as error:
+        return _error_snapshot(provider_class, error)
+
+
 def collect_provider(
     provider: str,
     *,
     notify: bool = False,
     anchor: bool = False,
 ) -> ProviderSnapshot:
-    """Collect a normalized snapshot for one provider."""
+    """Collect a normalized snapshot for one provider.
+
+    For multi-account ``ProviderAccount`` subclasses this returns the
+    snapshot for the first resolved account. Use ``collect_all`` to get
+    all accounts.
+    """
     provider_class = get_provider_class(provider)
+    return _collect_single(provider_class, notify=notify, anchor=anchor)
+
+
+def _resolve_instances(slug: str) -> list[UsageProvider]:
+    """Return provider instances for a slug, fanning out per account for multi-account."""
+    provider_class = get_provider_class(slug)
+    if issubclass(provider_class, ProviderAccount):
+        return list(provider_class.resolve_accounts())
+    return [provider_class()]
+
+
+def _collect_instance(
+    instance: UsageProvider,
+    *,
+    notify: bool = False,
+    anchor: bool = False,
+) -> ProviderSnapshot:
+    """Collect a snapshot from a single provider instance."""
     try:
-        return provider_class().collect_snapshot(notify=notify, anchor=anchor)
+        return instance.collect_snapshot(notify=notify, anchor=anchor)
     except BaseException as error:
-        return _error_snapshot(provider_class, error)
+        return _error_snapshot(type(instance), error)
 
 
 def collect_all(
@@ -197,12 +241,19 @@ def collect_all(
 ) -> UsageCollection:
     """Collect a normalized snapshot for one or more providers."""
     selected = providers or [provider.provider for provider in list_providers() if provider.active]
+
+    # Expand slugs into provider instances (one per account for multi-account)
+    instances: list[UsageProvider] = []
+    for slug in selected:
+        instances.extend(_resolve_instances(slug))
+
     snapshots: list[ProviderSnapshot] = []
-    with ThreadPoolExecutor(max_workers=len(selected)) as pool:
+    with ThreadPoolExecutor(max_workers=len(instances)) as pool:
         futures = {
-            pool.submit(collect_provider, slug, notify=notify, anchor=anchor): slug
-            for slug in selected
+            pool.submit(_collect_instance, instance, notify=notify, anchor=anchor): instance
+            for instance in instances
         }
         for future in as_completed(futures):
             snapshots.append(future.result())
+    snapshots.sort(key=lambda s: s.display_name)
     return UsageCollection(providers=snapshots)
