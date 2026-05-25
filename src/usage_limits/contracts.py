@@ -36,6 +36,7 @@ class ProviderSnapshot(BaseModel):
     status: Literal["ok", "error", "rate_limited"]
     rows: list[UsageRow] = Field(default_factory=list)
     availability: list[ModelAvailability] = Field(default_factory=list)
+    account: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     errors: list[ProviderError] = Field(default_factory=list)
 

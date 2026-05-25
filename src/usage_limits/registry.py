@@ -21,7 +21,8 @@ from usage_limits.providers import (
     CursorProvider,
     KiroProvider,
     OllamaProvider,
-    OpenCodeProvider,
+    OpenCodeGoProvider,
+    OpenCodeZenProvider,
     OpenRouterProvider,
     QoderProvider,
     TraeProvider,
@@ -44,7 +45,8 @@ FIRST_PARTY_PROVIDER_CLASSES: tuple[type[UsageProvider], ...] = (
     CursorProvider,
     KiroProvider,
     OllamaProvider,
-    OpenCodeProvider,
+    OpenCodeGoProvider,
+    OpenCodeZenProvider,
     OpenRouterProvider,
     QoderProvider,
     TraeProvider,
@@ -195,5 +197,12 @@ def collect_all(
 ) -> UsageCollection:
     """Collect a normalized snapshot for one or more providers."""
     selected = providers or [provider.provider for provider in list_providers() if provider.active]
-    snapshots = [collect_provider(provider, notify=notify, anchor=anchor) for provider in selected]
+    snapshots: list[ProviderSnapshot] = []
+    with ThreadPoolExecutor(max_workers=len(selected)) as pool:
+        futures = {
+            pool.submit(collect_provider, slug, notify=notify, anchor=anchor): slug
+            for slug in selected
+        }
+        for future in as_completed(futures):
+            snapshots.append(future.result())
     return UsageCollection(providers=snapshots)

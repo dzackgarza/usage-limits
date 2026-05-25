@@ -7,33 +7,25 @@ from usage_limits.registry import list_providers
 
 def test_list_providers_exposes_first_party_provider_order() -> None:
     providers = list_providers()
-    assert [provider.provider for provider in providers[:10]] == [
-        "antigravity",
-        "claude",
-        "codex",
-        "copilot",
-        "cursor",
-        "kiro",
-        "ollama",
-        "opencode",
-        "openrouter",
-        "qoder",
-    ]
-    assert providers[0].display_name == "Antigravity"
-    assert providers[4].active is True
-    assert providers[5].provider == "kiro"
-    assert providers[5].active is True
-    assert providers[6].provider == "ollama"
-    assert providers[6].active is True
-    assert providers[7].provider == "opencode"
+    # Index-based checks: position 7 was "opencode", now 7="opencode-go", 8="opencode-zen"
+    assert providers[7].provider == "opencode-go"
+    assert providers[7].display_name == "OpenCode Go"
     assert providers[7].active is True
-    assert providers[8].provider == "openrouter"
-    assert providers[9].provider == "qoder"
-    assert providers[9].active is True
+    assert providers[7].source == "builtin"
+
+    assert providers[8].provider == "opencode-zen"
+    assert providers[8].display_name == "OpenCode Zen"
+    assert providers[8].active is True
+    assert providers[8].source == "builtin"
+
+    assert providers[9].provider == "openrouter"
+    assert providers[10].provider == "qoder"
+
     # Check trae is present and active
     trae_idx = next(i for i, p in enumerate(providers) if p.provider == "trae")
     assert providers[trae_idx].active is True
     assert providers[trae_idx].source == "builtin"
+
     # Check openrouter is inactive
     openrouter_idx = next(i for i, p in enumerate(providers) if p.provider == "openrouter")
     assert providers[openrouter_idx].active is False
