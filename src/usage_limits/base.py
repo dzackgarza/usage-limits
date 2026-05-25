@@ -15,7 +15,7 @@ import requests
 from usage_limits.contracts import ProviderSnapshot
 from usage_limits.table import ModelAvailability, UsageRow, UsageTable
 
-__all__ = ["UsageProvider"]
+__all__ = ["ProviderAccount", "UsageProvider"]
 
 
 class UsageProvider(ABC):
@@ -286,7 +286,7 @@ class UsageProvider(ABC):
         """Return (raw, last_updated) if a cache entry with data exists, else None.
 
         Returns None for entries that only contain an error (raw is None) —
-        those are handled by ``_reject_cached_failure``.
+        those trigger a live fetch on the next attempt.
 
         When *ignore_ttl* is true the TTL freshness check is skipped —
         used to fall back to stale data when a live fetch fails.
@@ -318,8 +318,8 @@ class UsageProvider(ABC):
     def _write_cache_error(self, exc: BaseException) -> datetime:
         """Persist a fetch failure and preserve any existing raw data for stale fallback.
 
-        ``last_updated`` is set to the attempt time so
-        ``_reject_cached_failure`` can suppress retries within TTL.
+        The error entry marks the cache as dirty so ``_read_cache``
+        returns ``None``, forcing the next call to attempt a live fetch.
         Returns ``now``.
         """
         now = datetime.now(UTC)
@@ -347,47 +347,23 @@ class UsageProvider(ABC):
         path.write_text(json.dumps(entry))
         return now
 
-    def _reject_cached_failure(self) -> None:
-        """If a cached fetch failure exists within TTL, raise to avoid retry.
-
-        The raised exception carries ``response.status_code == 429`` so
-        ``registry._is_rate_limited`` classifies it correctly regardless
-        of the original error type.
-        """
-        path = self._get_cache_path()
-        if not path.exists():
-            return
-        try:
-            data = json.loads(path.read_text())
-        except (json.JSONDecodeError, OSError):
-            return
-        if "error_type" not in data:
-            return
-        last_updated = datetime.fromisoformat(data["last_updated"])
-        if (datetime.now(UTC) - last_updated).total_seconds() < self.cache_ttl_seconds:
-            resp = requests.Response()
-            resp.status_code = 429
-            raise requests.HTTPError(
-                data.get("error_message", "Cached fetch failure"),
-                response=resp,
-            )
-
     def _fetch_with_cache(self, *, force: bool = False) -> tuple[Any, datetime]:
         """Return (raw, last_updated), reading from cache when possible.
 
+        Cached GOOD data is served within TTL to prevent API hammering.
+        Cached errors are never served — they always trigger a live fetch.
+        On live-fetch failure, stale GOOD data is served as a fallback.
+
         Order of preference:
-        1. Fresh cache (within TTL) if not *force*
-        2. Cached-failure guard — raise without retry if within TTL
-        3. Live fetch — always persists to cache on success
-        4. Cache fetch failure — persists error so #2 triggers next time
-        5. Stale cache — served when the live fetch fails
-        6. Propagate exception — when no cache/data exists at all
+        1. Fresh GOOD cache (within TTL)
+        2. Live fetch — persists GOOD data on success, error on failure
+        3. Stale GOOD cache — fallback when live fetch fails
+        4. Propagate exception — when no data exists at all
         """
         if not force:
             cached = self._read_cache()
             if cached is not None:
                 return cached
-            self._reject_cached_failure()
 
         try:
             raw = self.fetch_raw()
@@ -400,3 +376,15 @@ class UsageProvider(ABC):
 
         last_updated = self._write_cache(raw)
         return raw, last_updated
+
+
+class ProviderAccount(UsageProvider, ABC):
+    """Provider bound to a specific account.
+
+    Single-account providers use ``account_id="default"``.
+    Multi-account providers create one instance per account identifier.
+    """
+
+    def __init__(self, account_id: str = "default") -> None:
+        super().__init__()
+        self.account_id = account_id
