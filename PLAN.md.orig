@@ -189,11 +189,6 @@ Run: `pytest -k claude -v` — expects PASS
 - `CodexProvider` — `src/usage_limits/providers/codex.py`
 - `CopilotProvider` — `src/usage_limits/providers/copilot.py`
 - `CursorProvider` — `src/usage_limits/providers/cursor.py`
-- `KiroProvider` — `src/usage_limits/providers/kiro.py`
-- `OllamaProvider` — `src/usage_limits/providers/ollama.py`
-- `OpenCodeGoProvider` — `src/usage_limits/providers/opencode.py`
-- `OpenCodeZenProvider` — `src/usage_limits/providers/opencode.py`
-- `QoderProvider` — `src/usage_limits/providers/qoder.py`
 - `TraeProvider` — `src/usage_limits/providers/trae.py`
 - `OpenRouterProvider` — `src/usage_limits/providers/openrouter.py`
 

@@ -16,7 +16,6 @@ Uniform quota collection and rendering for CLI- and API-backed LLM providers.
 | **Kiro** | ✅ | SQLite `data.sqlite3` → OAuth → Kiro usage API |
 | **Ollama Cloud** | ✅ | Chromium session cookie → HTML scrape |
 | **OpenCode** | ✅ | Chromium session cookie → workspace API → HTML scrape |
-| **Qoder** | ✅ | SQLite `state.vscdb` → secret keys → Qoder credit API |
 | **Trae** | ✅ | SQLite `storage.json` → JWT → Trae usage API |
 
 ### Inactive
@@ -53,8 +52,8 @@ obtained from local state files or OAuth refresh flows.
 Several IDE-based providers store credentials in local SQLite databases that are read
 and exchanged for API tokens.
 
-- **Cursor, Qoder**: Read `state.vscdb` (VS Code global storage) to extract session
-  tokens or secret material, then call the respective usage APIs.
+- **Cursor**: Reads `state.vscdb` (VS Code global storage) to extract session tokens or
+  secret material, then call the respective usage APIs.
 - **Kiro**: Reads `data.sqlite3` from the Kiro CLI state directory.
 - **Trae**: Reads `storage.json` from the Trae global storage directory.
 

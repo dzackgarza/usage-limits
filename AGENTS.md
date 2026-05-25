@@ -182,7 +182,7 @@ Checkmarks indicate implemented + tested.
 | Kiro | ✅ | builtin |
 | Cursor | ✅ | SQLite `state.vscdb` → JWT → usage-summary API |
 | Gemini CLI | ❌ | CLI hangs; will be deprecated soon |
-| Qoder | ✅ | SQLite `state.vscdb` → `secret://aicoding.auth.*` keys |
+| Qoder | :x: | archived — free tier model worse than GPT-4o, unusable for real work |
 | Trae | ✅ | SQLite `storage.json` → `Cloud-IDE-JWT` → ent_usage API |
 | OpenCode Go | ✅ | Chrome cookie → `/workspace/{id}/go` HTML scrape |
 | OpenCode Zen | ⬜️ | stub — implementation pending |

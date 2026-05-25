@@ -23,7 +23,6 @@ __all__ = [
     "opencode_main",
     "opencode_zen_main",
     "openrouter_main",
-    "qoder_main",
     "trae_main",
 ]
 
@@ -190,10 +189,6 @@ def copilot_main() -> None:
 
 def cursor_main() -> None:
     _provider_alias("cursor", supports_anchor=False)
-
-
-def qoder_main() -> None:
-    _provider_alias("qoder", supports_anchor=False)
 
 
 def trae_main() -> None:

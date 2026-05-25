@@ -55,7 +55,6 @@ usage-opencode-zen = "usage_limits.cli:opencode_zen_main"
 usage-kiro        = "usage_limits.cli:kiro_main"
 usage-copilot     = "usage_limits.cli:copilot_main"
 usage-cursor      = "usage_limits.cli:cursor_main"
-usage-qoder       = "usage_limits.cli:qoder_main"
 usage-trae        = "usage_limits.cli:trae_main"
 
 [build-system]

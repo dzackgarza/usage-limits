@@ -19,7 +19,7 @@ def test_list_providers_exposes_first_party_provider_order() -> None:
     assert providers[8].source == "builtin"
 
     assert providers[9].provider == "openrouter"
-    assert providers[10].provider == "qoder"
+    assert providers[10].provider == "trae"
 
     # Check trae is present and active
     trae_idx = next(i for i, p in enumerate(providers) if p.provider == "trae")

@@ -15,7 +15,6 @@ from usage_limits.providers.opencode import (
     OpenCodeZenProvider,
 )
 from usage_limits.providers.openrouter import OpenRouterProvider
-from usage_limits.providers.qoder import QoderProvider
 from usage_limits.providers.trae import TraeProvider
 
 __all__ = [
@@ -30,6 +29,5 @@ __all__ = [
     "OpenCodeProvider",
     "OpenCodeZenProvider",
     "OpenRouterProvider",
-    "QoderProvider",
     "TraeProvider",
 ]
