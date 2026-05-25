@@ -183,3 +183,5 @@ The following providers are required. Checkmarks indicate implemented + tested.
 | Gemini CLI | ❌ | CLI hangs; will be deprecated soon |
 | Qoder | ✅ | SQLite `state.vscdb` → `secret://aicoding.auth.*` keys |
 | Trae | ✅ | SQLite `storage.json` → `Cloud-IDE-JWT` → ent_usage API |
+| OpenCode Go | ✅ | Chrome cookie → `/workspace/{id}/go` HTML scrape |
+| OpenCode Zen | ⬜️ | stub — implementation pending |

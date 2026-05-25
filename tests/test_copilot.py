@@ -21,23 +21,11 @@ def test_copilot_to_rows_with_captured_fixture() -> None:
     raw = json.loads((FIXTURE_DIR / "copilot-usage.json").read_text())
     rows = provider.to_rows(raw)
 
-    assert len(rows) == 3
-
-    # Chat row (unlimited)
-    chat = rows[0]
-    assert chat.identifier == "Copilot (Chat)"
-    assert chat.pct_used == 0.0  # unlimited
-    assert chat.reset_at == datetime(2026, 6, 22, 0, 0, tzinfo=UTC)
-
-    # Completions row (unlimited)
-    completions = rows[1]
-    assert completions.identifier == "Copilot (Completions)"
-    assert completions.pct_used == 0.0  # unlimited
-    assert completions.reset_at == datetime(2026, 6, 22, 0, 0, tzinfo=UTC)
+    assert len(rows) == 1
 
     # Premium interactions row (exhausted)
-    premium = rows[2]
-    assert premium.identifier == "Copilot (Premium Interactions)"
+    premium = rows[0]
+    assert premium.identifier == "Copilot (30d)"
     assert premium.pct_used == 100.0  # 100 - 0
     assert premium.is_exhausted is True
     assert premium.reset_at == datetime(2026, 6, 22, 0, 0, tzinfo=UTC)

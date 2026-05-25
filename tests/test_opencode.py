@@ -31,13 +31,13 @@ def test_opencode_go_to_rows_extracts_usage_windows() -> None:
 
 
 def test_opencode_zen_to_rows() -> None:
-    """A real probe response always yields 100% (available)."""
+    """A successful probe yields 0% (nothing consumed)."""
     provider = OpenCodeZenProvider()
     rows = provider.to_rows({"available": True})
 
     assert len(rows) == 1
     row = rows[0]
     assert row.identifier == "OpenCode Zen"
-    assert row.pct_used == 100.0
-    assert row.is_exhausted is True
+    assert row.pct_used == 0.0
+    assert row.is_exhausted is False
     assert row.reset_at is None

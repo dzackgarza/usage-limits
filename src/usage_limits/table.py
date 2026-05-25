@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from pydantic import BaseModel, ConfigDict, computed_field
+from pydantic import BaseModel, ConfigDict, computed_field, field_validator
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress_bar import ProgressBar
@@ -39,12 +39,17 @@ class UsageRow(BaseModel):
     """Human label, e.g. 'Claude (5h)', 'Amp', 'Antigravity: Gemini 2.5 Pro'."""
 
     pct_used: float
-    """Percentage consumed, 0.0-100.0."""
+    """Percentage consumed, clamped to [0.0, 100.0]."""
 
     reset_at: datetime | None = None
     """UTC reset timestamp; None = not applicable or already at full capacity."""
 
     model_config = ConfigDict(frozen=True)
+
+    @field_validator("pct_used", mode="before")
+    @classmethod
+    def _clamp_pct_used(cls, v: float) -> float:
+        return max(0.0, min(float(v), 100.0))
 
     @computed_field  # type: ignore[prop-decorator]
     @property

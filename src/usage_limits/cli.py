@@ -21,6 +21,7 @@ __all__ = [
     "main",
     "ollama_main",
     "opencode_main",
+    "opencode_zen_main",
     "openrouter_main",
     "qoder_main",
     "trae_main",
@@ -169,7 +170,11 @@ def ollama_main() -> None:
 
 
 def opencode_main() -> None:
-    _provider_alias("opencode", supports_anchor=False)
+    _provider_alias("opencode-go", supports_anchor=False)
+
+
+def opencode_zen_main() -> None:
+    _provider_alias("opencode-zen", supports_anchor=False)
 
 
 def openrouter_main() -> None:

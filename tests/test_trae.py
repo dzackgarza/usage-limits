@@ -24,8 +24,9 @@ def test_trae_live_api() -> None:
     # Free plans with 0 limits produce 0 rows - this is valid
     assert len(rows) >= 0
 
-    # Each row should have identifier, pct_used, is_exhausted
+    # Each row should have identifier, pct_used, is_exhausted, reset_at
     for row in rows:
         assert row.identifier is not None
         assert row.pct_used >= 0
         assert isinstance(row.is_exhausted, bool)
+        assert row.reset_at is not None, f"reset_at is None for {row.identifier}"
