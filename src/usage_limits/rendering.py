@@ -11,6 +11,14 @@ from usage_limits.table import UsageTable
 __all__ = ["render_collection", "render_provider_snapshot"]
 
 
+def _display_title(snapshot: ProviderSnapshot) -> str:
+    """Return the display title, appending account identifier when relevant."""
+    base = snapshot.display_name
+    if snapshot.account and snapshot.account != "default":
+        return f"{base} ({snapshot.account})"
+    return base
+
+
 def render_provider_snapshot(
     snapshot: ProviderSnapshot,
     *,
@@ -18,12 +26,13 @@ def render_provider_snapshot(
 ) -> None:
     """Render one provider snapshot."""
     active_console = console or Console()
+    title = _display_title(snapshot)
     if snapshot.status == "error":
         message = "\n".join(error.message for error in snapshot.errors) or "Unknown provider error."
         active_console.print(
             Panel(
                 message,
-                title=f"{snapshot.display_name} ({snapshot.provider})",
+                title=f"{title} ({snapshot.provider})",
                 border_style="red",
             )
         )
@@ -35,14 +44,14 @@ def render_provider_snapshot(
         active_console.print(
             Panel(
                 message,
-                title=f"{snapshot.display_name} ({snapshot.provider})",
+                title=f"{title} ({snapshot.provider})",
                 border_style="yellow",
             )
         )
         active_console.print()
         return
 
-    UsageTable(console=active_console).render(snapshot.rows, title=snapshot.display_name)
+    UsageTable(console=active_console).render(snapshot.rows, title=title)
 
 
 def render_collection(collection: UsageCollection, *, console: Console | None = None) -> None:
