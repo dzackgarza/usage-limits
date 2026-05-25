@@ -8,7 +8,7 @@ from typing import TypedDict, cast
 
 import requests
 
-from usage_limits.base import UsageProvider
+from usage_limits.base import ProviderAccount
 from usage_limits.table import UsageRow
 
 
@@ -44,7 +44,7 @@ class CopilotUserResponse(TypedDict):
     endpoints: CopilotEndpoints
 
 
-class CopilotProvider(UsageProvider):
+class CopilotProvider(ProviderAccount):
     """GitHub Copilot usage checker (premium interactions, chat, completions)."""
 
     slug = "copilot"
@@ -83,25 +83,20 @@ class CopilotProvider(UsageProvider):
 
     def to_rows(self, raw: CopilotUserResponse) -> list[UsageRow]:
         snapshots = raw["quota_snapshots"]
+        premium = snapshots["premium_interactions"]
+
+        pct_used = 100.0 - premium["percent_remaining"]
         quota_reset_dt = datetime.fromisoformat(
             raw["quota_reset_date_utc"].replace("Z", "+00:00")
         ).astimezone(UTC)
 
-        rows: list[UsageRow] = []
-
-        for quota_id, snapshot in snapshots.items():
-            pct_used = 0.0 if snapshot["unlimited"] else 100.0 - snapshot["percent_remaining"]
-
-            label = quota_id.replace("_", " ").title()
-            rows.append(
-                UsageRow(
-                    identifier=f"Copilot ({label})",
-                    pct_used=pct_used,
-                    reset_at=quota_reset_dt,
-                )
+        return [
+            UsageRow(
+                identifier="Copilot (30d)",
+                pct_used=pct_used,
+                reset_at=quota_reset_dt,
             )
-
-        return rows
+        ]
 
     def should_anchor(self, rows: list[UsageRow]) -> bool:
         if any(r.is_exhausted for r in rows):

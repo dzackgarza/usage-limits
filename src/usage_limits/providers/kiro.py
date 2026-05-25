@@ -10,7 +10,7 @@ from typing import Any, TypedDict, cast
 
 import requests
 
-from usage_limits.base import UsageProvider
+from usage_limits.base import ProviderAccount
 from usage_limits.table import UsageRow
 
 KIRO_REFRESH_ENDPOINT = "https://prod.us-east-1.auth.desktop.kiro.dev/refreshToken"
@@ -56,7 +56,7 @@ class SubscriptionInfo(TypedDict):
     type: str
 
 
-class KiroProvider(UsageProvider):
+class KiroProvider(ProviderAccount):
     """Kiro usage checker (credits and bonus/free trial)."""
 
     slug = "kiro"

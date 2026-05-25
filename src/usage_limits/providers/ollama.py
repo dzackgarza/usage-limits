@@ -8,7 +8,7 @@ from typing import TypedDict
 import requests
 from bs4 import BeautifulSoup
 
-from usage_limits.base import UsageProvider
+from usage_limits.base import ProviderAccount
 from usage_limits.table import UsageRow
 
 
@@ -16,7 +16,7 @@ class OllamaRaw(TypedDict):
     html: str
 
 
-class OllamaProvider(UsageProvider):
+class OllamaProvider(ProviderAccount):
     """Ollama Cloud usage checker (session and weekly windows via HTML scrape)."""
 
     slug = "ollama"

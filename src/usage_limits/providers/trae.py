@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TypedDict, cast
 
@@ -12,7 +13,7 @@ import requests
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.padding import PKCS7
 
-from usage_limits.base import UsageProvider
+from usage_limits.base import ProviderAccount
 from usage_limits.table import UsageRow
 
 # ByteCrypto constants
@@ -282,7 +283,7 @@ REGION_ORIGINS = {
 }
 
 
-class TraeProvider(UsageProvider):
+class TraeProvider(ProviderAccount):
     """Trae usage checker (per-plan quota tracking)."""
 
     slug = "trae"
@@ -363,6 +364,9 @@ class TraeProvider(UsageProvider):
         product_type = base_info["product_type"]
         identity = PRODUCT_NAMES.get(product_type, f"Unknown({product_type})")
 
+        # Reset at the start of the next entitlement period
+        reset_at = datetime.fromtimestamp(base_info["end_time"] + 1, tz=UTC)
+
         usage = best_pack["usage"]
 
         # Quota is nested in product_extra.subscription_extra.quota
@@ -378,9 +382,9 @@ class TraeProvider(UsageProvider):
             pct_used = (basic_used / basic_limit) * 100
             rows.append(
                 UsageRow(
-                    identifier=f"Trae ({identity} - basic)",
+                    identifier="Trae (30d)",
                     pct_used=pct_used,
-                    reset_at=None,
+                    reset_at=reset_at,
                 )
             )
 
@@ -392,9 +396,9 @@ class TraeProvider(UsageProvider):
             pct_used = (bonus_used / bonus_limit) * 100
             rows.append(
                 UsageRow(
-                    identifier=f"Trae ({identity} - bonus)",
+                    identifier="Trae (30d)",
                     pct_used=pct_used,
-                    reset_at=None,
+                    reset_at=reset_at,
                 )
             )
 

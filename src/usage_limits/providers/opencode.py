@@ -14,7 +14,7 @@ from typing import TypedDict
 import requests
 from bs4 import BeautifulSoup
 
-from usage_limits.base import UsageProvider
+from usage_limits.base import ProviderAccount
 from usage_limits.table import UsageRow
 
 
@@ -33,7 +33,7 @@ WINDOW_MAP: dict[str, str] = {
 }
 
 
-class OpenCodeGoProvider(UsageProvider):
+class OpenCodeGoProvider(ProviderAccount):
     """OpenCode Go (free tier) usage checker via console cookie scraping."""
 
     slug = "opencode-go"
@@ -141,7 +141,7 @@ class OpenCodeGoProvider(UsageProvider):
         pass
 
 
-class OpenCodeZenProvider(UsageProvider):
+class OpenCodeZenProvider(ProviderAccount):
     """OpenCode Zen health check.
 
     Pings the free inference endpoint. A real response means the service
@@ -182,7 +182,7 @@ class OpenCodeZenProvider(UsageProvider):
         return [
             UsageRow(
                 identifier="OpenCode Zen",
-                pct_used=100.0,
+                pct_used=0.0 if raw["available"] else 100.0,
                 reset_at=None,
             )
         ]

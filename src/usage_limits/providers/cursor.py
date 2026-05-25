@@ -11,7 +11,7 @@ from typing import TypedDict, cast
 
 import requests
 
-from usage_limits.base import UsageProvider
+from usage_limits.base import ProviderAccount
 from usage_limits.table import UsageRow
 
 
@@ -56,7 +56,7 @@ class CursorUsageResponse(TypedDict):
     teamUsage: dict[str, object]
 
 
-class CursorProvider(UsageProvider):
+class CursorProvider(ProviderAccount):
     """Cursor usage checker (aggregate plan usage)."""
 
     slug = "cursor"
@@ -133,7 +133,7 @@ class CursorProvider(UsageProvider):
 
         rows.append(
             UsageRow(
-                identifier=f"Cursor ({membership} - Plan)",
+                identifier="Cursor (30d)",
                 pct_used=pct_used,
                 reset_at=reset_at,
             )

@@ -10,7 +10,7 @@ from typing import TypedDict, cast
 
 import requests
 
-from usage_limits.base import UsageProvider
+from usage_limits.base import ProviderAccount
 from usage_limits.table import UsageRow
 
 
@@ -44,7 +44,7 @@ class WindsurfUserStatusResponse(TypedDict):
     userStatus: WindsurfUserStatus
 
 
-class WindsurfProvider(UsageProvider):
+class WindsurfProvider(ProviderAccount):
     """Windsurf usage checker (prompt credits, flow credits, daily/weekly quotas)."""
 
     slug = "windsurf"
@@ -108,37 +108,8 @@ class WindsurfProvider(UsageProvider):
 
     def to_rows(self, raw: WindsurfUserStatusResponse) -> list[UsageRow]:
         plan_status = raw["userStatus"]["planStatus"]
-        plan_info = plan_status["planInfo"]
 
         rows: list[UsageRow] = []
-
-        # Monthly prompt credits
-        monthly_prompt_total = plan_info["monthlyPromptCredits"]
-        available_prompt = plan_status["availablePromptCredits"]
-        used_prompt = monthly_prompt_total - available_prompt
-        if monthly_prompt_total > 0:
-            pct_used = used_prompt / monthly_prompt_total * 100
-            rows.append(
-                UsageRow(
-                    identifier=f"Windsurf ({plan_info['planName']} - Prompt)",
-                    pct_used=pct_used,
-                    reset_at=None,
-                )
-            )
-
-        # Monthly flow credits
-        monthly_flow_total = plan_info["monthlyFlowCredits"]
-        available_flow = plan_status["availableFlowCredits"]
-        used_flow = monthly_flow_total - available_flow
-        if monthly_flow_total > 0:
-            pct_used = used_flow / monthly_flow_total * 100
-            rows.append(
-                UsageRow(
-                    identifier=f"Windsurf ({plan_info['planName']} - Flow)",
-                    pct_used=pct_used,
-                    reset_at=None,
-                )
-            )
 
         # Daily quota
         daily_remaining = plan_status["dailyQuotaRemainingPercent"]
@@ -146,7 +117,7 @@ class WindsurfProvider(UsageProvider):
         daily_reset = datetime.fromtimestamp(int(plan_status["dailyQuotaResetAtUnix"]), tz=UTC)
         rows.append(
             UsageRow(
-                identifier="Windsurf (Daily Quota)",
+                identifier="Windsurf (24h)",
                 pct_used=float(daily_used),
                 reset_at=daily_reset,
             )
@@ -158,7 +129,7 @@ class WindsurfProvider(UsageProvider):
         weekly_reset = datetime.fromtimestamp(int(plan_status["weeklyQuotaResetAtUnix"]), tz=UTC)
         rows.append(
             UsageRow(
-                identifier="Windsurf (Weekly Quota)",
+                identifier="Windsurf (7d)",
                 pct_used=float(weekly_used),
                 reset_at=weekly_reset,
             )

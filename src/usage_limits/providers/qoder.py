@@ -8,7 +8,7 @@ from typing import TypedDict, cast
 
 import requests
 
-from usage_limits.base import UsageProvider
+from usage_limits.base import ProviderAccount
 from usage_limits.table import UsageRow
 
 QODER_OPENAPI_BASE_URL = "https://openapi.qoder.sh"
@@ -40,7 +40,7 @@ class QoderCredentials(TypedDict):
     credit_usage: QoderCreditUsage
 
 
-class QoderProvider(UsageProvider):
+class QoderProvider(ProviderAccount):
     """Qoder usage checker (credits quota via OpenAPI)."""
 
     slug = "qoder"
@@ -105,40 +105,34 @@ class QoderProvider(UsageProvider):
 
         rows: list[UsageRow] = []
 
-        # User quota
+        # User quota — only produce a row when the bucket has meaningful data
         user_quota = credit_usage["userQuota"]
         used = user_quota["used"]
         total = user_quota["total"]
         if isinstance(total, (int, float)) and total > 0:
             pct_used = (used / total) * 100
-        else:
-            pct_used = user_quota.get("percentage", 0.0)
-
-        rows.append(
-            UsageRow(
-                identifier=f"Qoder ({plan_type} - {email})",
-                pct_used=pct_used,
-                reset_at=None,
+            rows.append(
+                UsageRow(
+                    identifier=f"Qoder ({plan_type} - {email})",
+                    pct_used=pct_used,
+                    reset_at=None,
+                )
             )
-        )
 
         # Add-on quota (if present)
         add_on_quota = credit_usage.get("addOnQuota")
         if add_on_quota:
-            addon_used = add_on_quota.get("used", 0)
-            addon_total = add_on_quota.get("total", 0)
+            addon_used = add_on_quota["used"]
+            addon_total = add_on_quota["total"]
             if isinstance(addon_total, (int, float)) and addon_total > 0:
                 addon_pct = (addon_used / addon_total) * 100
-            else:
-                addon_pct = add_on_quota.get("percentage", 0.0)
-
-            rows.append(
-                UsageRow(
-                    identifier=f"Qoder (Add-on - {email})",
-                    pct_used=addon_pct,
-                    reset_at=None,
+                rows.append(
+                    UsageRow(
+                        identifier=f"Qoder (Add-on - {email})",
+                        pct_used=addon_pct,
+                        reset_at=None,
+                    )
                 )
-            )
 
         # Total usage percentage
         total_pct = credit_usage.get("totalUsagePercentage")

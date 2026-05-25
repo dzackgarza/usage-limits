@@ -9,7 +9,7 @@ from typing import Any, TypedDict, cast
 
 import requests
 
-from usage_limits.base import UsageProvider
+from usage_limits.base import ProviderAccount
 from usage_limits.table import UsageRow
 
 
@@ -31,7 +31,7 @@ class WhamUsageResponse(TypedDict):
     rate_limit: WhamRateLimit
 
 
-class CodexProvider(UsageProvider):
+class CodexProvider(ProviderAccount):
     """Codex CLI usage checker (5-hour and 7-day WHAM windows)."""
 
     slug = "codex"

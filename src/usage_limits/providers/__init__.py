@@ -9,7 +9,11 @@ from usage_limits.providers.copilot import CopilotProvider
 from usage_limits.providers.cursor import CursorProvider
 from usage_limits.providers.kiro import KiroProvider
 from usage_limits.providers.ollama import OllamaProvider
-from usage_limits.providers.opencode import OpenCodeProvider
+from usage_limits.providers.opencode import (
+    OpenCodeGoProvider,
+    OpenCodeProvider,
+    OpenCodeZenProvider,
+)
 from usage_limits.providers.openrouter import OpenRouterProvider
 from usage_limits.providers.qoder import QoderProvider
 from usage_limits.providers.trae import TraeProvider
@@ -23,7 +27,9 @@ __all__ = [
     "CursorProvider",
     "KiroProvider",
     "OllamaProvider",
+    "OpenCodeGoProvider",
     "OpenCodeProvider",
+    "OpenCodeZenProvider",
     "OpenRouterProvider",
     "QoderProvider",
     "TraeProvider",

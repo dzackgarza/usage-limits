@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TypedDict
 
-from usage_limits.base import UsageProvider
+from usage_limits.base import ProviderAccount
 from usage_limits.table import UsageRow
 
 
@@ -15,7 +15,7 @@ class OpenRouterRaw(TypedDict):
     count: int
 
 
-class OpenRouterProvider(UsageProvider):
+class OpenRouterProvider(ProviderAccount):
     """OpenRouter daily request quota tracker.
 
     Free tier: 50 req/day (never purchased credits) or 1000 req/day (credits
