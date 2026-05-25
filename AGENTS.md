@@ -169,15 +169,16 @@ Keep the first two. Delete the rest.
 
 ## Target Providers
 
-The following providers are required. Checkmarks indicate implemented + tested.
+The following providers are required.
+Checkmarks indicate implemented + tested.
 
 | Provider | Status | Technique |
-|----------|:------:|-----------|
+| --- | :---: | --- |
 | Antigravity | ✅ | builtin |
 | Claude Code | ✅ | builtin |
 | Codex | ✅ | builtin |
 | Copilot | ✅ | `gh auth token` → `GET /copilot_internal/user` |
-| Windsurf | ✅ | SQLite `state.vscdb` → `GetUserStatus` API |
+| Windsurf | :x: | archived — free tier unusable, constant "high demand" errors |
 | Kiro | ✅ | builtin |
 | Cursor | ✅ | SQLite `state.vscdb` → JWT → usage-summary API |
 | Gemini CLI | ❌ | CLI hangs; will be deprecated soon |

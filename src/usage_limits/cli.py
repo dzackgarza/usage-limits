@@ -25,7 +25,6 @@ __all__ = [
     "openrouter_main",
     "qoder_main",
     "trae_main",
-    "windsurf_main",
 ]
 
 
@@ -183,10 +182,6 @@ def openrouter_main() -> None:
 
 def kiro_main() -> None:
     _provider_alias("kiro", supports_anchor=False)
-
-
-def windsurf_main() -> None:
-    _provider_alias("windsurf", supports_anchor=False)
 
 
 def copilot_main() -> None:

@@ -195,7 +195,6 @@ Run: `pytest -k claude -v` — expects PASS
 - `OpenCodeZenProvider` — `src/usage_limits/providers/opencode.py`
 - `QoderProvider` — `src/usage_limits/providers/qoder.py`
 - `TraeProvider` — `src/usage_limits/providers/trae.py`
-- `WindsurfProvider` — `src/usage_limits/providers/windsurf.py`
 - `OpenRouterProvider` — `src/usage_limits/providers/openrouter.py`
 
 **For each:**

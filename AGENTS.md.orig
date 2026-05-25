@@ -22,62 +22,64 @@ notifications (via `ntfy`) when limits are reached.
 - Follow standard Python conventions (PEP 8).
 - Use `ruff` for all formatting and linting.
 - Prefer type hints for all function signatures and class members.
-- **Define TypedDicts for every data shape that crosses a boundary** (API response,
-  file read, subprocess output). Never use `dict[str, Any]` for structured data.
+- **Define TypedDicts for every data shape that crosses a boundary** (API response, file
+  read, subprocess output).
+  Never use `dict[str, Any]` for structured data.
   Every key access must be typed.
 - **Never suppress type errors** with `# type: ignore`. If mypy reports an error, fix
-  the type definition. Use `cast()` at JSON-decoding boundaries (`json.loads`,
-  `resp.json()`) to assert the expected shape — this is an explicit programmer
-  assertion, not a suppression.
+  the type definition.
+  Use `cast()` at JSON-decoding boundaries (`json.loads`, `resp.json()`) to assert the
+  expected shape — this is an explicit programmer assertion, not a suppression.
 - Providers should inherit from `UsageProvider` in `src/usage_limits/base.py`.
 - New providers should be added to `src/usage_limits/providers/` and registered in
   `src/usage_limits/registry.py`.
 
 ## Error and Failure Philosophy
 
-**The only valid failure mode is an uncaught exception.** Every rule below follows
-from this.
+**The only valid failure mode is an uncaught exception.** Every rule below follows from
+this.
 
 ### Do not interpret failures for the user
 
 Do not `print("Error: ...")` + `sys.exit(1)`. Do not catch exceptions to produce
 "helpful" messages. Do not try to guess what went wrong.
 
-A 403 means "I don't know why." It does not mean "log in again" — next week the API
-might return 403 for a different reason, and the interpretation will be wrong. The
-user reads the raw exception and figures it out. If they can't, the tool needs better
-documentation, not better error guessing.
+A 403 means "I don't know why."
+It does not mean "log in again" — next week the API might return 403 for a different
+reason, and the interpretation will be wrong.
+The user reads the raw exception and figures it out.
+If they can't, the tool needs better documentation, not better error guessing.
 
 ### Do not catch exceptions
 
-No try/except blocks. Let every exception propagate as a raw traceback. The
-traceback tells the user exactly what failed, where, and with what data.
+No try/except blocks.
+Let every exception propagate as a raw traceback.
+The traceback tells the user exactly what failed, where, and with what data.
 
-The only exception is `try/except` for genuinely expected control flow (e.g.,
-re-raising non-target status codes), never for wrapping or explaining errors.
+The only exception is `try/except` for genuinely expected control flow (e.g., re-raising
+non-target status codes), never for wrapping or explaining errors.
 
 ### Do not check existence before access
 
-Do not `if path.exists(): read()` — just `read()` and let `FileNotFoundError`
-propagate. Do not `if key in dict:` before `dict[key]` — just index and let
-`KeyError` propagate. The exception tells the user exactly what resource is missing.
+Do not `if path.exists(): read()` — just `read()` and let `FileNotFoundError` propagate.
+Do not `if key in dict:` before `dict[key]` — just index and let `KeyError` propagate.
+The exception tells the user exactly what resource is missing.
 
 ### Do not use fallback defaults
 
-Every `.get(key, default)` that could produce data indistinguishable from a real
-value is fraud. Use hard key access (`dict[key]`) everywhere. If the key is missing,
-`KeyError` propagates — the user sees the exact field name that the API no longer
-returns.
+Every `.get(key, default)` that could produce data indistinguishable from a real value
+is fraud. Use hard key access (`dict[key]`) everywhere.
+If the key is missing, `KeyError` propagates — the user sees the exact field name that
+the API no longer returns.
 
-`assert x is not None` is acceptable when a value is expected to exist but the type
-is nullable — it crashes with a clear assertion failure at the exact point of
-violation.
+`assert x is not None` is acceptable when a value is expected to exist but the type is
+nullable — it crashes with a clear assertion failure at the exact point of violation.
 
 ### Do not retry or recover
 
-If a token is expired, a network request fails, or a 401 is returned — propagate
-the error. Do not attempt re-auth, retry, or any recovery logic. The user runs the
-tool again after fixing the issue.
+If a token is expired, a network request fails, or a 401 is returned — propagate the
+error. Do not attempt re-auth, retry, or any recovery logic.
+The user runs the tool again after fixing the issue.
 
 ## Testing Requirements
 
@@ -164,3 +166,22 @@ Keep the first two. Delete the rest.
 - `src/usage_limits/registry.py`: Provider registration and discovery.
 - `src/usage_limits/table.py`: Table rendering logic.
 - `src/usage_limits/providers/`: Individual service implementations.
+
+## Target Providers
+
+The following providers are required. Checkmarks indicate implemented + tested.
+
+| Provider | Status | Technique |
+|----------|:------:|-----------|
+| Antigravity | ✅ | builtin |
+| Claude Code | ✅ | builtin |
+| Codex | ✅ | builtin |
+| Copilot | ✅ | `gh auth token` → `GET /copilot_internal/user` |
+| Windsurf | :x: | archived — free tier unusable, constant "high demand" errors |
+| Kiro | ✅ | builtin |
+| Cursor | ✅ | SQLite `state.vscdb` → JWT → usage-summary API |
+| Gemini CLI | ❌ | CLI hangs; will be deprecated soon |
+| Qoder | ✅ | SQLite `state.vscdb` → `secret://aicoding.auth.*` keys |
+| Trae | ✅ | SQLite `storage.json` → `Cloud-IDE-JWT` → ent_usage API |
+| OpenCode Go | ✅ | Chrome cookie → `/workspace/{id}/go` HTML scrape |
+| OpenCode Zen | ⬜️ | stub — implementation pending |

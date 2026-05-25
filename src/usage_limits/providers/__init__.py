@@ -17,7 +17,6 @@ from usage_limits.providers.opencode import (
 from usage_limits.providers.openrouter import OpenRouterProvider
 from usage_limits.providers.qoder import QoderProvider
 from usage_limits.providers.trae import TraeProvider
-from usage_limits.providers.windsurf import WindsurfProvider
 
 __all__ = [
     "AntigravityProvider",
@@ -33,5 +32,4 @@ __all__ = [
     "OpenRouterProvider",
     "QoderProvider",
     "TraeProvider",
-    "WindsurfProvider",
 ]

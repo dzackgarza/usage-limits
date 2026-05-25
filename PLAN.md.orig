@@ -1,8 +1,11 @@
 # Multi-Account Provider Support — Implementation Plan
 
-> **TDD.** Red first. Every task: write failing test → run (red) → write code → run (green) → commit.
+> **TDD.** Red first. Every task: write failing test → run (red) → write code → run
+> (green) → commit.
 
-**Goal:** Make accounts a first-class framework concept so providers with multiple credentials (Antigravity) produce one `ProviderSnapshot` per account instead of jamming all accounts into one flat row list.
+**Goal:** Make accounts a first-class framework concept so providers with multiple
+credentials (Antigravity) produce one `ProviderSnapshot` per account instead of jamming
+all accounts into one flat row list.
 
 **Design:**
 
@@ -18,20 +21,23 @@ UsageProvider (ABC) — unchanged
 - `ProviderSnapshot` gains an `account: str | None` field
 - Registry fans out: one provider slug → (one snapshot per account)
 - Collection output is keyed by `(slug, account)` pairs
-- Single-account providers reproduce current behavior exactly via default `account_id="default"`
+- Single-account providers reproduce current behavior exactly via default
+  `account_id="default"`
 
----
+* * *
 
 ### Task 1: Add `account` field to ProviderSnapshot
 
-**Objective:** Contracts change so every snapshot carries an account identifier. Default `None` preserves backward compat for external consumers.
+**Objective:** Contracts change so every snapshot carries an account identifier.
+Default `None` preserves backward compat for external consumers.
 
 **Files:**
 - Modify: `src/usage_limits/contracts.py`
 
 **Step 1: Write failing test (test that `account` field exists)**
 
-Read current tests to find best location — add to `tests/test_registry.py` or create `tests/test_base.py`.
+Read current tests to find best location — add to `tests/test_registry.py` or create
+`tests/test_base.py`.
 
 ```python
 # tests/test_base.py
@@ -69,11 +75,12 @@ Run: `just test` — expects green
 
 **Step 5: Commit**
 
----
+* * *
 
 ### Task 2: Define ProviderAccount ABC in base.py
 
-**Objective:** New ABC `ProviderAccount(UsageProvider)` adds `account_id: str`. All existing providers will eventually inherit from this instead of `UsageProvider`.
+**Objective:** New ABC `ProviderAccount(UsageProvider)` adds `account_id: str`. All
+existing providers will eventually inherit from this instead of `UsageProvider`.
 
 **Files:**
 - Create test: `tests/test_base.py` (or append if exists)
@@ -137,11 +144,12 @@ Run: `pytest tests/test_base.py -v` — expects PASS
 
 **Step 4: Commit**
 
----
+* * *
 
 ### Task 3: Migrate one single-account provider (Claude) to ProviderAccount
 
-**Objective:** Prove backward compat — ClaudeProvider inherits ProviderAccount instead of UsageProvider, all existing tests pass unchanged.
+**Objective:** Prove backward compat — ClaudeProvider inherits ProviderAccount instead
+of UsageProvider, all existing tests pass unchanged.
 
 **Files:**
 - Modify: `src/usage_limits/providers/claude.py`
@@ -169,11 +177,12 @@ Run: `pytest -k claude -v` — expects PASS
 
 **Step 3: Commit**
 
----
+* * *
 
 ### Task 4: Migrate ALL remaining single-account providers
 
-**Objective:** Every provider that currently extends `UsageProvider` now extends `ProviderAccount`. One commit per provider, each verified.
+**Objective:** Every provider that currently extends `UsageProvider` now extends
+`ProviderAccount`. One commit per provider, each verified.
 
 **Providers to migrate (all single-account):**
 - `ClaudeProvider` — done in Task 3
@@ -186,7 +195,6 @@ Run: `pytest -k claude -v` — expects PASS
 - `OpenCodeZenProvider` — `src/usage_limits/providers/opencode.py`
 - `QoderProvider` — `src/usage_limits/providers/qoder.py`
 - `TraeProvider` — `src/usage_limits/providers/trae.py`
-- `WindsurfProvider` — `src/usage_limits/providers/windsurf.py`
 - `OpenRouterProvider` — `src/usage_limits/providers/openrouter.py`
 
 **For each:**
@@ -194,11 +202,13 @@ Run: `pytest -k claude -v` — expects PASS
 2. Run `pytest -k foo -v` — expects PASS
 3. Commit
 
----
+* * *
 
 ### Task 5: Update collect_provider to emit account-tagged snapshots
 
-**Objective:** `collect_provider` now attaches the account_id to the snapshot it returns. Single-account providers produce `account="default"`. This is the plumbing change that makes account info appear in output.
+**Objective:** `collect_provider` now attaches the account_id to the snapshot it
+returns. Single-account providers produce `account="default"`. This is the plumbing
+change that makes account info appear in output.
 
 **Files:**
 - Modify: `src/usage_limits/registry.py`
@@ -244,19 +254,28 @@ def collect_provider(provider: str, *, notify=False, anchor=False) -> ProviderSn
         return _error_snapshot(provider_class, error)
 ```
 
-Wait — this is awkward because `ProviderSnapshot` is frozen and I'd be constructing a new one. Better to just set it in `collect_snapshot` directly, or pass `account` through `collect_snapshot`.
+Wait — this is awkward because `ProviderSnapshot` is frozen and I'd be constructing a
+new one. Better to just set it in `collect_snapshot` directly, or pass `account` through
+`collect_snapshot`.
 
-Actually, the cleanest way: `collect_snapshot` in `ProviderAccount` sets the account field. The base `UsageProvider.collect_snapshot` stays as-is. Let me think...
+Actually, the cleanest way: `collect_snapshot` in `ProviderAccount` sets the account
+field. The base `UsageProvider.collect_snapshot` stays as-is.
+Let me think...
 
-Actually, the simplest approach: `collect_provider` just sets the account after getting the snapshot. But `ProviderSnapshot` is frozen (model_config = ConfigDict(frozen=True)). So I need to construct a new one or unfreeze it.
+Actually, the simplest approach: `collect_provider` just sets the account after getting
+the snapshot. But `ProviderSnapshot` is frozen (model_config = ConfigDict(frozen=True)).
+So I need to construct a new one or unfreeze it.
 
-Better: pass account through to `collect_snapshot` or have `ProviderAccount` override `collect_snapshot` to set account.
+Better: pass account through to `collect_snapshot` or have `ProviderAccount` override
+`collect_snapshot` to set account.
 
-Actually even simpler: just reconstruct the ProviderSnapshot with the account field set. Since it's a pydantic model with frozen=True, I can use `model_copy` or reconstruct.
+Actually even simpler: just reconstruct the ProviderSnapshot with the account field set.
+Since it's a pydantic model with frozen=True, I can use `model_copy` or reconstruct.
 
 Or: remove `frozen=True` from `ProviderSnapshot`. Let me check if that matters.
 
-Actually, the simplest approach that doesn't break anything: have `ProviderAccount.collect_snapshot` set the account in the returned snapshot:
+Actually, the simplest approach that doesn't break anything: have
+`ProviderAccount.collect_snapshot` set the account in the returned snapshot:
 
 ```python
 class ProviderAccount(UsageProvider, ABC):
@@ -266,7 +285,9 @@ class ProviderAccount(UsageProvider, ABC):
         return snap.model_copy(update={"account": self.account_id})
 ```
 
-But `model_copy` with frozen=True... let me check. Actually `model_copy(update=...)` works even with frozen=True — frozen prevents direct field mutation but model_copy creates a new instance.
+But `model_copy` with frozen=True... let me check.
+Actually `model_copy(update=...)` works even with frozen=True — frozen prevents direct
+field mutation but model_copy creates a new instance.
 
 Let me just write the test, verify it fails, then implement.
 
@@ -276,11 +297,12 @@ Run: `pytest tests/test_registry.py::test_collect_provider_sets_account -v`
 
 **Step 4: Commit**
 
----
+* * *
 
 ### Task 6: Convert Antigravity to per-account instances
 
-**Objective:** Antigravity creates one ProviderAccount per email. Registry collects them all.
+**Objective:** Antigravity creates one ProviderAccount per email.
+Registry collects them all.
 
 **Files:**
 - Modify: `src/usage_limits/providers/antigravity.py`
@@ -313,15 +335,15 @@ class AntigravityAccount(ProviderAccount):
     slug = "antigravity"
     name = "Antigravity"
     ...
-    
+
     def __init__(self, account_id: str, access_token: str) -> None:
         super().__init__(account_id=account_id)
         self._access_token = access_token
-    
+
     def fetch_raw(self) -> AntigravityRaw:
         # Use self._access_token instead of _get_all_access_tokens
         ...
-    
+
     def to_rows(self, raw) -> list[UsageRow]:
         ...  # unchanged, but no longer embeds email in identifier
 ```
@@ -339,13 +361,17 @@ def collect_provider(provider: str, *, account: str | None = None, ...) -> Provi
     ...
 ```
 
-Actually this is getting complicated for the plan. Let me simplify — the Antigravity refactor is the last and most complex step. Let me keep the plan scoped to the core Tasks 1-5 first, and treat Antigravity as Task 6.
+Actually this is getting complicated for the plan.
+Let me simplify — the Antigravity refactor is the last and most complex step.
+Let me keep the plan scoped to the core Tasks 1-5 first, and treat Antigravity as Task
+6\.
 
----
+* * *
 
 ### Task 7: Update rendering to show account
 
-**Objective:** The output table shows account alongside provider name for multi-account providers.
+**Objective:** The output table shows account alongside provider name for multi-account
+providers.
 
 **Files:**
 - Modify: `src/usage_limits/rendering.py` (or wherever display logic lives)
@@ -356,9 +382,10 @@ Check that rendered output for a multi-account provider includes the account ide
 
 **Step 2: Update rendering**
 
-When `snap.account` is set and not "default", display `"{display_name} ({account})"` instead of just `"{display_name}"`.
+When `snap.account` is set and not "default", display `"{display_name} ({account})"`
+instead of just `"{display_name}"`.
 
----
+* * *
 
 ### Summary (uncommitted checkpoints at end)
 

@@ -27,7 +27,6 @@ from usage_limits.providers import (
     OpenRouterProvider,
     QoderProvider,
     TraeProvider,
-    WindsurfProvider,
 )
 
 __all__ = [
@@ -51,7 +50,6 @@ FIRST_PARTY_PROVIDER_CLASSES: tuple[type[UsageProvider], ...] = (
     OpenRouterProvider,
     QoderProvider,
     TraeProvider,
-    WindsurfProvider,
 )
 
 FIRST_PARTY_PROVIDERS: dict[str, type[UsageProvider]] = {
