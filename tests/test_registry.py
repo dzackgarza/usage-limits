@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from usage_limits.registry import list_providers
+from usage_limits.registry import collect_provider, list_providers
 
 
 def test_list_providers_exposes_first_party_provider_order() -> None:
@@ -30,3 +30,9 @@ def test_list_providers_exposes_first_party_provider_order() -> None:
     openrouter_idx = next(i for i, p in enumerate(providers) if p.provider == "openrouter")
     assert providers[openrouter_idx].active is False
     assert providers[openrouter_idx].source == "builtin"
+
+
+def test_collect_provider_sets_account_for_provider_account() -> None:
+    snap = collect_provider("claude")
+    assert snap.account is not None
+    assert snap.account == "default"

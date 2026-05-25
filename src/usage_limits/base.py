@@ -388,3 +388,12 @@ class ProviderAccount(UsageProvider, ABC):
     def __init__(self, account_id: str = "default") -> None:
         super().__init__()
         self.account_id = account_id
+
+    def collect_snapshot(
+        self,
+        *,
+        notify: bool = False,
+        anchor: bool = False,
+    ) -> ProviderSnapshot:
+        snap = super().collect_snapshot(notify=notify, anchor=anchor)
+        return snap.model_copy(update={"account": self.account_id})
