@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TypedDict, cast
 
 import requests
 
-from usage_limits.base import UsageProvider
+from usage_limits.base import ProviderAccount
 from usage_limits.table import UsageRow
 
 
@@ -28,7 +30,7 @@ class ClaudeUsageResponse(TypedDict):
     seven_day: ClaudeUsageWindow
 
 
-class ClaudeProvider(UsageProvider):
+class ClaudeProvider(ProviderAccount):
     """Claude Code usage checker (5-hour and 7-day OAuth-gated windows)."""
 
     slug = "claude"
