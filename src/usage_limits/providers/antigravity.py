@@ -1,7 +1,8 @@
 """Antigravity usage limits provider.
 
-Reads Google OAuth credentials from cockpit-tools credentials.json,
-refreshes the access token, and calls the Google Cloud Code API directly.
+Reads Google OAuth credentials from cockpit-tools V2 account files
+(``accounts.json`` + ``accounts/<uuid>.json``), refreshes the access
+token, and calls the Google Cloud Code API directly.
 
 Known upstream quirk:
 Anthropic models (Claude Sonnet, Opus, GPT-OSS) stopped including
@@ -22,7 +23,10 @@ import requests
 from usage_limits.base import ProviderAccount
 from usage_limits.table import ModelAvailability, UsageRow
 
-COCKPIT_CREDENTIALS_PATH = Path.home() / ".antigravity_cockpit" / "credentials.json"
+COCKPIT_DIR = Path.home() / ".antigravity_cockpit"
+COCKPIT_CREDENTIALS_PATH = COCKPIT_DIR / "credentials.json"  # V1 legacy, one account only
+ACCOUNTS_INDEX_PATH = COCKPIT_DIR / "accounts.json"  # V2 account index
+ACCOUNTS_DIR = COCKPIT_DIR / "accounts"  # V2 per-account credential files
 CLOUDCODE_BASE_URL = "https://cloudcode-pa.googleapis.com"
 CLOUDCODE_METADATA = {
     "ideType": "ANTIGRAVITY",
@@ -33,7 +37,7 @@ GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 
 # OAuth client from cockpit-tools (public — hardcoded in jlcodes99/cockpit-tools
 # src-tauri/src/modules/oauth.rs). These are not secrets; the actual credential
-# is the refresh token in ~/.antigravity_cockpit/credentials.json.
+# is the refresh token in ~/.antigravity_cockpit/accounts/<uuid>.json.
 _OAUTH_CLIENT_ID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
 _OAUTH_CLIENT_SECRET = "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"
 
@@ -102,6 +106,42 @@ class FetchAvailableModelsResponse(TypedDict, total=False):
     defaultAgentModelId: str
 
 
+class V2AccountEntry(TypedDict):
+    id: str
+    email: str
+    name: str
+    created_at: int
+    last_used: int
+
+
+class V2AccountIndex(TypedDict):
+    version: float
+    accounts: list[V2AccountEntry]
+    current_account_id: str | None
+
+
+class V2Token(TypedDict):
+    access_token: str
+    refresh_token: str
+    expires_in: int
+    expiry_timestamp: int
+    token_type: str
+    email: str
+
+
+class V2AccountFile(TypedDict):
+    id: str
+    email: str
+    name: str
+    token: V2Token
+    fingerprint_id: str
+    disabled: bool
+    quota_error: NotRequired[dict]
+    usage_updated_at: int
+    created_at: int
+    last_used: int
+
+
 class AntigravityAccount(ProviderAccount):
     """Antigravity usage checker for a single account.
 
@@ -121,16 +161,33 @@ class AntigravityAccount(ProviderAccount):
     def provider_name(self) -> str:
         return "Antigravity"
 
+    @staticmethod
+    def _read_account_token(email: str) -> V2Token:
+        """Read the token dict for an account email from V2 account files.
+
+        Looks up the account UUID in ``accounts.json``, then reads
+        ``accounts/<uuid>.json`` to get the OAuth token.
+        """
+        index = cast(V2AccountIndex, json.loads(ACCOUNTS_INDEX_PATH.read_text()))
+        uuid: str | None = None
+        for entry in index["accounts"]:
+            if entry["email"] == email:
+                uuid = entry["id"]
+                break
+        if uuid is None:
+            raise KeyError(f"Account {email!r} not found in cockpit accounts index")
+        acct_file = cast(V2AccountFile, json.loads((ACCOUNTS_DIR / f"{uuid}.json").read_text()))
+        return acct_file["token"]
+
     def _get_access_token(self) -> str:
         """Get a fresh access token for ``self.account_id``."""
-        creds = cast(CockpitCredentials, json.loads(COCKPIT_CREDENTIALS_PATH.read_text()))
-        account = creds["accounts"][self.account_id]
+        token = self._read_account_token(self.account_id)
         resp = requests.post(
             GOOGLE_TOKEN_ENDPOINT,
             json={
                 "client_id": _OAUTH_CLIENT_ID,
                 "client_secret": _OAUTH_CLIENT_SECRET,
-                "refresh_token": account["refreshToken"],
+                "refresh_token": token["refresh_token"],
                 "grant_type": "refresh_token",
             },
         )
@@ -303,9 +360,22 @@ class AntigravityAccount(ProviderAccount):
 
     @classmethod
     def resolve_accounts(cls) -> list[AntigravityAccount]:
-        """Return one ``AntigravityAccount`` per credential email."""
-        creds = cast(CockpitCredentials, json.loads(COCKPIT_CREDENTIALS_PATH.read_text()))
-        return [cls(email) for email in creds["accounts"]]
+        """Return one ``AntigravityAccount`` per credential email.
+
+        Reads the V2 ``accounts.json`` index and skips accounts whose
+        individual file has ``disabled: true``.
+        """
+        index = cast(V2AccountIndex, json.loads(ACCOUNTS_INDEX_PATH.read_text()))
+        accounts: list[AntigravityAccount] = []
+        for entry in index["accounts"]:
+            acct_file = cast(
+                V2AccountFile,
+                json.loads((ACCOUNTS_DIR / f"{entry['id']}.json").read_text()),
+            )
+            if acct_file.get("disabled", False):
+                continue
+            accounts.append(cls(entry["email"]))
+        return accounts
 
 
 # Backward-compat alias
