@@ -44,9 +44,7 @@ class DeepseekProvider(ProviderAccount):
         return "DeepSeek"
 
     def fetch_raw(self) -> DeepseekBalance:
-        from usage_limits.config import settings as _cfg
-
-        api_key = os.environ.get("DEEPSEEK_API_KEY") or _cfg.deepseek.api_key
+        api_key = os.environ.get("DEEPSEEK_API_KEY")
         if not api_key:
             return _EMPTY
 
