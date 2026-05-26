@@ -103,3 +103,23 @@ def test_live_api_with_real_key(provider: DeepseekProvider) -> None:
     assert "balance_infos" in raw
     rows = provider.to_rows(raw)
     assert isinstance(rows, list)
+
+
+def test_config_api_key_fallback(provider: DeepseekProvider) -> None:
+    """When DEEPSEEK_API_KEY is unset but config has api_key, fetch_raw attempts to use it."""
+    import usage_limits.config as _config
+    import requests
+
+    env_key = os.environ.pop("DEEPSEEK_API_KEY", None)
+    orig_config_key = _config.settings.deepseek.api_key
+    _config.settings.deepseek.api_key = "invalid-test-key-12345"
+
+    try:
+        with pytest.raises(requests.HTTPError) as exc_info:
+            provider.fetch_raw()
+        assert exc_info.value.response is not None
+        assert exc_info.value.response.status_code == 401
+    finally:
+        _config.settings.deepseek.api_key = orig_config_key
+        if env_key is not None:
+            os.environ["DEEPSEEK_API_KEY"] = env_key

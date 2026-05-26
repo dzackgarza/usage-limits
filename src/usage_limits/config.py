@@ -106,6 +106,7 @@ class DeepseekSettings(BaseModel):
     api_base: str = "https://api.deepseek.com"
     balance_endpoint: str = "/user/balance"
     max_amount: float = 10.0
+    api_key: str | None = None
     """Maximum prepaid amount (USD). Used to compute pct_used from total_balance."""
 
 
