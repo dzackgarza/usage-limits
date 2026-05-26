@@ -1,8 +1,36 @@
 """Antigravity usage limits provider.
 
-Reads Google OAuth credentials from cockpit-tools V2 account files
-(``accounts.json`` + ``accounts/<uuid>.json``), refreshes the access
-token, and calls the Google Cloud Code API directly.
+Depends on cockpit-tools (https://github.com/jlcodes99/cockpit-tools)
+for credential storage. Reads the following files from
+``~/.antigravity_cockpit/``:
+
+==================== ===============================================
+File                 Role
+==================== ===============================================
+``accounts.json``    V2 account index — lists every known account
+                     with a UUID, email, name, and timestamps.
+                     Read by ``resolve_accounts()`` to discover
+                     which accounts exist.
+``accounts/<id>.json``  Per-account credential file (one per UUID).
+                     Contains the OAuth ``token`` dict (with
+                     ``refresh_token``) plus a ``disabled`` flag.
+                     Read by ``_get_access_token()`` to obtain the
+                     refresh token for each account.
+``credentials.json`` Legacy V1 file (no longer read). Stored only
+                     the active account.
+==================== ===============================================
+
+Account resolution:
+  ``resolve_accounts()`` parses ``accounts.json``, reads each
+  account's individual file, skips those with ``"disabled": true``,
+  and returns one ``AntigravityAccount(email)`` per remaining entry.
+  Each instance independently refreshes its own OAuth token and
+  fetches quota from the Google Cloud Code API.
+
+The OAuth client ID and secret are hardcoded — they match the values
+embedded in cockpit-tools
+``src-tauri/src/modules/oauth.rs``). These are public; the actual
+secret is each account's refresh token.
 
 Known upstream quirk:
 Anthropic models (Claude Sonnet, Opus, GPT-OSS) stopped including
@@ -146,7 +174,8 @@ class AntigravityAccount(ProviderAccount):
     """Antigravity usage checker for a single account.
 
     One instance per credential email. Use ``resolve_accounts()`` to
-    create instances for all known credentials.
+    discover all accounts from the V2 cockpit-tools file layout
+    (``accounts.json`` + ``accounts/<uuid>.json``).
     """
 
     slug = "antigravity"

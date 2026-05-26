@@ -35,10 +35,11 @@ obtained from local state files or OAuth refresh flows.
 
 - **Antigravity**: Requires [cockpit-tools](https://github.com/jlcodes99/cockpit-tools)
   to be installed and logged in with at least one Google account.
-  Reads credentials from `~/.antigravity_cockpit/credentials.json`, refreshes the access
-  token via Google's OAuth2 endpoint, then calls the Cloud Code `loadCodeAssist` and
+  Reads the V2 account index from `~/.antigravity_cockpit/accounts.json`, resolves each
+  entry to a per-account credential file under `accounts/<uuid>.json`, then refreshes
+  the OAuth access token and calls the Cloud Code `loadCodeAssist` and
   `fetchAvailableModels` APIs directly.
-  Supports multiple accounts — usage rows are tagged with the account email.
+  Supports multiple accounts — one snapshot per email.
   Supports multi-model quotas (Flash, Pro, Claude, GPT-OSS).
 - **Claude Code**: Anthropic OAuth API. Relies on the JSON credentials file created by
   `claude login`.
@@ -83,11 +84,13 @@ The caching layer:
 ## Prerequisites
 
 - **Antigravity provider**: [cockpit-tools](https://github.com/jlcodes99/cockpit-tools)
-  must be installed and you must be logged in to at least one Google account via the
-  cockpit-tools UI. The provider reads all accounts from
-  `~/.antigravity_cockpit/credentials.json` and reports quota for each.
-  `ANTIGRAVITY_OAUTH_CLIENT_ID` and `ANTIGRAVITY_OAUTH_CLIENT_SECRET` must be set in
-  `.envrc`.
+  must be installed with at least one Google account added via the cockpit-tools UI. The
+  provider discovers accounts from `~/.antigravity_cockpit/accounts.json` and reads
+  OAuth refresh tokens from `~/.antigravity_cockpit/accounts/<uuid>.json` — the V2
+  credential storage format written by cockpit-tools.
+  Accounts whose individual file has `"disabled": true` are skipped.
+  The OAuth client ID and secret are hardcoded (they match the public values embedded in
+  cockpit-tools source).
 - **Claude Code**: Requires `claude login` to have produced
   `~/.claude/.credentials.json`.
 - **Codex**: Requires `codex login`.
