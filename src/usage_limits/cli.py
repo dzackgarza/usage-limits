@@ -7,6 +7,7 @@ from typing import Annotated
 
 import typer
 
+from usage_limits.config import settings
 from usage_limits.doctor import doctor as doctor_checks
 from usage_limits.registry import collect_all, collect_provider, list_providers
 from usage_limits.rendering import render_collection, render_provider_snapshot
@@ -131,8 +132,12 @@ def doctor() -> None:
 
 @app.command("serve")
 def serve(
-    port: Annotated[int, typer.Option("--port", help="The port to listen on.")] = 4318,
-    host: Annotated[str, typer.Option("--host", help="The host to bind to.")] = "0.0.0.0",
+    port: Annotated[
+        int, typer.Option("--port", help="The port to listen on.")
+    ] = settings.server.port,
+    host: Annotated[
+        str, typer.Option("--host", help="The host to bind to.")
+    ] = settings.server.host,
 ) -> None:
     """Start the OTLP sink server to collect OpenRouter traces.
     Requires OPENROUTER_SINK_TOKEN to be set in the environment.

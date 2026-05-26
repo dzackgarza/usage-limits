@@ -5,15 +5,16 @@ from __future__ import annotations
 import json
 import sqlite3
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any, TypedDict, cast
 
 import requests
 
 from usage_limits.base import ProviderAccount
+from usage_limits.config import resolve_path
 from usage_limits.table import UsageRow
 
-KIRO_REFRESH_ENDPOINT = "https://prod.us-east-1.auth.desktop.kiro.dev/refreshToken"
+# Default refresh endpoint — override via config
+_KIRO_REFRESH_ENDPOINT = "https://prod.us-east-1.auth.desktop.kiro.dev/refreshToken"
 
 
 class KiroCredentials(TypedDict):
@@ -62,12 +63,12 @@ class KiroProvider(ProviderAccount):
     slug = "kiro"
     name = "Kiro"
     state_dir = "kiro_usage"
-    ntfy_topic = "usage-updates"
-    ntfy_server = "http://localhost"
 
     def __init__(self) -> None:
         super().__init__()
-        self.db_path = Path.home() / ".local" / "share" / "kiro-cli" / "data.sqlite3"
+        from usage_limits.config import settings as _cfg
+
+        self.db_path = resolve_path(_cfg.paths.kiro_db)
 
     def provider_name(self) -> str:
         return "Kiro"
@@ -103,8 +104,10 @@ class KiroProvider(ProviderAccount):
 
     def _refresh_token(self, refresh_token: str) -> dict[str, Any]:
         """Refresh the access token using the refresh_token endpoint."""
+        from usage_limits.config import settings as _cfg
+
         resp = requests.post(
-            KIRO_REFRESH_ENDPOINT,
+            _cfg.kiro.refresh_endpoint,
             json={"refreshToken": refresh_token},
             timeout=30,
         )
@@ -155,9 +158,11 @@ class KiroProvider(ProviderAccount):
         )
 
     def fetch_raw(self) -> KiroUsageResponse:
+        from usage_limits.config import settings as _cfg
+
         creds = self.get_credentials()
         resp = requests.get(
-            "https://q.us-east-1.amazonaws.com/getUsageLimits",
+            _cfg.kiro.usage_endpoint,
             params={
                 "origin": "AI_EDITOR",
                 "profileArn": creds["profile_arn"],

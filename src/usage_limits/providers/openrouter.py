@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import TypedDict
 
 from usage_limits.base import ProviderAccount
@@ -25,16 +24,21 @@ class OpenRouterProvider(ProviderAccount):
     slug = "openrouter"
     name = "OpenRouter"
     state_dir = "openrouter_usage"
-    ntfy_topic = "usage-updates"
-    ntfy_server = "http://localhost"
 
+    # Default — override via config
     FREE_DAILY_LIMIT = 1000
 
     def provider_name(self) -> str:
         return "OpenRouter"
 
+    def _state_file(self) -> Path:
+        from usage_limits.config import resolve_path
+        from usage_limits.config import settings as _cfg
+
+        return resolve_path(_cfg.paths.openrouter_state_file)
+
     def fetch_raw(self) -> OpenRouterRaw:
-        state_file = Path.home() / ".local" / "state" / "openrouter_usage" / "traces.json"
+        state_file = self._state_file()
         state: dict[str, int] = json.loads(state_file.read_text())
         today = datetime.now(UTC).date().isoformat()
         return {"count": state[today]}

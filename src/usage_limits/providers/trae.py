@@ -6,7 +6,6 @@ import base64
 import hashlib
 import json
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import TypedDict, cast
 
 import requests
@@ -274,7 +273,7 @@ PRODUCT_NAMES = {
     9: "Trial",
 }
 
-# Region origins
+# Region origins — override via config.trae.region_origins
 REGION_ORIGINS = {
     "CN": "https://grow-normal.trae.ai",
     "SG": "https://growsg-normal.trae.ai",
@@ -289,12 +288,13 @@ class TraeProvider(ProviderAccount):
     slug = "trae"
     name = "Trae"
     state_dir = "trae_usage"
-    ntfy_topic = "usage-updates"
-    ntfy_server = "http://localhost"
 
     def __init__(self) -> None:
         super().__init__()
-        self.state_db = Path.home() / ".config" / "Trae" / "User" / "globalStorage" / "storage.json"
+        from usage_limits.config import resolve_path
+        from usage_limits.config import settings as _cfg
+
+        self.state_db = resolve_path(_cfg.paths.trae_storage)
 
     def provider_name(self) -> str:
         return "Trae"

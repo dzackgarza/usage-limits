@@ -3,19 +3,20 @@ from __future__ import annotations
 import json
 import os
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from google.protobuf.json_format import Parse
 from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import ExportTraceServiceRequest
 
+from usage_limits.config import resolve_path, settings
+
 app = FastAPI()
 
 # State management
-STATE_DIR = Path.home() / ".local" / "state" / "openrouter_usage"
+STATE_FILE = resolve_path(settings.paths.openrouter_state_file)
+STATE_DIR = STATE_FILE.parent
 STATE_DIR.mkdir(parents=True, exist_ok=True)
-STATE_FILE = STATE_DIR / "traces.json"
 
 
 def _verify_token(

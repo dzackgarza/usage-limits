@@ -12,7 +12,9 @@ import sqlite3
 from pathlib import Path
 from typing import NamedTuple
 
-_COCKPIT_DIR = Path.home() / ".antigravity_cockpit"
+from usage_limits.config import resolve_path, settings
+
+_COCKPIT_DIR = resolve_path(settings.paths.antigravity_cockpit_dir)
 
 
 class Check(NamedTuple):
@@ -272,7 +274,7 @@ def doctor() -> list[Result]:
     # Also check standalone fallback
     checks.append(
         _check_standalone_file(
-            Path.home() / ".codex" / "auth.json",
+            resolve_path(settings.paths.codex_auth),
             "Codex CLI auth (fallback)",
         )
     )
@@ -282,7 +284,7 @@ def doctor() -> list[Result]:
     # ---- Kiro (cockpit path) ----
     checks = list(_check_cockpit_account_index("kiro_accounts", "Kiro"))
     # Also check standalone SQLite fallback
-    kiro_db = Path.home() / ".local" / "share" / "kiro-cli" / "data.sqlite3"
+    kiro_db = resolve_path(settings.paths.kiro_db)
     try:
         conn = sqlite3.connect(kiro_db)
         cursor = conn.cursor()
@@ -313,7 +315,7 @@ def doctor() -> list[Result]:
     # ---- Claude ----
     checks = [
         _check_standalone_file(
-            Path.home() / ".claude" / ".credentials.json",
+            resolve_path(settings.paths.claude_credentials),
             "Claude credentials",
         ),
     ]
@@ -373,7 +375,7 @@ def doctor() -> list[Result]:
     # ---- Cursor ----
     checks = [
         _check_standalone_file(
-            Path.home() / ".config" / "Cursor" / "User" / "globalStorage" / "state.vscdb",
+            resolve_path(settings.paths.cursor_state_db),
             "Cursor state DB",
         ),
     ]
@@ -383,7 +385,7 @@ def doctor() -> list[Result]:
     # ---- Trae ----
     checks = [
         _check_standalone_file(
-            Path.home() / ".config" / "Trae" / "User" / "globalStorage" / "storage.json",
+            resolve_path(settings.paths.trae_storage),
             "Trae storage",
         ),
     ]

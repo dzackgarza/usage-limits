@@ -39,8 +39,6 @@ class OpenCodeGoProvider(ProviderAccount):
     slug = "opencode-go"
     name = "OpenCode Go"
     state_dir = "opencode_go"
-    ntfy_topic = "usage-updates"
-    ntfy_server = "http://localhost"
 
     def __init__(self) -> None:
         super().__init__()
@@ -68,8 +66,10 @@ class OpenCodeGoProvider(ProviderAccount):
 
     def _discover_workspace_id(self, cookies: dict[str, str]) -> str:
         """Follow /auth redirect to discover the workspace ID."""
+        from usage_limits.config import settings as _cfg
+
         response = requests.get(
-            "https://opencode.ai/auth",
+            _cfg.opencode.auth_url,
             cookies=cookies,
             headers={
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -152,9 +152,8 @@ class OpenCodeZenProvider(ProviderAccount):
     slug = "opencode-zen"
     name = "OpenCode Zen"
     state_dir = "opencode_zen"
-    ntfy_topic = "usage-updates"
-    ntfy_server = "http://localhost"
 
+    # Defaults — override via config
     API_BASE = "https://opencode.ai/zen/v1"
     PROBE_MODEL = "deepseek-v4-flash-free"
 

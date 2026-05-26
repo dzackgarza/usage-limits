@@ -6,12 +6,12 @@ import json
 import subprocess
 import tempfile
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any, TypedDict, cast
 
 import requests
 
 from usage_limits.base import ProviderAccount
+from usage_limits.config import resolve_path, settings
 from usage_limits.table import UsageRow
 
 
@@ -36,13 +36,11 @@ class ClaudeProvider(ProviderAccount):
     slug = "claude"
     name = "Claude Code"
     state_dir = "claude_usage"
-    cache_ttl_seconds = 300
-    ntfy_topic = "usage-updates"
-    ntfy_server = "http://localhost"
+    cache_ttl_seconds = 300  # default; override in config.ntfy.cache_ttl_seconds
 
     def __init__(self) -> None:
         super().__init__()
-        self.cred_file = Path.home() / ".claude" / ".credentials.json"
+        self.cred_file = resolve_path(settings.paths.claude_credentials)
 
     def provider_name(self) -> str:
         return "Claude"
@@ -78,10 +76,10 @@ class ClaudeProvider(ProviderAccount):
 
         def _call() -> requests.Response:
             return requests.get(
-                "https://api.anthropic.com/api/oauth/usage",
+                settings.claude.api_url,
                 headers={
                     "Authorization": f"Bearer {creds['accessToken']}",
-                    "anthropic-beta": "oauth-2025-04-20",
+                    "anthropic-beta": settings.claude.beta_header,
                 },
                 timeout=30,
             )

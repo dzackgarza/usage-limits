@@ -50,8 +50,6 @@ class CopilotProvider(ProviderAccount):
     slug = "copilot"
     name = "GitHub Copilot"
     state_dir = "copilot_usage"
-    ntfy_topic = "usage-updates"
-    ntfy_server = "http://localhost"
 
     def provider_name(self) -> str:
         return "GitHub Copilot"
@@ -67,14 +65,16 @@ class CopilotProvider(ProviderAccount):
         return result.stdout.strip()
 
     def fetch_raw(self) -> CopilotUserResponse:
+        from usage_limits.config import settings as _cfg
+
         token = self.get_token()
         resp = requests.get(
-            "https://api.github.com/copilot_internal/user",
+            _cfg.copilot.api_url,
             headers={
                 "Authorization": f"token {token}",
                 "Accept": "application/json",
-                "Editor-Version": "vscode/1.100.0",
-                "Editor-Plugin-Version": "copilot-chat/0.25.0",
+                "Editor-Version": _cfg.copilot.editor_version,
+                "Editor-Plugin-Version": _cfg.copilot.editor_plugin_version,
             },
             timeout=30,
         )

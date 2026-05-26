@@ -100,5 +100,10 @@ bump-major: check
 publish:
     git push origin $(git branch --show-current) --tags
 
+# Install default config file (does not overwrite existing)
+init-config:
+    mkdir -p ~/.config/usage-limits
+    test -f ~/.config/usage-limits/config.toml || cp .config/usage-limits/config.toml ~/.config/usage-limits/config.toml
+
 build:
     uv build

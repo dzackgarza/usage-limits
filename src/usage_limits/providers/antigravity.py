@@ -43,31 +43,20 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import NotRequired, TypedDict, cast
 
 import requests
 
 from usage_limits.base import ProviderAccount
+from usage_limits.config import resolve_path
 from usage_limits.table import ModelAvailability, UsageRow
 
-COCKPIT_DIR = Path.home() / ".antigravity_cockpit"
-COCKPIT_CREDENTIALS_PATH = COCKPIT_DIR / "credentials.json"  # V1 legacy, one account only
-ACCOUNTS_INDEX_PATH = COCKPIT_DIR / "accounts.json"  # V2 account index
-ACCOUNTS_DIR = COCKPIT_DIR / "accounts"  # V2 per-account credential files
-CLOUDCODE_BASE_URL = "https://cloudcode-pa.googleapis.com"
-CLOUDCODE_METADATA = {
-    "ideType": "ANTIGRAVITY",
-    "platform": "PLATFORM_UNSPECIFIED",
-    "pluginType": "GEMINI",
-}
-GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
-
-# OAuth client from cockpit-tools (public — hardcoded in jlcodes99/cockpit-tools
-# src-tauri/src/modules/oauth.rs). These are not secrets; the actual credential
-# is the refresh token in ~/.antigravity_cockpit/accounts/<uuid>.json.
-_OAUTH_CLIENT_ID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
-_OAUTH_CLIENT_SECRET = "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"
+# Default cockpit directory — override via config
+_COCKPIT_DIR_STR = "~/.antigravity_cockpit"
+_COCKPIT_DIR = resolve_path(_COCKPIT_DIR_STR)
+COCKPIT_CREDENTIALS_PATH = _COCKPIT_DIR / "credentials.json"  # V1 legacy, one account only
+ACCOUNTS_INDEX_PATH = _COCKPIT_DIR / "accounts.json"  # V2 account index
+ACCOUNTS_DIR = _COCKPIT_DIR / "accounts"  # V2 per-account credential files
 
 
 class AntigravityModel(TypedDict):
@@ -210,12 +199,14 @@ class AntigravityAccount(ProviderAccount):
 
     def _get_access_token(self) -> str:
         """Get a fresh access token for ``self.account_id``."""
+        from usage_limits.config import settings as _cfg
+
         token = self._read_account_token(self.account_id)
         resp = requests.post(
-            GOOGLE_TOKEN_ENDPOINT,
+            _cfg.antigravity.oauth_token_endpoint,
             json={
-                "client_id": _OAUTH_CLIENT_ID,
-                "client_secret": _OAUTH_CLIENT_SECRET,
+                "client_id": _cfg.antigravity.client_id,
+                "client_secret": _cfg.antigravity.client_secret,
                 "refresh_token": token["refresh_token"],
                 "grant_type": "refresh_token",
             },
@@ -224,17 +215,27 @@ class AntigravityAccount(ProviderAccount):
 
     def _fetch_models(self, token: str) -> list[AntigravityModel]:
         """Fetch and parse model quota data for this account."""
+        from usage_limits.config import settings as _cfg
+
         headers: dict[str, str] = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
             "User-Agent": "antigravity",
         }
 
+        cfg = _cfg.antigravity
+
         # Step 1: Load code assist (gets plan info, project ID)
         resp = requests.post(
-            f"{CLOUDCODE_BASE_URL}/v1internal:loadCodeAssist",
+            f"{cfg.cloudcode_base_url}/v1internal:loadCodeAssist",
             headers=headers,
-            json={"metadata": CLOUDCODE_METADATA},
+            json={
+                "metadata": {
+                    "ideType": cfg.metadata_ide_type,
+                    "platform": cfg.metadata_platform,
+                    "pluginType": cfg.metadata_plugin_type,
+                }
+            },
         )
         code_assist = cast(LoadCodeAssistResponse, resp.json())
 
@@ -252,7 +253,7 @@ class AntigravityAccount(ProviderAccount):
             body["project"] = project_id
 
         resp = requests.post(
-            f"{CLOUDCODE_BASE_URL}/v1internal:fetchAvailableModels",
+            f"{cfg.cloudcode_base_url}/v1internal:fetchAvailableModels",
             headers=headers,
             json=body,
         )
@@ -269,13 +270,7 @@ class AntigravityAccount(ProviderAccount):
             if label.startswith(("chat_", "tab_", "gemini-")):
                 continue
             # Skip deprecated models
-            deprecated = {
-                "Gemini 2.5 Pro",
-                "Gemini 3 Flash",
-                "Gemini 3.1 Flash Lite",
-                "Gemini 3.1 Flash Image",
-            }
-            if label in deprecated:
+            if label in cfg.deprecated_models:
                 continue
             # Skip duplicates within this account (keep first seen)
             if label in seen_labels:

@@ -26,17 +26,17 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any, TypedDict, cast
 
 import requests
 
 from usage_limits.base import ProviderAccount
+from usage_limits.config import resolve_path
 from usage_limits.table import UsageRow
 
-COCKPIT_DIR = Path.home() / ".antigravity_cockpit"
-CODEX_ACCOUNTS_INDEX_PATH = COCKPIT_DIR / "codex_accounts.json"
-CODEX_ACCOUNTS_DIR = COCKPIT_DIR / "codex_accounts"
+_COCKPIT_DIR = resolve_path("~/.antigravity_cockpit")
+CODEX_ACCOUNTS_INDEX_PATH = _COCKPIT_DIR / "codex_accounts.json"
+CODEX_ACCOUNTS_DIR = _COCKPIT_DIR / "codex_accounts"
 
 
 class CodexTokens(TypedDict):
@@ -97,8 +97,6 @@ class CodexProvider(ProviderAccount):
     slug = "codex"
     name = "Codex"
     state_dir = "codex_usage"
-    ntfy_topic = "usage-updates"
-    ntfy_server = "http://localhost"
 
     def __init__(self, account_id: str = "default") -> None:
         super().__init__(account_id=account_id)
@@ -115,7 +113,9 @@ class CodexProvider(ProviderAccount):
         (``codex_accounts/<id>.json``).
         """
         if self.account_id == "default":
-            data: dict[str, Any] = json.loads((Path.home() / ".codex" / "auth.json").read_text())
+            from usage_limits.config import settings as _cfg
+
+            data: dict[str, Any] = json.loads(resolve_path(_cfg.paths.codex_auth).read_text())
             return cast(CodexTokens, data["tokens"])
 
         # Cockpit V2 path — look up the account entry by email
@@ -134,9 +134,11 @@ class CodexProvider(ProviderAccount):
         return acct_file["tokens"]
 
     def fetch_raw(self) -> WhamUsageResponse:
+        from usage_limits.config import settings as _cfg
+
         creds = self.get_credentials()
         resp = requests.get(
-            "https://chatgpt.com/backend-api/wham/usage",
+            _cfg.codex.api_url,
             headers={"Authorization": f"Bearer {creds['access_token']}"},
             timeout=30,
         )

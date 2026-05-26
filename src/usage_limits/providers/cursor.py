@@ -6,12 +6,12 @@ import base64
 import json
 import sqlite3
 from datetime import datetime
-from pathlib import Path
 from typing import TypedDict, cast
 
 import requests
 
 from usage_limits.base import ProviderAccount
+from usage_limits.config import resolve_path
 from usage_limits.table import UsageRow
 
 
@@ -62,22 +62,20 @@ class CursorProvider(ProviderAccount):
     slug = "cursor"
     name = "Cursor"
     state_dir = "cursor_usage"
-    ntfy_topic = "usage-updates"
-    ntfy_server = "http://localhost"
-
-    USAGE_URL = "https://cursor.com/api/usage-summary"
 
     def __init__(self) -> None:
         super().__init__()
-        self.state_db = (
-            Path.home() / ".config" / "Cursor" / "User" / "globalStorage" / "state.vscdb"
-        )
+        from usage_limits.config import settings as _cfg
+
+        self.state_db = _cfg.paths.cursor_state_db  # stored as str, resolved by resolve_path
+        self.state_db_abs = resolve_path(self.state_db)
+        self.usage_url: str = _cfg.cursor.api_url
 
     def provider_name(self) -> str:
         return "Cursor"
 
     def get_access_token(self) -> str:
-        conn = sqlite3.connect(self.state_db)
+        conn = sqlite3.connect(self.state_db_abs)
         cursor = conn.cursor()
         cursor.execute("SELECT value FROM ItemTable WHERE key = 'cursorAuth/accessToken'")
         row = cursor.fetchone()
@@ -99,7 +97,7 @@ class CursorProvider(ProviderAccount):
         cookie = f"WorkosCursorSessionToken={user_id}%3A%3A{access_token}"
 
         resp = requests.get(
-            self.USAGE_URL,
+            self.usage_url,
             headers={
                 "Accept": "application/json",
                 "Cookie": cookie,

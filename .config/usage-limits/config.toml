@@ -1,0 +1,67 @@
+# usage-limits configuration
+#
+# Copy or symlink this to ~/.config/usage-limits/config.toml.
+# Only the keys you want to override need to be present.
+# All values shown are the built-in defaults.
+
+# [core]
+# cache_ttl_seconds = 0       # 0 = no caching
+# state_dir_base = ".local/state"
+
+# [ntfy]
+# server = "http://localhost"
+# topic = "usage-updates"
+
+# [server]
+# host = "0.0.0.0"
+# port = 4318
+
+# [paths]
+# antigravity_cockpit_dir = "~/.antigravity_cockpit"
+# claude_credentials = "~/.claude/.credentials.json"
+# codex_auth = "~/.codex/auth.json"
+# cursor_state_db = "~/.config/Cursor/User/globalStorage/state.vscdb"
+# kiro_db = "~/.local/share/kiro-cli/data.sqlite3"
+# trae_storage = "~/.config/Trae/User/globalStorage/storage.json"
+# openrouter_state_file = "~/.local/state/openrouter_usage/traces.json"
+
+# [antigravity]
+# client_id = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+# client_secret = "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"
+# cloudcode_base_url = "https://cloudcode-pa.googleapis.com"
+# oauth_token_endpoint = "https://oauth2.googleapis.com/token"
+# deprecated_models = ["Gemini 2.5 Pro", "Gemini 3 Flash", "Gemini 3.1 Flash Lite", "Gemini 3.1 Flash Image"]
+
+# [claude]
+# api_url = "https://api.anthropic.com/api/oauth/usage"
+# beta_header = "oauth-2025-04-20"
+# cache_ttl_seconds = 300
+
+# [codex]
+# api_url = "https://chatgpt.com/backend-api/wham/usage"
+
+# [copilot]
+# api_url = "https://api.github.com/copilot_internal/user"
+# editor_version = "vscode/1.100.0"
+# editor_plugin_version = "copilot-chat/0.25.0"
+
+# [cursor]
+# api_url = "https://cursor.com/api/usage-summary"
+
+# [kiro]
+# refresh_endpoint = "https://prod.us-east-1.auth.desktop.kiro.dev/refreshToken"
+# usage_endpoint = "https://q.us-east-1.amazonaws.com/getUsageLimits"
+
+# [ollama]
+# settings_url = "https://ollama.com/settings"
+
+# [opencode]
+# auth_url = "https://opencode.ai/auth"
+# zen_api_base = "https://opencode.ai/zen/v1"
+# zen_probe_model = "deepseek-v4-flash-free"
+
+# [openrouter]
+# daily_limit = 1000
+
+# [trae]
+# region_origins = {CN = "https://grow-normal.trae.ai", SG = "https://growsg-normal.trae.ai", US = "https://growva-normal.trae.ai", USTTP = "https://grow-normal.traeapi.us"}

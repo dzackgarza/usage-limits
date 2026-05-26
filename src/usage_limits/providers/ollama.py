@@ -22,8 +22,6 @@ class OllamaProvider(ProviderAccount):
     slug = "ollama"
     name = "Ollama Cloud"
     state_dir = "ollama_usage"
-    ntfy_topic = "usage-updates"
-    ntfy_server = "http://localhost"
 
     def __init__(self) -> None:
         super().__init__()
@@ -50,11 +48,13 @@ class OllamaProvider(ProviderAccount):
         return cookies
 
     def fetch_raw(self) -> OllamaRaw:
+        from usage_limits.config import settings as _cfg
+
         cookie_str = self.get_session_cookie()
         cookies = self.parse_cookie_string(cookie_str)
 
         response = requests.get(
-            "https://ollama.com/settings",
+            _cfg.ollama.settings_url,
             cookies=cookies,
             headers={
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",

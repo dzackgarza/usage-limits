@@ -12,6 +12,7 @@ from typing import Any
 
 import requests
 
+from usage_limits.config import settings
 from usage_limits.contracts import ProviderSnapshot
 from usage_limits.table import ModelAvailability, UsageRow, UsageTable
 
@@ -27,11 +28,17 @@ class UsageProvider(ABC):
     cache_ttl_seconds: int = 0
     """How long (in seconds) a cached ``fetch_raw()`` response is considered fresh.
     0 means the cache expires immediately — every call re-fetches."""
-    ntfy_topic: str = "usage-updates"
-    ntfy_server: str = "http://localhost"
+
+    @property
+    def ntfy_topic(self) -> str:
+        return settings.ntfy.topic
+
+    @property
+    def ntfy_server(self) -> str:
+        return settings.ntfy.server
 
     def __init__(self) -> None:
-        self._state_path = Path.home() / ".local" / "state" / self.state_dir
+        self._state_path = Path.home() / settings.core.state_dir_base / self.state_dir
         self._state_path.mkdir(parents=True, exist_ok=True)
 
     @abstractmethod
