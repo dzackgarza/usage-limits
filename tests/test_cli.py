@@ -16,7 +16,8 @@ def test_cli_runs_full_collection_pipeline() -> None:
         text=True,
     )
     assert "OpenCode Zen" in result.stdout
-    assert "0%" in result.stdout
+    assert "0%" in result.stdout or "100%" in result.stdout
+
 
 
 def test_module_cli_lists_registered_providers_as_json() -> None:

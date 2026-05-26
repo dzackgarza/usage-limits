@@ -174,6 +174,8 @@ class OpenCodeZenProvider(ProviderAccount):
             },
             timeout=30,
         )
+        if resp.status_code == 429:
+            return {"available": False}
         resp.raise_for_status()
         return {"available": True}
 
