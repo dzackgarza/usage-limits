@@ -27,13 +27,13 @@ def test_no_api_key_returns_empty_rows(provider: DeepseekProvider) -> None:
             os.environ["DEEPSEEK_API_KEY"] = key
 
 
-def test_to_rows_balance_available(provider: DeepseekProvider) -> None:
-    """to_rows produces a single non-exhausted row when balance is positive."""
+def test_to_rows_computes_pct_from_balance_and_max_amount(provider: DeepseekProvider) -> None:
+    """With default max_amount=10.0, $8.66 balance → (1 - 8.66/10) * 100 = 13.4% used."""
     raw = {
         "is_available": True,
         "balance_infos": [
             {
-                "currency": "CNY",
+                "currency": "USD",
                 "total_balance": "8.66",
                 "granted_balance": "0.00",
                 "topped_up_balance": "8.66",
@@ -44,16 +44,18 @@ def test_to_rows_balance_available(provider: DeepseekProvider) -> None:
     assert len(rows) == 1
     row = rows[0]
     assert "DeepSeek" in row.identifier
-    assert row.pct_used == 0.0
+    assert "$10.00" in row.identifier
+    assert row.pct_used == pytest.approx(13.4, abs=0.01)
+    assert not row.is_exhausted
 
 
-def test_to_rows_balance_exhausted(provider: DeepseekProvider) -> None:
-    """to_rows produces an exhausted row when balance is zero."""
+def test_to_rows_exhausted_when_balance_zero(provider: DeepseekProvider) -> None:
+    """Zero balance → (1 - 0/10) * 100 = 100% used, row is exhausted."""
     raw = {
         "is_available": True,
         "balance_infos": [
             {
-                "currency": "CNY",
+                "currency": "USD",
                 "total_balance": "0.00",
                 "granted_balance": "0.00",
                 "topped_up_balance": "0.00",

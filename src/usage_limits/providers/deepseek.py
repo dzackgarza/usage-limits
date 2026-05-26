@@ -2,6 +2,9 @@
 
 Queries the ``/user/balance`` endpoint to check prepaid account balance.
 Requires ``DEEPSEEK_API_KEY`` env var; quietly returns no rows when unset.
+
+A configured ``max_amount`` (default $10 USD) is used to compute the
+``pct_used`` from the ``total_balance`` returned by the API.
 """
 
 from __future__ import annotations
@@ -56,14 +59,16 @@ class DeepseekProvider(ProviderAccount):
         if not raw.get("is_available") or not raw.get("balance_infos"):
             return []
 
+        from usage_limits.config import settings as _cfg
+
         info = raw["balance_infos"][0]
         total = float(info["total_balance"])
+        max_amt = _cfg.deepseek.max_amount
 
-        # No fixed limit — binary availability: >0 → 0% used, 0 → 100% used
-        pct_used = 0.0 if total > 0 else 100.0
+        pct_used = (1.0 - total / max_amt) * 100.0
         return [
             UsageRow(
-                identifier=f"DeepSeek (¥{total:.2f})",
+                identifier=f"DeepSeek (${max_amt:.2f})",
                 pct_used=pct_used,
                 reset_at=None,
             )

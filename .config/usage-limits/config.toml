@@ -58,6 +58,7 @@
 # [deepseek]
 # api_base = "https://api.deepseek.com"
 # balance_endpoint = "/user/balance"
+# max_amount = 10.0
 
 # [opencode]
 # auth_url = "https://opencode.ai/auth"
