@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import requests
 
@@ -395,6 +396,12 @@ class ProviderAccount(UsageProvider, ABC):
     def __init__(self, account_id: str = "default") -> None:
         super().__init__()
         self.account_id = account_id
+
+    def _get_cache_path(self) -> Path:
+        """Path to this account's fetch-result cache file."""
+        account_path = self._state_path / quote(self.account_id, safe="")
+        account_path.mkdir(parents=True, exist_ok=True)
+        return account_path / "_fetch_cache.json"
 
     def collect_snapshot(
         self,

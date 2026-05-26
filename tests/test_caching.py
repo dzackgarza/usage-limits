@@ -16,14 +16,38 @@ import json
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import requests
 
+from usage_limits.base import ProviderAccount
 from usage_limits.providers.antigravity import AntigravityAccount
 from usage_limits.providers.claude import ClaudeProvider
 from usage_limits.registry import collect_provider
+from usage_limits.table import UsageRow
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+
+class AccountScopedCacheProvider(ProviderAccount):
+    slug = "account-scoped-cache"
+    name = "Account Scoped Cache"
+    state_dir = "account_scoped_cache_test"
+
+    def provider_name(self) -> str:
+        return self.name
+
+    def fetch_raw(self) -> dict[str, str]:
+        return {"account": self.account_id}
+
+    def to_rows(self, raw: Any) -> list[UsageRow]:
+        return []
+
+    def should_anchor(self, rows: list[UsageRow]) -> bool:
+        return False
+
+    def notify_always(self, rows: list[UsageRow]) -> None:
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -50,6 +74,31 @@ def test_cache_file_is_created_after_successful_fetch() -> None:
     assert snap.status == "ok"
 
     assert cache_path.exists(), f"Cache file missing at {cache_path}"
+
+
+def test_account_providers_do_not_share_fetch_cache_files() -> None:
+    """Separate accounts must not overwrite or corrupt each other's fetch cache."""
+    first = AccountScopedCacheProvider(account_id="first@example.com")
+    second = AccountScopedCacheProvider(account_id="second@example.com")
+
+    first_cache = first._get_cache_path()
+    second_cache = second._get_cache_path()
+    first_cache.unlink(missing_ok=True)
+    second_cache.unlink(missing_ok=True)
+
+    first._write_cache({"account": first.account_id})
+    second._write_cache({"account": second.account_id})
+
+    first_result = first._read_cache(ignore_ttl=True)
+    second_result = second._read_cache(ignore_ttl=True)
+
+    assert first_cache != second_cache
+    assert first_result is not None
+    assert second_result is not None
+    first_raw, _ = first_result
+    second_raw, _ = second_result
+    assert first_raw == {"account": "first@example.com"}
+    assert second_raw == {"account": "second@example.com"}
 
 
 def test_ttl_zero_re_fetches_each_time() -> None:
@@ -113,7 +162,7 @@ def test_read_cache_ignore_ttl_returns_stale() -> None:
 
     result = provider._read_cache(ignore_ttl=True)
     assert result is not None, "Expected stale cache to be returned with ignore_ttl=True"
-    raw, ts = result
+    _, ts = result
     assert ts == cached_dt
 
 
