@@ -19,7 +19,6 @@ def test_cli_runs_full_collection_pipeline() -> None:
     assert "0%" in result.stdout or "100%" in result.stdout
 
 
-
 def test_module_cli_lists_registered_providers_as_json() -> None:
     result = subprocess.run(
         [sys.executable, "-m", "usage_limits", "providers", "list", "--json"],

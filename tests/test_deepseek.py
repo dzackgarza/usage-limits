@@ -107,8 +107,9 @@ def test_live_api_with_real_key(provider: DeepseekProvider) -> None:
 
 def test_config_api_key_fallback(provider: DeepseekProvider) -> None:
     """When DEEPSEEK_API_KEY is unset but config has api_key, fetch_raw attempts to use it."""
-    import usage_limits.config as _config
     import requests
+
+    import usage_limits.config as _config
 
     env_key = os.environ.pop("DEEPSEEK_API_KEY", None)
     orig_config_key = _config.settings.deepseek.api_key
