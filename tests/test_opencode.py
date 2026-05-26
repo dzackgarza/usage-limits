@@ -41,3 +41,16 @@ def test_opencode_zen_to_rows() -> None:
     assert row.pct_used == 0.0
     assert row.is_exhausted is False
     assert row.reset_at is None
+
+
+def test_opencode_zen_to_rows_rate_limited() -> None:
+    """A rate limited probe (429) yields 100% used."""
+    provider = OpenCodeZenProvider()
+    rows = provider.to_rows({"available": False})
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.identifier == "OpenCode Zen"
+    assert row.pct_used == 100.0
+    assert row.is_exhausted is True
+    assert row.reset_at is None
