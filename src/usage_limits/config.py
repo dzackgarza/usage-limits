@@ -179,7 +179,7 @@ def _load_toml(path: Path) -> dict[str, Any]:
     """Load a TOML file, returning an empty dict on any error."""
     try:
         with path.open("rb") as f:
-            return tomllib.load(f)  # type: ignore[no-any-return]
+            return tomllib.load(f)
     except (FileNotFoundError, tomllib.TOMLDecodeError, OSError):
         return {}
 

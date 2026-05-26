@@ -361,8 +361,6 @@ class TraeProvider(ProviderAccount):
         best_pack = max(packs, key=tier_priority)
 
         base_info = best_pack["entitlement_base_info"]
-        product_type = base_info["product_type"]
-        identity = PRODUCT_NAMES.get(product_type, f"Unknown({product_type})")
 
         # Reset at the start of the next entitlement period
         reset_at = datetime.fromtimestamp(base_info["end_time"] + 1, tz=UTC)
