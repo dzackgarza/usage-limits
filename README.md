@@ -4,68 +4,143 @@
 
 Uniform quota collection and rendering for CLI- and API-backed LLM providers.
 
-## Current Provider Coverage
+## Quick start
 
-| Provider | Status | Mechanism |
+1. Install [cockpit-tools](https://github.com/jlcodes99/cockpit-tools) and add accounts
+   via the UI. This populates the OAuth tokens that Antigravity, Codex, and Kiro need.
+2. Run `uvx git+https://github.com/dzackgarza/usage-limits doctor` — checks provider
+   readiness and points out anything missing.
+3. Run `uvx git+https://github.com/dzackgarza/usage-limits --help` — available commands
+   and flags.
+4. Run `uvx git+https://github.com/dzackgarza/usage-limits` — collects and displays
+   usage data from all available providers.
+
+## Provider coverage
+
+| Provider | Strategy | How to set up |
 | :--- | :--- | :--- |
-| **Antigravity** | ✅ | Google Cloud Code API via cockpit-tools credentials (`~/.antigravity_cockpit/credentials.json`) |
-| **Claude Code** | ✅ | Anthropic OAuth API (`~/.claude/.credentials.json`) |
-| **Codex** | ✅ | ChatGPT WHAM API (`~/.codex/auth.json`) |
-| **Copilot** | ✅ | `gh auth token` → GitHub Copilot internal API |
-| **Cursor** | ✅ | SQLite `state.vscdb` → JWT → Cursor usage-summary API |
-| **Kiro** | ✅ | SQLite `data.sqlite3` → OAuth → Kiro usage API |
-| **Ollama Cloud** | ✅ | Chromium session cookie → HTML scrape |
-| **OpenCode** | ✅ | Chromium session cookie → workspace API → HTML scrape |
-| **Trae** | ✅ | SQLite `storage.json` → JWT → Trae usage API |
+| Antigravity | cockpit-tools OAuth | Install cockpit-tools, add a Google account via its UI |
+| Claude Code | OAuth credential | Run `claude login` |
+| Codex | OAuth credential | Run `codex login` (or add a Codex account in cockpit-tools) |
+| Copilot | GitHub CLI token | Run `gh auth login` |
+| Cursor | SQLite database | Have Cursor installed and logged in |
+| DeepSeek | API key + balance query | Set `DEEPSEEK_API_KEY` environment variable |
+| Kiro | SQLite + OAuth | Have Kiro CLI installed and logged in (or cockpit-tools) |
+| Ollama Cloud | Cookie scrape | Visit ollama.com and log in via Chromium |
+| OpenCode Go | Cookie scrape | Visit opencode.ai and log in via Chromium |
+| OpenCode Zen | API probe | Nothing — pings a free endpoint, no auth needed |
+| OpenRouter | OTLP trace sink | Start the built-in trace server with `OPENROUTER_SINK_TOKEN` set |
+| Trae | SQLite database | Have Trae installed and logged in |
 
-### Inactive
+## Provider setup
 
-These providers are registered but not collected by default:
+### Antigravity
 
-| Provider | Mechanism |
-| :--- | :--- |
-| **OpenRouter** | Local traces file (`~/.local/state/openrouter_usage/traces.json`) |
+Reads OAuth refresh tokens from cockpit-tools credential files, then calls the Google
+Cloud Code API (`loadCodeAssist`, `fetchAvailableModels`). Supports multiple accounts
+and multi-model quotas (Flash, Pro, Claude, GPT-OSS).
 
-## How It Works
+- **Setup**: Install [cockpit-tools](https://github.com/jlcodes99/cockpit-tools), launch
+  it, and add a Google account via its UI.
+- **Files**: `~/.antigravity_cockpit/accounts.json` (account index) +
+  `accounts/<uuid>.json` (per-account OAuth refresh tokens).
 
-### OAuth / First-Party API
+### Claude Code
 
-Providers that expose a first-party usage API are called directly with credentials
-obtained from local state files or OAuth refresh flows.
+Reads the OAuth credential file produced by `claude login`.
 
-- **Antigravity**: Requires [cockpit-tools](https://github.com/jlcodes99/cockpit-tools)
-  to be installed and logged in with at least one Google account.
-  Reads the V2 account index from `~/.antigravity_cockpit/accounts.json`, resolves each
-  entry to a per-account credential file under `accounts/<uuid>.json`, then refreshes
-  the OAuth access token and calls the Cloud Code `loadCodeAssist` and
-  `fetchAvailableModels` APIs directly.
-  Supports multiple accounts — one snapshot per email.
-  Supports multi-model quotas (Flash, Pro, Claude, GPT-OSS).
-- **Claude Code**: Anthropic OAuth API. Relies on the JSON credentials file created by
-  `claude login`.
-- **Codex**: ChatGPT WHAM (Usage) API. Relies on the JSON auth file created by
-  `codex login`.
-- **Copilot**: Uses `gh auth token` for GitHub authentication, then calls the Copilot
-  internal user API.
+- **Setup**: Run `claude login` and complete the browser-based OAuth flow.
+- **File**: `~/.claude/.credentials.json`
 
-### SQLite-Backed Credentials
+### Codex
 
-Several IDE-based providers store credentials in local SQLite databases that are read
-and exchanged for API tokens.
+Reads a ChatGPT WHAM API auth file, using either `codex login` or cockpit-tools account
+files.
 
-- **Cursor**: Reads `state.vscdb` (VS Code global storage) to extract session tokens or
-  secret material, then call the respective usage APIs.
-- **Kiro**: Reads `data.sqlite3` from the Kiro CLI state directory.
-- **Trae**: Reads `storage.json` from the Trae global storage directory.
+- **Setup**: Run `codex login`, or add a Codex account in cockpit-tools.
+- **Files**: `~/.codex/auth.json` — or cockpit-tools
+  `~/.antigravity_cockpit/codex_accounts/<id>.json`
 
-### Cookie-Based Scraping
+### Copilot
 
-Platforms that do not expose a usage API are scraped via Chromium session cookies
-extracted with `browser_cookie3`.
+Uses the GitHub OAuth token managed by `gh`.
 
-- **Ollama Cloud**: Scrapes `ollama.com/settings`.
-- **OpenCode**: Discovers the workspace ID from `opencode.ai`, then scrapes the
-  subscription page.
+- **Setup**: Run `gh auth login`.
+- **Token**: Retrieved via `gh auth token`.
+
+### Cursor
+
+Reads session tokens from the VS Code global storage SQLite database, then exchanges
+them for API access to Cursor's usage-summary endpoint.
+
+- **Setup**: Install Cursor and log in.
+- **Database**: `~/.config/Cursor/User/globalStorage/state.vscdb` (Linux) or equivalent
+  per-platform VS Code global storage path.
+
+### Kiro
+
+Reads OAuth tokens from the Kiro CLI SQLite database or from cockpit-tools account
+files.
+
+- **Setup**: Install Kiro CLI and run `kiro login`, or add a Kiro account in
+  cockpit-tools.
+- **Files**: `~/.local/share/kiro-cli/data.sqlite3` — or cockpit-tools
+  `~/.antigravity_cockpit/kiro_accounts/<id>.json`
+
+### DeepSeek
+
+Queries the DeepSeek `/user/balance` endpoint for prepaid account balance.
+
+- **Setup**: Set the `DEEPSEEK_API_KEY` environment variable.
+- **Note**: Silently returns no rows when the env var is unset (no error).
+
+### Ollama Cloud
+
+Scrapes the Ollama subscription page using a Chromium session cookie extracted via
+`browser_cookie3`.
+
+- **Setup**: Visit [ollama.com](https://ollama.com) in Chromium and log in.
+  The session cookie must be present — the tool does not open a browser for you.
+- **No local file to configure**: the cookie is read from the Chromium cookie store.
+
+### OpenCode Go
+
+Scrapes the OpenCode workspace subscription page using a Chromium session cookie.
+The workspace ID is auto-discovered from `opencode.ai`.
+
+- **Setup**: Visit [opencode.ai](https://opencode.ai) in Chromium and log in.
+- **No local file to configure**: the cookie is read from the Chromium cookie store.
+
+### OpenCode Zen
+
+Pings the free OpenCode inference endpoint as a health check.
+A successful response means the service is available.
+
+- **Setup**: Nothing required — no auth, no local files.
+- **Note**: Shows 0% used when available, errors propagate if the endpoint is down.
+
+### OpenRouter
+
+Usage is tracked by a built-in OTLP trace sink server that receives trace exports from
+OpenRouter and writes daily request counts to a state file.
+
+- **Setup**: Start the server with
+  `uvx --from git+https://github.com/dzackgarza/usage-limits usage-limits serve`, with
+  `OPENROUTER_SINK_TOKEN` set in the environment.
+  Then configure OpenRouter to export OTLP traces to the server's `/v1/traces` endpoint.
+- **File**: `~/.local/state/openrouter_usage/traces.json` — daily count map written by
+  the sink server.
+- **Note**: Inactive by default — not collected unless explicitly enabled (no server
+  running = no trace data).
+
+### Trae
+
+Reads session tokens from the Trae global storage file, then exchanges them for API
+access to Trae's usage endpoint.
+
+- **Setup**: Install Trae and log in.
+- **File**: `~/.config/Trae/User/globalStorage/storage.json` (Linux) or equivalent
+  per-platform path.
 
 ## Caching
 
@@ -80,118 +155,6 @@ The caching layer:
 - Caches fetch failures themselves — if a provider is rate-limited, the error is
   persisted so subsequent calls within the TTL window skip the API entirely instead of
   retrying immediately.
-
-## Dependency: cockpit-tools
-
-Several providers (Antigravity, Codex, Kiro) rely on
-[cockpit-tools](https://github.com/jlcodes99/cockpit-tools) — a desktop application that
-manages OAuth credentials for multiple AI services.
-
-### Why cockpit-tools?
-
-Instead of each provider implementing its own OAuth login and token storage,
-cockpit-tools acts as a centralized credential manager.
-It stores refresh tokens in a well-known directory (`~/.antigravity_cockpit/`) that
-`usage-limits` reads directly.
-
-The following providers depend on cockpit-tools files:
-
-| Provider | File(s) | Purpose |
-| --- | --- | --- |
-| Antigravity | `accounts.json` + `accounts/<uuid>.json` | Google OAuth refresh tokens for Google Cloud Code API |
-| Codex | `codex_accounts.json` + `codex_accounts/<id>.json` | ChatGPT access tokens for WHAM usage API |
-| Kiro | `kiro_accounts.json` + `kiro_accounts/<id>.json` | Kiro API tokens (partial — SQLite fallback used) |
-
-### How to install
-
-1. Visit
-   [github.com/jlcodes99/cockpit-tools/releases](https://github.com/jlcodes99/cockpit-tools/releases)
-2. Download the latest release for your platform
-3. Run cockpit-tools and complete the Google OAuth login
-
-### Adding accounts
-
-Launch cockpit-tools and navigate to the accounts section.
-Add one or more Google accounts — each goes through the OAuth consent flow.
-Once added, the following files are created automatically:
-
-```
-~/.antigravity_cockpit/
-  accounts.json              # V2 account index (all services)
-  accounts/<uuid>.json       # Per-account OAuth credentials
-  codex_accounts.json        # Codex-specific account index
-  codex_accounts/<id>.json   # Per-account ChatGPT tokens
-  kiro_accounts.json         # Kiro-specific account index
-  kiro_accounts/<id>.json    # Per-account Kiro tokens
-```
-
-### Diagnostics
-
-Run `usage-limits doctor` to check that cockpit-tools is installed, that account files
-exist, and that tokens are present.
-The doctor command provides specific remediation instructions for each issue.
-
-## Prerequisites
-
-- **Antigravity provider**: [cockpit-tools](https://github.com/jlcodes99/cockpit-tools)
-  must be installed with at least one Google account added via the cockpit-tools UI. The
-  provider discovers accounts from `~/.antigravity_cockpit/accounts.json` and reads
-  OAuth refresh tokens from `~/.antigravity_cockpit/accounts/<uuid>.json` — the V2
-  credential storage format written by cockpit-tools.
-  Accounts whose individual file has `"disabled": true` are skipped.
-  The OAuth client ID and secret are hardcoded (they match the public values embedded in
-  cockpit-tools source).
-- **Codex**: Requires cockpit-tools with a Codex account added, or the standard
-  `~/.codex/auth.json` from `codex login`.
-- **Claude Code**: Requires `claude login` to have produced
-  `~/.claude/.credentials.json`.
-- **Copilot**: Requires `gh auth login`.
-- **Kiro**: Requires cockpit-tools with a Kiro account added, or the standard
-  `~/.local/share/kiro-cli/data.sqlite3` from the Kiro CLI.
-- **Ollama Cloud / OpenCode**: Requires Chromium session cookies for the respective
-  domains.
-
-## Usage
-
-### Simple Collection
-
-```bash
-usage-limits
-```
-
-### JSON Output
-
-```bash
-usage-limits --json | jq '.providers[] | {p: .provider, a: .availability}'
-```
-
-### Options
-
-- `-p, --provider <slug>`: Collect only specified provider(s).
-- `-j, --json`: JSON output.
-- `-n, --notify`: Send notifications (via local `ntfy` topic).
-- `-a, --anchor`: Allow providers to "anchor" (warm up) windows (e.g., running `claude`
-  or `ollama` with a trivial prompt).
-
-## Setup
-
-```bash
-direnv allow
-just setup
-```
-
-## JSON Contract
-
-The canonical JSON contract includes:
-- `version`: Contract version.
-- `captured_at`: UTC timestamp.
-- `providers`: List of provider snapshots.
-
-Each provider snapshot contains:
-- `status`: `ok` or `error` or `rate_limited`.
-- `rows`: List of usage rows (Identifier, % used, Reset time).
-- `availability`: High-level summary of model readiness.
-- `errors`: List of provider-specific error messages.
 
 ## Development
 
