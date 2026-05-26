@@ -81,6 +81,56 @@ The caching layer:
   persisted so subsequent calls within the TTL window skip the API entirely instead of
   retrying immediately.
 
+## Dependency: cockpit-tools
+
+Several providers (Antigravity, Codex, Kiro) rely on
+[cockpit-tools](https://github.com/jlcodes99/cockpit-tools) — a desktop application that
+manages OAuth credentials for multiple AI services.
+
+### Why cockpit-tools?
+
+Instead of each provider implementing its own OAuth login and token storage,
+cockpit-tools acts as a centralized credential manager.
+It stores refresh tokens in a well-known directory (`~/.antigravity_cockpit/`) that
+`usage-limits` reads directly.
+
+The following providers depend on cockpit-tools files:
+
+| Provider | File(s) | Purpose |
+| --- | --- | --- |
+| Antigravity | `accounts.json` + `accounts/<uuid>.json` | Google OAuth refresh tokens for Google Cloud Code API |
+| Codex | `codex_accounts.json` + `codex_accounts/<id>.json` | ChatGPT access tokens for WHAM usage API |
+| Kiro | `kiro_accounts.json` + `kiro_accounts/<id>.json` | Kiro API tokens (partial — SQLite fallback used) |
+
+### How to install
+
+1. Visit
+   [github.com/jlcodes99/cockpit-tools/releases](https://github.com/jlcodes99/cockpit-tools/releases)
+2. Download the latest release for your platform
+3. Run cockpit-tools and complete the Google OAuth login
+
+### Adding accounts
+
+Launch cockpit-tools and navigate to the accounts section.
+Add one or more Google accounts — each goes through the OAuth consent flow.
+Once added, the following files are created automatically:
+
+```
+~/.antigravity_cockpit/
+  accounts.json              # V2 account index (all services)
+  accounts/<uuid>.json       # Per-account OAuth credentials
+  codex_accounts.json        # Codex-specific account index
+  codex_accounts/<id>.json   # Per-account ChatGPT tokens
+  kiro_accounts.json         # Kiro-specific account index
+  kiro_accounts/<id>.json    # Per-account Kiro tokens
+```
+
+### Diagnostics
+
+Run `usage-limits doctor` to check that cockpit-tools is installed, that account files
+exist, and that tokens are present.
+The doctor command provides specific remediation instructions for each issue.
+
 ## Prerequisites
 
 - **Antigravity provider**: [cockpit-tools](https://github.com/jlcodes99/cockpit-tools)
@@ -91,10 +141,13 @@ The caching layer:
   Accounts whose individual file has `"disabled": true` are skipped.
   The OAuth client ID and secret are hardcoded (they match the public values embedded in
   cockpit-tools source).
+- **Codex**: Requires cockpit-tools with a Codex account added, or the standard
+  `~/.codex/auth.json` from `codex login`.
 - **Claude Code**: Requires `claude login` to have produced
   `~/.claude/.credentials.json`.
-- **Codex**: Requires `codex login`.
 - **Copilot**: Requires `gh auth login`.
+- **Kiro**: Requires cockpit-tools with a Kiro account added, or the standard
+  `~/.local/share/kiro-cli/data.sqlite3` from the Kiro CLI.
 - **Ollama Cloud / OpenCode**: Requires Chromium session cookies for the respective
   domains.
 

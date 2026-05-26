@@ -7,6 +7,7 @@ from typing import Annotated
 
 import typer
 
+from usage_limits.doctor import doctor as doctor_checks
 from usage_limits.registry import collect_all, collect_provider, list_providers
 from usage_limits.rendering import render_collection, render_provider_snapshot
 
@@ -60,6 +61,72 @@ def providers_list(
         return
     for provider in providers:
         typer.echo(f"{provider.provider}\t{provider.display_name}\t{provider.source}")
+
+
+@app.command("doctor")
+def doctor() -> None:
+    """Check provider credential readiness and give setup instructions."""
+    from rich.console import Console
+    from rich.panel import Panel
+
+    console = Console()
+    console.print(
+        Panel(
+            "Checks credential files, tokens, and CLI tools for every provider. "
+            "Each check includes a remediation hint if something is missing.",
+            title="usage-limits doctor",
+        )
+    )
+    console.print()
+
+    results = doctor_checks()
+    has_errors = False
+
+    for result in results:
+        # Component header
+        icon = "\u2705" if result.status == "ok" else "\u274c"
+        style = "green" if result.status == "ok" else "red"
+        console.print(f"{icon}  [bold {style}]{result.component}[/bold {style}]")
+
+        for check in result.checks:
+            if check.status == "ok":
+                mark = "\u2713"
+                color = "green"
+            elif check.status == "warning":
+                mark = "\u26a0"
+                color = "yellow"
+            else:
+                mark = "\u2717"
+                color = "red"
+                has_errors = True
+
+            console.print(f"     {mark} [{color}]{check.description}[/{color}]")
+
+            if check.remediation:
+                for line in check.remediation.strip().split("\n"):
+                    console.print(f"          {line}")
+
+        console.print()
+
+    if has_errors:
+        console.print(
+            Panel(
+                "Some checks failed. Follow the remediation steps above for each\n"
+                "provider you want to use. Most issues are resolved by:\n"
+                "  - Installing or running cockpit-tools and adding accounts\n"
+                "  - Running provider-specific login commands",
+                title="Summary",
+                border_style="yellow",
+            )
+        )
+    else:
+        console.print(
+            Panel(
+                "All providers look ready.",
+                title="Summary",
+                border_style="green",
+            )
+        )
 
 
 @app.command("serve")
