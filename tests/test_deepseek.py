@@ -28,7 +28,7 @@ def test_no_api_key_returns_empty_rows(provider: DeepseekProvider) -> None:
 
 
 def test_to_rows_computes_pct_from_balance_and_max_amount(provider: DeepseekProvider) -> None:
-    """With default max_amount=10.0, $8.66 balance → (1 - 8.66/10) * 100 = 13.4% used."""
+    """With default max_amount=10.0, $8.66 balance → (8.66/10) * 100 = 86.6%."""
     raw = {
         "is_available": True,
         "balance_infos": [
@@ -45,12 +45,12 @@ def test_to_rows_computes_pct_from_balance_and_max_amount(provider: DeepseekProv
     row = rows[0]
     assert "DeepSeek" in row.identifier
     assert "$10.00" in row.identifier
-    assert row.pct_used == pytest.approx(13.4, abs=0.01)
+    assert row.pct_used == pytest.approx(86.6, abs=0.01)
     assert not row.is_exhausted
 
 
-def test_to_rows_exhausted_when_balance_zero(provider: DeepseekProvider) -> None:
-    """Zero balance → (1 - 0/10) * 100 = 100% used, row is exhausted."""
+def test_to_rows_zero_balance_is_zero_percent(provider: DeepseekProvider) -> None:
+    """Zero balance → (0/10) * 100 = 0% used."""
     raw = {
         "is_available": True,
         "balance_infos": [
@@ -64,7 +64,7 @@ def test_to_rows_exhausted_when_balance_zero(provider: DeepseekProvider) -> None
     }
     rows = provider.to_rows(raw)
     assert len(rows) == 1
-    assert rows[0].is_exhausted
+    assert rows[0].pct_used == 0.0
 
 
 def test_to_rows_not_available(provider: DeepseekProvider) -> None:

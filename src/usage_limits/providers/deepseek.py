@@ -65,7 +65,7 @@ class DeepseekProvider(ProviderAccount):
         total = float(info["total_balance"])
         max_amt = _cfg.deepseek.max_amount
 
-        pct_used = (1.0 - total / max_amt) * 100.0
+        pct_used = (total / max_amt) * 100.0
         return [
             UsageRow(
                 identifier=f"DeepSeek (${max_amt:.2f})",
