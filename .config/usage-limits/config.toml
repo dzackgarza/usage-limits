@@ -55,6 +55,10 @@
 # [ollama]
 # settings_url = "https://ollama.com/settings"
 
+# [deepseek]
+# api_base = "https://api.deepseek.com"
+# balance_endpoint = "/user/balance"
+
 # [opencode]
 # auth_url = "https://opencode.ai/auth"
 # zen_api_base = "https://opencode.ai/zen/v1"

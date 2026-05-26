@@ -102,6 +102,11 @@ class OllamaSettings(BaseModel):
     settings_url: str = "https://ollama.com/settings"
 
 
+class DeepseekSettings(BaseModel):
+    api_base: str = "https://api.deepseek.com"
+    balance_endpoint: str = "/user/balance"
+
+
 class OpenCodeSettings(BaseModel):
     auth_url: str = "https://opencode.ai/auth"
     zen_api_base: str = "https://opencode.ai/zen/v1"
@@ -154,6 +159,7 @@ class Settings(BaseModel):
     cursor: CursorSettings = CursorSettings()
     kiro: KiroSettings = KiroSettings()
     ollama: OllamaSettings = OllamaSettings()
+    deepseek: DeepseekSettings = DeepseekSettings()
     opencode: OpenCodeSettings = OpenCodeSettings()
     openrouter: OpenRouterSettings = OpenRouterSettings()
     trae: TraeSettings = TraeSettings()
