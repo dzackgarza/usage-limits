@@ -42,8 +42,9 @@ as 100% used regardless of the ``isExhausted`` field.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import NotRequired, TypedDict, cast
+from typing import Any, NotRequired, TypedDict, cast
 
 import requests
 
@@ -153,7 +154,7 @@ class V2AccountFile(TypedDict):
     token: V2Token
     fingerprint_id: str
     disabled: bool
-    quota_error: NotRequired[dict]
+    quota_error: NotRequired[dict[str, Any]]
     usage_updated_at: int
     created_at: int
     last_used: int
@@ -335,7 +336,7 @@ class AntigravityAccount(ProviderAccount):
             rows.append(
                 UsageRow(
                     identifier=label,
-                    pct_used=pct_used,
+                    pct_used=round(pct_used),
                     reset_at=reset_at,
                 )
             )
@@ -383,7 +384,7 @@ class AntigravityAccount(ProviderAccount):
             )
 
     @classmethod
-    def resolve_accounts(cls) -> list[AntigravityAccount]:
+    def resolve_accounts(cls) -> Sequence[AntigravityAccount]:
         """Return one ``AntigravityAccount`` per credential email.
 
         Reads the V2 ``accounts.json`` index and skips accounts whose

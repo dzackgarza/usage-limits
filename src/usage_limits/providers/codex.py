@@ -25,6 +25,7 @@ Codex CLI auth file.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any, TypedDict, cast
 
@@ -69,7 +70,7 @@ class CodexAccountFile(TypedDict):
     id: str
     email: str
     tokens: CodexTokens
-    quota: dict
+    quota: dict[str, Any]
 
 
 class WhamWindow(TypedDict):
@@ -153,7 +154,7 @@ class CodexProvider(ProviderAccount):
         rows: list[UsageRow] = [
             UsageRow(
                 identifier="Codex (5h)",
-                pct_used=primary["used_percent"],
+                pct_used=round(primary["used_percent"]),
                 reset_at=_ts_to_dt(primary["reset_at"]),
             ),
         ]
@@ -161,7 +162,7 @@ class CodexProvider(ProviderAccount):
             rows.append(
                 UsageRow(
                     identifier="Codex (7d)",
-                    pct_used=secondary["used_percent"],
+                    pct_used=round(secondary["used_percent"]),
                     reset_at=_ts_to_dt(secondary["reset_at"]),
                 )
             )
@@ -184,7 +185,7 @@ class CodexProvider(ProviderAccount):
         return ["codex", "exec", "-c", "project_doc_max_bytes=0", "Say hello and do nothing else"]
 
     @classmethod
-    def resolve_accounts(cls) -> list[CodexProvider]:
+    def resolve_accounts(cls) -> Sequence[CodexProvider]:
         """Return one ``CodexProvider`` per cockpit-tools Codex account."""
         index = cast(CodexAccountIndex, json.loads(CODEX_ACCOUNTS_INDEX_PATH.read_text()))
         return [cls(entry["email"]) for entry in index["accounts"]]

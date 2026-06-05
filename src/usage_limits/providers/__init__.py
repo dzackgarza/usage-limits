@@ -8,6 +8,7 @@ from usage_limits.providers.codex import CodexProvider
 from usage_limits.providers.copilot import CopilotProvider
 from usage_limits.providers.cursor import CursorProvider
 from usage_limits.providers.deepseek import DeepseekProvider
+from usage_limits.providers.gemini import GeminiProvider
 from usage_limits.providers.kiro import KiroProvider
 from usage_limits.providers.ollama import OllamaProvider
 from usage_limits.providers.opencode import (
@@ -25,6 +26,7 @@ __all__ = [
     "CopilotProvider",
     "CursorProvider",
     "DeepseekProvider",
+    "GeminiProvider",
     "KiroProvider",
     "OllamaProvider",
     "OpenCodeGoProvider",

@@ -6,6 +6,7 @@ import json
 import subprocess
 import tempfile
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -293,16 +294,20 @@ class UsageProvider(ABC):
     def _read_cache(self, *, ignore_ttl: bool = False) -> tuple[Any, datetime] | None:
         """Return (raw, last_updated) if a cache entry with data exists, else None.
 
-        Returns None for entries that only contain an error (raw is None) —
-        those trigger a live fetch on the next attempt.
+        Returns None for entries that contain an error (``error_type``
+        is present) or have no raw data — those trigger a live fetch on
+        the next attempt.
 
-        When *ignore_ttl* is true the TTL freshness check is skipped —
-        used to fall back to stale data when a live fetch fails.
+        When *ignore_ttl* is true the TTL freshness check is skipped,
+        allowing stale-but-good data to be inspected.
         """
         path = self._get_cache_path()
         if not path.exists():
             return None
         data = json.loads(path.read_text())
+        # Error entries are always a cache miss — force a live fetch
+        if "error_type" in data:
+            return None
         last_updated = datetime.fromisoformat(data["last_updated"])
         if (
             not ignore_ttl
@@ -324,32 +329,22 @@ class UsageProvider(ABC):
         return now
 
     def _write_cache_error(self, exc: BaseException) -> datetime:
-        """Persist a fetch failure and preserve any existing raw data for stale fallback.
+        """Persist a fetch failure as an error-only cache entry.
 
-        The error entry marks the cache as dirty so ``_read_cache``
-        returns ``None``, forcing the next call to attempt a live fetch.
+        The entry has ``raw: null`` so ``_read_cache`` returns ``None``,
+        forcing the next call to attempt a live fetch.  No old raw data
+        is preserved — stale fallback is never served.
         Returns ``now``.
         """
         now = datetime.now(UTC)
         path = self._get_cache_path()
 
-        # Preserve prior raw data so stale fallback still works
-        raw: Any = None
-        if path.exists():
-            try:
-                prior = json.loads(path.read_text())
-                raw = prior.get("raw")
-            except (json.JSONDecodeError, OSError):
-                pass
-
-        entry: dict[str, Any] = {}
-        if raw is not None:
-            entry["raw"] = raw
-        else:
-            entry["raw"] = None
-        entry["error_type"] = type(exc).__name__
-        entry["error_message"] = str(exc)
-        entry["last_updated"] = now.isoformat()
+        entry: dict[str, Any] = {
+            "raw": None,
+            "error_type": type(exc).__name__,
+            "error_message": str(exc),
+            "last_updated": now.isoformat(),
+        }
         if isinstance(exc, requests.HTTPError) and exc.response is not None:
             entry["error_status_code"] = exc.response.status_code
         path.write_text(json.dumps(entry))
@@ -360,13 +355,13 @@ class UsageProvider(ABC):
 
         Cached GOOD data is served within TTL to prevent API hammering.
         Cached errors are never served — they always trigger a live fetch.
-        On live-fetch failure, stale GOOD data is served as a fallback.
+        On live-fetch failure the exception propagates (no stale fallback)
+        so the caller can report it accurately.
 
         Order of preference:
         1. Fresh GOOD cache (within TTL)
         2. Live fetch — persists GOOD data on success, error on failure
-        3. Stale GOOD cache — fallback when live fetch fails
-        4. Propagate exception — when no data exists at all
+        3. Propagate exception — when live fetch fails
         """
         if not force:
             cached = self._read_cache()
@@ -377,9 +372,6 @@ class UsageProvider(ABC):
             raw = self.fetch_raw()
         except BaseException as exc:
             self._write_cache_error(exc)
-            cached = self._read_cache(ignore_ttl=True)
-            if cached is not None:
-                return cached
             raise
 
         last_updated = self._write_cache(raw)
@@ -413,7 +405,7 @@ class ProviderAccount(UsageProvider, ABC):
         return snap.model_copy(update={"account": self.account_id})
 
     @classmethod
-    def resolve_accounts(cls) -> list[ProviderAccount]:
+    def resolve_accounts(cls) -> Sequence[ProviderAccount]:
         """Return one ProviderAccount instance per known credential.
 
         Single-account providers return ``[cls()]``.

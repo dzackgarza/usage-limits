@@ -97,12 +97,12 @@ class ClaudeProvider(ProviderAccount):
         return [
             UsageRow(
                 identifier="Claude (5h)",
-                pct_used=five_hour["utilization"],
+                pct_used=round(five_hour["utilization"]),
                 reset_at=_parse_dt(five_hour["resets_at"]),
             ),
             UsageRow(
                 identifier="Claude (7d)",
-                pct_used=seven_day["utilization"],
+                pct_used=round(seven_day["utilization"]),
                 reset_at=_parse_dt(seven_day["resets_at"]),
             ),
         ]

@@ -32,7 +32,7 @@ class OpenRouterProvider(ProviderAccount):
     def provider_name(self) -> str:
         return "OpenRouter"
 
-    def _state_file(self) -> Path:
+    def _state_file(self, name: str = "") -> Path:
         from usage_limits.config import resolve_path
         from usage_limits.config import settings as _cfg
 
@@ -51,7 +51,9 @@ class OpenRouterProvider(ProviderAccount):
         )
         now = datetime.now(UTC)
         tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-        return [UsageRow(identifier="OpenRouter (daily)", pct_used=pct_used, reset_at=tomorrow)]
+        return [
+            UsageRow(identifier="OpenRouter (daily)", pct_used=round(pct_used), reset_at=tomorrow)
+        ]
 
     def should_anchor(self, rows: list[UsageRow]) -> bool:
         return False

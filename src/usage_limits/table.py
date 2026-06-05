@@ -38,8 +38,8 @@ class UsageRow(BaseModel):
     identifier: str
     """Human label, e.g. 'Claude (5h)', 'Amp', 'Antigravity: Gemini 2.5 Pro'."""
 
-    pct_used: float
-    """Percentage consumed, clamped to [0.0, 100.0]."""
+    pct_used: int
+    """Percentage consumed, clamped to [0, 100]."""
 
     reset_at: datetime | None = None
     """UTC reset timestamp; None = not applicable or already at full capacity."""
@@ -48,8 +48,8 @@ class UsageRow(BaseModel):
 
     @field_validator("pct_used", mode="before")
     @classmethod
-    def _clamp_pct_used(cls, v: float) -> float:
-        return max(0.0, min(float(v), 100.0))
+    def _clamp_pct_used(cls, v: float) -> int:
+        return max(0, min(round(v), 100))
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -118,7 +118,7 @@ class UsageTable:
 
         for row in rows:
             color = self._bar_color(row.pct_used)
-            pct_str = f"{int(row.pct_used):>4}%"
+            pct_str = f"{row.pct_used:>4}%"
             if bar_width:
                 bar = ProgressBar(
                     total=100,

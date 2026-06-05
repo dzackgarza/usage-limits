@@ -132,7 +132,7 @@ class CursorProvider(ProviderAccount):
         rows.append(
             UsageRow(
                 identifier="Cursor (30d)",
-                pct_used=pct_used,
+                pct_used=round(pct_used),
                 reset_at=reset_at,
             )
         )
@@ -142,7 +142,7 @@ class CursorProvider(ProviderAccount):
         on_demand_limit = on_demand["limit"]
         on_demand_used = on_demand["used"]
         if isinstance(on_demand_limit, int) and on_demand_limit > 0:
-            pct_used = (on_demand_used / on_demand_limit) * 100
+            pct_used = round((on_demand_used / on_demand_limit) * 100)
             rows.append(
                 UsageRow(
                     identifier=f"Cursor ({membership} - On Demand)",

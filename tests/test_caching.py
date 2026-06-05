@@ -147,11 +147,7 @@ def test_read_cache_returns_none_on_stale() -> None:
 
 
 def test_read_cache_ignore_ttl_returns_stale() -> None:
-    """``_read_cache(ignore_ttl=True)`` returns data even when outside TTL.
-
-    This is the fallback path used when a live fetch fails — the stale
-    cache data is served rather than propagating the error.
-    """
+    """``_read_cache(ignore_ttl=True)`` returns data even when outside TTL."""
     provider = ClaudeProvider()
     cache_path = provider._get_cache_path()
     cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -191,9 +187,9 @@ def test_fresh_cache_hit_within_ttl() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Failure caching: persist fetch failures for stale-good-data fallback.
-# Errors are never served from cache — they always trigger a live fetch,
-# and on failure the stale good data is returned instead.
+# Failure caching: persist fetch failures as error-only cache entries.
+# Error entries are never served from cache — they always trigger a
+# live fetch, and on failure the exception propagates to the caller.
 # ---------------------------------------------------------------------------
 
 
@@ -212,11 +208,12 @@ def test_write_cache_error_persists_error_type() -> None:
     assert data["error_message"] == "test fetch failure"
 
 
-def test_write_cache_error_preserves_stale_data() -> None:
-    """``_write_cache_error`` must not overwrite existing raw data.
+def test_write_cache_error_wipes_raw_data() -> None:
+    """``_write_cache_error`` must overwrite existing raw data with null.
 
-    When a prior successful fetch left raw data in the cache, an
-    error write should preserve it so stale fallback still works.
+    A prior successful fetch left raw data in the cache.  An error write
+    must discard it so the cache only contains an error — no stale data
+    to accidentally serve.
     """
     provider = ClaudeProvider()
     cache_path = provider._get_cache_path()
@@ -230,5 +227,5 @@ def test_write_cache_error_preserves_stale_data() -> None:
     provider._write_cache_error(error)
 
     data = json.loads(cache_path.read_text())
-    assert data["raw"] is not None, "raw data was wiped by error write"
-    assert data["raw"]["five_hour"]["utilization"] == 5.0
+    assert data["raw"] is None, "raw data should be wiped by error write"
+    assert data["error_type"] == "HTTPError"

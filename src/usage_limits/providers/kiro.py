@@ -187,7 +187,7 @@ class KiroProvider(ProviderAccount):
             # Main credits
             total = breakdown["usageLimit"]
             used = breakdown["currentUsage"]
-            pct_used = (used / total * 100) if total > 0 else 0.0
+            pct_used = round((used / total * 100) if total > 0 else 0.0)
             reset_at = datetime.fromtimestamp(breakdown["nextDateReset"], tz=UTC)
 
             rows.append(
@@ -203,7 +203,7 @@ class KiroProvider(ProviderAccount):
             if free_trial and free_trial["freeTrialStatus"] != "EXPIRED":
                 bonus_total = free_trial["usageLimit"]
                 bonus_used = free_trial["currentUsage"]
-                bonus_pct = (bonus_used / bonus_total * 100) if bonus_total > 0 else 0.0
+                bonus_pct = round((bonus_used / bonus_total * 100) if bonus_total > 0 else 0.0)
                 bonus_reset = datetime.fromtimestamp(free_trial["freeTrialExpiry"], tz=UTC)
 
                 rows.append(

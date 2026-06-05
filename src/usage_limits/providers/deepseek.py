@@ -56,7 +56,7 @@ class DeepseekProvider(ProviderAccount):
         return cast(DeepseekBalance, resp.json())
 
     def to_rows(self, raw: DeepseekBalance) -> list[UsageRow]:
-        if not raw.get("is_available") or not raw.get("balance_infos"):
+        if not raw["balance_infos"]:
             return []
 
         from usage_limits.config import settings as _cfg
@@ -69,7 +69,7 @@ class DeepseekProvider(ProviderAccount):
         return [
             UsageRow(
                 identifier=f"DeepSeek (${max_amt:.2f})",
-                pct_used=pct_used,
+                pct_used=round(pct_used),
                 reset_at=None,
             )
         ]
@@ -81,11 +81,11 @@ class DeepseekProvider(ProviderAccount):
         pass
 
     def metadata(self, raw: Any, rows: list[UsageRow]) -> dict[str, Any]:
-        if not raw.get("balance_infos"):
+        if not raw["balance_infos"]:
             return {"available": False}
         info = raw["balance_infos"][0]
         return {
-            "available": raw.get("is_available", False),
+            "available": raw["is_available"],
             "currency": info["currency"],
             "total_balance": info["total_balance"],
             "granted_balance": info["granted_balance"],

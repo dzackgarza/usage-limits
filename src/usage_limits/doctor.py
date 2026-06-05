@@ -10,7 +10,7 @@ import json
 import shutil
 import sqlite3
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 from usage_limits.config import resolve_path, settings
 
@@ -43,7 +43,7 @@ def _cockpit_tool() -> str | None:
     return shutil.which("cockpit-tools")
 
 
-def _json_load(path: Path) -> dict | list | None:
+def _json_load(path: Path) -> dict[str, Any] | list[Any] | None:
     """Safely load a JSON file, returning None on any failure."""
     try:
         data = json.loads(path.read_text())
@@ -134,10 +134,10 @@ def _check_cockpit_account_index(name: str, label: str) -> list[Check]:
         return checks
 
     count = len(accounts)
-    emails = []
+    emails: list[str] = []
     for a in accounts:
         if isinstance(a, dict):
-            emails.append(a.get("email", a.get("id", "?")))
+            emails.append(str(a.get("email", a.get("id", "?"))))
         else:
             emails.append(str(a))
     checks = [

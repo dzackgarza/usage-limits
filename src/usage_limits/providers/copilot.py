@@ -85,7 +85,7 @@ class CopilotProvider(ProviderAccount):
         snapshots = raw["quota_snapshots"]
         premium = snapshots["premium_interactions"]
 
-        pct_used = 100.0 - premium["percent_remaining"]
+        pct_used = round(100.0 - premium["percent_remaining"])
         quota_reset_dt = datetime.fromisoformat(
             raw["quota_reset_date_utc"].replace("Z", "+00:00")
         ).astimezone(UTC)

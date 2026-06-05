@@ -127,7 +127,7 @@ class OpenCodeGoProvider(ProviderAccount):
             rows.append(
                 UsageRow(
                     identifier=f"OpenCode Go ({short_label})",
-                    pct_used=pct,
+                    pct_used=round(pct),
                     reset_at=reset_at,
                 )
             )
@@ -183,7 +183,7 @@ class OpenCodeZenProvider(ProviderAccount):
         return [
             UsageRow(
                 identifier="OpenCode Zen",
-                pct_used=0.0 if raw["available"] else 100.0,
+                pct_used=0 if raw["available"] else 100,
                 reset_at=None,
             )
         ]

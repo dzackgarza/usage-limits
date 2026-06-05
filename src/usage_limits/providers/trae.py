@@ -377,7 +377,7 @@ class TraeProvider(ProviderAccount):
         basic_used = usage["basic_usage_amount"]
 
         if isinstance(basic_limit, (int, float)) and basic_limit > 0:
-            pct_used = (basic_used / basic_limit) * 100
+            pct_used = round((basic_used / basic_limit) * 100)
             rows.append(
                 UsageRow(
                     identifier="Trae (30d)",
@@ -391,7 +391,7 @@ class TraeProvider(ProviderAccount):
         bonus_used = usage["bonus_usage_amount"]
 
         if isinstance(bonus_limit, (int, float)) and bonus_limit > 0:
-            pct_used = (bonus_used / bonus_limit) * 100
+            pct_used = round((bonus_used / bonus_limit) * 100)
             rows.append(
                 UsageRow(
                     identifier="Trae (30d)",

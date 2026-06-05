@@ -93,7 +93,7 @@ class OllamaProvider(ProviderAccount):
             rows.append(
                 UsageRow(
                     identifier=f"Ollama ({window})",
-                    pct_used=percentage,
+                    pct_used=round(percentage),
                     reset_at=reset_at,
                 )
             )

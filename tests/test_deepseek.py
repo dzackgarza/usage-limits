@@ -45,7 +45,7 @@ def test_to_rows_computes_pct_from_balance_and_max_amount(provider: DeepseekProv
     row = rows[0]
     assert "DeepSeek" in row.identifier
     assert "$10.00" in row.identifier
-    assert row.pct_used == pytest.approx(13.4, abs=0.01)
+    assert row.pct_used == 13
     assert not row.is_exhausted
 
 
@@ -85,10 +85,26 @@ def test_to_rows_full_balance_is_zero_percent(provider: DeepseekProvider) -> Non
     assert rows[0].pct_used == 0.0
 
 
-def test_to_rows_not_available(provider: DeepseekProvider) -> None:
-    """to_rows returns [] when the API reports the account is not available."""
-    raw = {"is_available": False, "balance_infos": []}
-    assert provider.to_rows(raw) == []
+def test_to_rows_insufficient_balance_still_returns_row(provider: DeepseekProvider) -> None:
+    """Captured response: is_available=false but balance_infos is non-empty.
+
+    API returns is_available=false when balance is insufficient for calls,
+    but to_rows must still produce a row from the balance data.
+    """
+    raw = {
+        "is_available": False,
+        "balance_infos": [
+            {
+                "currency": "USD",
+                "total_balance": "-0.01",
+                "granted_balance": "0.00",
+                "topped_up_balance": "-0.01",
+            }
+        ],
+    }
+    rows = provider.to_rows(raw)
+    assert len(rows) == 1
+    assert rows[0].pct_used == 100.0
 
 
 @pytest.mark.skipif(
@@ -103,4 +119,3 @@ def test_live_api_with_real_key(provider: DeepseekProvider) -> None:
     assert "balance_infos" in raw
     rows = provider.to_rows(raw)
     assert isinstance(rows, list)
-
