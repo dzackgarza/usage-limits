@@ -17,18 +17,9 @@ def login_main(ctx: typer.Context) -> None:
     if ctx.invoked_subcommand:
         return
 
-    try:
-        subprocess.run(
-            ["gum", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
-        )
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        typer.secho(
-            "Error: 'gum' is not installed. Please install charmbracelet/gum to use "
-            "the interactive menu.",
-            fg=typer.colors.RED,
-            err=True,
-        )
-        raise typer.Exit(code=1) from None
+    subprocess.run(
+        ["gum", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
+    )
 
     choices = ["antigravity", "codex", "gemini"]
     result = subprocess.run(
@@ -82,20 +73,16 @@ def login_antigravity() -> None:
         use_pkce=False,
     )
 
-    try:
-        cred = flow.login()
-        email = cred["email"]
-        if email == "unknown":
-            email = "default"
+    cred = flow.login()
+    email = cred["email"]
+    if email == "unknown":
+        email = "default"
 
-        store = CredentialStore()
-        store.save("antigravity", email, cred)
+    store = CredentialStore()
+    store.save("antigravity", email, cred)
 
-        typer.secho(f"\nLogged in successfully as {email}", fg=typer.colors.GREEN)
-        typer.echo(f"Credential saved to {store._credential_path('antigravity', email)}")
-    except Exception as e:
-        typer.secho(f"\nLogin failed: {e}", fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=1) from e
+    typer.secho(f"\nLogged in successfully as {email}", fg=typer.colors.GREEN)
+    typer.echo(f"Credential saved to {store._credential_path('antigravity', email)}")
 
 
 @login_app.command("codex")
@@ -127,20 +114,16 @@ def login_codex() -> None:
         },
     )
 
-    try:
-        cred = flow.login()
-        email = cred["email"]
-        if email == "unknown":
-            email = "default"
+    cred = flow.login()
+    email = cred["email"]
+    if email == "unknown":
+        email = "default"
 
-        store = CredentialStore()
-        store.save("codex", email, cred)
+    store = CredentialStore()
+    store.save("codex", email, cred)
 
-        typer.secho(f"\nLogged in successfully as {email}", fg=typer.colors.GREEN)
-        typer.echo(f"Credential saved to {store._credential_path('codex', email)}")
-    except Exception as e:
-        typer.secho(f"\nLogin failed: {e}", fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=1) from e
+    typer.secho(f"\nLogged in successfully as {email}", fg=typer.colors.GREEN)
+    typer.echo(f"Credential saved to {store._credential_path('codex', email)}")
 
 
 @login_app.command("gemini")
@@ -172,19 +155,15 @@ def login_gemini(
         use_pkce=False,
     )
 
-    try:
-        cred = flow.login()
-        email = cred["email"]
-        if email == "unknown":
-            email = "default"
+    cred = flow.login()
+    email = cred["email"]
+    if email == "unknown":
+        email = "default"
 
-        cred["extra"] = {"project_id": project_id}
+    cred["extra"] = {"project_id": project_id}
 
-        store = CredentialStore()
-        store.save("gemini-cli", email, cred)
+    store = CredentialStore()
+    store.save("gemini-cli", email, cred)
 
-        typer.secho(f"\nLogged in successfully as {email}", fg=typer.colors.GREEN)
-        typer.echo(f"Credential saved to {store._credential_path('gemini-cli', email)}")
-    except Exception as e:
-        typer.secho(f"\nLogin failed: {e}", fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=1) from e
+    typer.secho(f"\nLogged in successfully as {email}", fg=typer.colors.GREEN)
+    typer.echo(f"Credential saved to {store._credential_path('gemini-cli', email)}")

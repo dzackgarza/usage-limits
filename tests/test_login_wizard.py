@@ -70,7 +70,7 @@ def test_login_wizard_invokes_real_gum_and_routes_correctly() -> None:
     full_output = output.decode("utf-8", errors="ignore")
     assert port is not None, f"Failed to find localhost port in output: {full_output}"
     assert "Logging in to OpenAI Codex..." in full_output
-    assert "Login failed: OAuth error: access_denied" in full_output
+    assert "RuntimeError: OAuth error: access_denied" in full_output
 
 
 def test_login_wizard_fails_loudly_when_gum_missing(tmp_path: Path) -> None:
@@ -85,5 +85,6 @@ def test_login_wizard_fails_loudly_when_gum_missing(tmp_path: Path) -> None:
     )
     
     assert result.returncode == 1
-    assert "Error: 'gum' is not installed" in result.stderr
+    assert "Traceback (most recent call last)" in result.stderr
+    assert "FileNotFoundError" in result.stderr
 

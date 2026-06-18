@@ -81,10 +81,10 @@ class StderrCapture:
 
 
 def test_login_flow_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    # We must patch webbrowser.open so it doesn't actually open a browser during the test.
-    # The guidelines forbid unittest.mock for core logic, but patching webbrowser.open
-    # is required to prevent a GUI popup in CI. It does not compromise the boundary proof.
-    monkeypatch.setattr("webbrowser.open", lambda url: None)
+    # We must set BROWSER=true so webbrowser.open doesn't actually open a browser during the test.
+    # We use monkeypatch.setenv because it simulates a real environment configuration
+    # (unlike monkeypatch.setattr which is a mock/simulated object).
+    monkeypatch.setenv("BROWSER", "true")
 
     # Capture stderr to get the dynamically generated auth_url and port
     cap = StderrCapture()
@@ -178,7 +178,7 @@ def test_login_flow_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_login_flow_invalid_state(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("webbrowser.open", lambda url: None)
+    monkeypatch.setenv("BROWSER", "true")
     cap = StderrCapture()
     monkeypatch.setattr("sys.stderr", cap)
 
