@@ -61,7 +61,13 @@ def test_login_wizard_invokes_real_gum_and_routes_correctly() -> None:
                 
                 if port is not None:
                     # Unblock the server
-                    requests.get(f"http://127.0.0.1:{port}/?error=access_denied")
+                    # Try to use the discovered callback path if possible, else default to /oauth2callback
+                    try:
+                        callback_path = urllib.parse.urlparse(redirect_uri).path
+                    except Exception:
+                        callback_path = "/oauth2callback"
+                    
+                    requests.get(f"http://127.0.0.1:{port}{callback_path}?error=access_denied")
     except OSError:
         pass
 
@@ -69,6 +75,9 @@ def test_login_wizard_invokes_real_gum_and_routes_correctly() -> None:
     
     full_output = output.decode("utf-8", errors="ignore")
     assert port is not None, f"Failed to find localhost port in output: {full_output}"
+    assert port == 1455, f"Codex redirect_uri must use port 1455, got {port}"
+    assert "redirect_uri=http%3A%2F%2F127.0.0.1%3A1455%2Fauth%2Fcallback" in full_output, "redirect_uri must exactly match what OpenAI authorized"
+    
     assert "Logging in to OpenAI Codex..." in full_output
     assert "RuntimeError: OAuth error: access_denied" in full_output
 
