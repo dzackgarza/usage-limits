@@ -51,13 +51,13 @@ class UsageRow(BaseModel):
     def _clamp_pct_used(cls, v: float) -> int:
         return max(0, min(round(v), 100))
 
-    @computed_field  # type: ignore[prop-decorator]
+    @computed_field
     @property
     def is_exhausted(self) -> bool:
         """True when usage is at or above 100%."""
         return self.pct_used >= 100.0
 
-    @computed_field  # type: ignore[prop-decorator]
+    @computed_field
     @property
     def time_until_reset(self) -> str:
         """Human-readable countdown to reset_at, or empty string if unset."""

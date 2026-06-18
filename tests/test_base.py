@@ -1,5 +1,7 @@
 """Tests for base provider framework models and contracts."""
 
+from typing import Any, cast
+
 import pytest
 
 from usage_limits.base import ProviderAccount, UsageProvider
@@ -18,7 +20,7 @@ def test_provider_account_is_subclass_of_usage_provider() -> None:
 
 def test_provider_account_is_abstract() -> None:
     with pytest.raises(TypeError):
-        ProviderAccount()  # type: ignore[abstract]
+        cast(Any, ProviderAccount)()
 
 
 class _ConcreteAccount(ProviderAccount):
@@ -29,16 +31,16 @@ class _ConcreteAccount(ProviderAccount):
     def provider_name(self) -> str:
         return "Test"
 
-    def fetch_raw(self) -> dict:
+    def fetch_raw(self) -> dict[str, Any]:
         return {}
 
-    def to_rows(self, raw: dict) -> list:
+    def to_rows(self, raw: dict[str, Any]) -> list[Any]:
         return []
 
-    def should_anchor(self, rows: list) -> bool:
+    def should_anchor(self, rows: list[Any]) -> bool:
         return False
 
-    def notify_always(self, rows: list) -> None:
+    def notify_always(self, rows: list[Any]) -> None:
         pass
 
 

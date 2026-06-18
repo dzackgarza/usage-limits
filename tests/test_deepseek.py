@@ -14,14 +14,12 @@ def provider() -> DeepseekProvider:
     return DeepseekProvider()
 
 
-def test_no_api_key_returns_empty_rows(provider: DeepseekProvider) -> None:
-    """When DEEPSEEK_API_KEY is unset, fetch_raw returns empty and to_rows yields []."""
+def test_no_api_key_raises_keyerror(provider: DeepseekProvider) -> None:
+    """When DEEPSEEK_API_KEY is unset, fetch_raw raises KeyError."""
     key = os.environ.pop("DEEPSEEK_API_KEY", None)
     try:
-        raw = provider.fetch_raw()
-        assert raw == {"is_available": False, "balance_infos": []}
-        rows = provider.to_rows(raw)
-        assert rows == []
+        with pytest.raises(KeyError):
+            provider.fetch_raw()
     finally:
         if key is not None:
             os.environ["DEEPSEEK_API_KEY"] = key

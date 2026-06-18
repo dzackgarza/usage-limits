@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, TypedDict, cast
 
 import requests
@@ -134,7 +134,9 @@ class KiroProvider(ProviderAccount):
 
                 # Update the database with new token
                 data["access_token"] = access_token
-                data["expires_at"] = new_token_data.get("expiresAt", expires_at_str)
+                expires_in = new_token_data["expiresIn"]
+                expires_dt = datetime.now(tz=UTC) + timedelta(seconds=expires_in)
+                data["expires_at"] = expires_dt.isoformat().replace("+00:00", "Z")
                 conn = sqlite3.connect(self.db_path)
                 cursor = conn.cursor()
                 cursor.execute(
@@ -199,7 +201,7 @@ class KiroProvider(ProviderAccount):
             )
 
             # Bonus/free trial
-            free_trial = breakdown.get("freeTrialInfo")
+            free_trial = breakdown["freeTrialInfo"]
             if free_trial and free_trial["freeTrialStatus"] != "EXPIRED":
                 bonus_total = free_trial["usageLimit"]
                 bonus_used = free_trial["currentUsage"]

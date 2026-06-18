@@ -80,6 +80,12 @@ warn_unused_configs = true
 explicit_package_bases = true
 mypy_path = "src"
 ignore_missing_imports = true
+plugins = [
+    "pydantic.mypy",
+]
+disable_error_code = [
+    "prop-decorator",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -364,7 +364,3 @@ class AntigravityAccount(ProviderAccount):
         store = CredentialStore()
         accounts = store.list_accounts("antigravity")
         return [cls(acct) for acct in accounts]
-
-
-# Backward-compat alias
-AntigravityProvider = AntigravityAccount

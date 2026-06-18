@@ -124,7 +124,7 @@ class CursorProvider(ProviderAccount):
             # limit=0 means no quota (free/exhausted), not undefined
             pct_used = 100.0
 
-        billing_end = raw.get("billingCycleEnd")
+        billing_end = raw["billingCycleEnd"]
         reset_at = None
         if billing_end:
             reset_at = datetime.fromisoformat(billing_end.replace("Z", "+00:00"))

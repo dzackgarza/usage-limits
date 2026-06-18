@@ -368,37 +368,37 @@ class TraeProvider(ProviderAccount):
         usage = best_pack["usage"]
 
         # Quota is nested in product_extra.subscription_extra.quota
-        extra = base_info.get("product_extra", {}).get("subscription_extra")
-        quota: dict[str, object] = {}
-        if extra:
-            quota = cast(dict[str, object], extra.get("quota", {}))
+        product_extra = base_info["product_extra"]
+        subscription_extra = product_extra["subscription_extra"]
+        if subscription_extra is not None:
+            quota = cast(TraeQuota, subscription_extra["quota"])
 
-        basic_limit = quota.get("basic_usage_limit", 0)
-        basic_used = usage["basic_usage_amount"]
+            basic_limit = quota["basic_usage_limit"]
+            basic_used = usage["basic_usage_amount"]
 
-        if isinstance(basic_limit, (int, float)) and basic_limit > 0:
-            pct_used = round((basic_used / basic_limit) * 100)
-            rows.append(
-                UsageRow(
-                    identifier="Trae (30d)",
-                    pct_used=pct_used,
-                    reset_at=reset_at,
+            if basic_limit > 0:
+                pct_used = round((basic_used / basic_limit) * 100)
+                rows.append(
+                    UsageRow(
+                        identifier="Trae (30d)",
+                        pct_used=pct_used,
+                        reset_at=reset_at,
+                    )
                 )
-            )
 
-        # Also report bonus quota if present
-        bonus_limit = quota.get("bonus_usage_limit", 0)
-        bonus_used = usage["bonus_usage_amount"]
+            # Also report bonus quota if present
+            bonus_limit = quota["bonus_usage_limit"]
+            bonus_used = usage["bonus_usage_amount"]
 
-        if isinstance(bonus_limit, (int, float)) and bonus_limit > 0:
-            pct_used = round((bonus_used / bonus_limit) * 100)
-            rows.append(
-                UsageRow(
-                    identifier="Trae (30d)",
-                    pct_used=pct_used,
-                    reset_at=reset_at,
+            if bonus_limit > 0:
+                pct_used = round((bonus_used / bonus_limit) * 100)
+                rows.append(
+                    UsageRow(
+                        identifier="Trae (30d)",
+                        pct_used=pct_used,
+                        reset_at=reset_at,
+                    )
                 )
-            )
 
         return rows
 

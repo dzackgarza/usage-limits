@@ -15,13 +15,13 @@ from usage_limits.contracts import (
     UsageCollection,
 )
 from usage_limits.providers import (
-    AntigravityProvider,
+    AntigravityAccount,
     ClaudeProvider,
     CodexProvider,
     CopilotProvider,
     CursorProvider,
     DeepseekProvider,
-    GeminiProvider,
+    GeminiAccount,
     KiroProvider,
     OllamaProvider,
     OpenCodeGoProvider,
@@ -39,13 +39,13 @@ __all__ = [
 
 
 FIRST_PARTY_PROVIDER_CLASSES: tuple[type[UsageProvider], ...] = (
-    AntigravityProvider,
+    AntigravityAccount,
     ClaudeProvider,
     CodexProvider,
     CopilotProvider,
     CursorProvider,
     DeepseekProvider,
-    GeminiProvider,
+    GeminiAccount,
     KiroProvider,
     OllamaProvider,
     OpenCodeGoProvider,

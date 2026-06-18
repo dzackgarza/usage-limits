@@ -190,11 +190,14 @@ _DEFAULT_CONFIG_PATH = Path("~/.config/usage-limits/config.toml").expanduser()
 
 
 def _load_toml(path: Path) -> dict[str, Any]:
-    """Load a TOML file, returning an empty dict on any error."""
+    """Load a TOML file, returning an empty dict if the file is absent.
+
+    Propagates decoding and other OSErrors loudly.
+    """
     try:
         with path.open("rb") as f:
             return tomllib.load(f)
-    except (FileNotFoundError, tomllib.TOMLDecodeError, OSError):
+    except FileNotFoundError:
         return {}
 
 

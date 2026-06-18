@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from google.protobuf.json_format import Parse
@@ -42,13 +42,15 @@ def _verify_token(
 
 
 def load_state() -> dict[str, int]:
-    """Load the daily trace counts from disk."""
-    if STATE_FILE.exists():
-        try:
-            return json.loads(STATE_FILE.read_text())  # type: ignore[no-any-return]
-        except (json.JSONDecodeError, OSError):
-            pass
-    return {}
+    """Load the daily trace counts from disk.
+
+    Returns an empty dict if the state file does not exist.
+    """
+    try:
+        data = STATE_FILE.read_text()
+    except FileNotFoundError:
+        return {}
+    return cast(dict[str, int], json.loads(data))
 
 
 def save_state(state: dict[str, int]) -> None:
