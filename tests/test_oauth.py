@@ -113,6 +113,7 @@ def test_login_flow_success(monkeypatch: pytest.MonkeyPatch) -> None:
     t.daemon = True
 
     import re
+
     with responses.RequestsMock() as rsps:
         rsps.add_passthru(re.compile(r"http://127\.0\.0\.1:.*"))
         # Mock the token exchange endpoint
@@ -191,6 +192,7 @@ def test_login_flow_invalid_state(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     exc = []
+
     def run_flow():
         try:
             flow.login()

@@ -120,12 +120,15 @@ def migrate_codex() -> None:
                 typer.echo(f"Skipping account without refresh token: {email}")
                 continue
 
-            cred = cast(StoredCredential, {
-                "access_token": token_data.get("access_token", ""),
-                "refresh_token": token_data["refresh_token"],
-                "expires_at": None,
-                "email": email,
-            })
+            cred = cast(
+                StoredCredential,
+                {
+                    "access_token": token_data.get("access_token", ""),
+                    "refresh_token": token_data["refresh_token"],
+                    "expires_at": None,
+                    "email": email,
+                },
+            )
 
             store.save("codex", email, cred)
             typer.echo(f"Migrated account: {email}")
@@ -183,15 +186,16 @@ def migrate_gemini() -> None:
                 typer.echo(f"Skipping account without refresh token: {email}")
                 continue
 
-            cred = cast(StoredCredential, {
-                "access_token": access_token or "",
-                "refresh_token": refresh_token,
-                "expires_at": None,
-                "email": email,
-                "extra": {
-                    "project_id": project_id
-                }
-            })
+            cred = cast(
+                StoredCredential,
+                {
+                    "access_token": access_token or "",
+                    "refresh_token": refresh_token,
+                    "expires_at": None,
+                    "email": email,
+                    "extra": {"project_id": project_id},
+                },
+            )
 
             store.save("gemini-cli", email, cred)
             typer.echo(f"Migrated account: {email}")
@@ -206,4 +210,3 @@ def migrate_gemini() -> None:
         )
     else:
         typer.echo("No active accounts to migrate.")
-

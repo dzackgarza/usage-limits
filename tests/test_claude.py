@@ -40,6 +40,6 @@ def test_claude_to_rows_with_captured_fixture() -> None:
 def test_claude_missing_credentials(tmp_path: Path) -> None:
     provider = ClaudeProvider()
     provider.cred_file = tmp_path / "missing.json"
-    
+
     with pytest.raises(FileNotFoundError):
         provider.fetch_raw()

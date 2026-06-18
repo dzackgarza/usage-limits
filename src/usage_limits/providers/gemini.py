@@ -265,6 +265,7 @@ class GeminiAccount(ProviderAccount):
     def resolve_accounts(cls) -> Sequence[GeminiAccount]:
         """Return one ``GeminiAccount`` per credential email."""
         from usage_limits.auth.store import CredentialStore
+
         store = CredentialStore()
         accounts = store.list_accounts("gemini-cli")
         return [cls(acct) for acct in accounts]

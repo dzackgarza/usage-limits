@@ -84,15 +84,19 @@ class CodexProvider(ProviderAccount):
             return cast(CodexTokens, data["tokens"])
 
         from usage_limits.auth.store import CredentialStore
+
         store = CredentialStore()
         try:
             cred = store.get("codex", self.account_id)
-            return cast(CodexTokens, {
-                "access_token": cred["access_token"],
-                "refresh_token": cred["refresh_token"],
-                "id_token": "",
-                "account_id": self.account_id,
-            })
+            return cast(
+                CodexTokens,
+                {
+                    "access_token": cred["access_token"],
+                    "refresh_token": cred["refresh_token"],
+                    "id_token": "",
+                    "account_id": self.account_id,
+                },
+            )
         except FileNotFoundError as e:
             raise KeyError(f"Codex account {self.account_id!r} not found in CredentialStore") from e
 
@@ -112,6 +116,7 @@ class CodexProvider(ProviderAccount):
             if e.response.status_code == 401 and self.account_id != "default":
                 from usage_limits.auth.oauth import LocalhostBrowserFlow
                 from usage_limits.auth.store import CredentialStore
+
                 store = CredentialStore()
                 cred = store.get("codex", self.account_id)
                 flow = LocalhostBrowserFlow(
@@ -128,7 +133,6 @@ class CodexProvider(ProviderAccount):
                     ) from e
 
                 new_access_token, new_expires_at = flow.refresh(refresh_token)
-
 
                 # Update credential in store
                 cred["access_token"] = new_access_token
@@ -186,6 +190,7 @@ class CodexProvider(ProviderAccount):
     def resolve_accounts(cls) -> Sequence[CodexProvider]:
         """Return one ``CodexProvider`` per CredentialStore Codex account."""
         from usage_limits.auth.store import CredentialStore
+
         store = CredentialStore()
         return [cls(email) for email in store.list_accounts("codex")]
 
