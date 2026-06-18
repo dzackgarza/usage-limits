@@ -1,8 +1,6 @@
-"""Antigravity usage limits provider.
+"""Provider for Google Cloud Code / Antigravity usage metrics.
 
-Depends on cockpit-tools (https://github.com/jlcodes99/cockpit-tools)
-for credential storage. Reads the following files from
-``~/.antigravity_cockpit/``:
+Reads OAuth refresh tokens from the credential store to fetch limits.
 
 ==================== ===============================================
 File                 Role
@@ -16,8 +14,6 @@ File                 Role
                      ``refresh_token``) plus a ``disabled`` flag.
                      Read by ``_get_access_token()`` to obtain the
                      refresh token for each account.
-``credentials.json`` Legacy V1 file (no longer read). Stored only
-                     the active account.
 ==================== ===============================================
 
 Account resolution:
@@ -27,9 +23,7 @@ Account resolution:
   Each instance independently refreshes its own OAuth token and
   fetches quota from the Google Cloud Code API.
 
-The OAuth client ID and secret are hardcoded — they match the values
-embedded in cockpit-tools
-``src-tauri/src/modules/oauth.rs``). These are public; the actual
+The OAuth client ID and secret are hardcoded. These are public; the actual
 secret is each account's refresh token.
 
 Known upstream quirk:
@@ -41,7 +35,6 @@ as 100% used regardless of the ``isExhausted`` field.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any, NotRequired, TypedDict, cast
@@ -49,15 +42,7 @@ from typing import Any, NotRequired, TypedDict, cast
 import requests
 
 from usage_limits.base import ProviderAccount
-from usage_limits.config import resolve_path
 from usage_limits.table import ModelAvailability, UsageRow
-
-# Default cockpit directory — override via config
-_COCKPIT_DIR_STR = "~/.antigravity_cockpit"
-_COCKPIT_DIR = resolve_path(_COCKPIT_DIR_STR)
-COCKPIT_CREDENTIALS_PATH = _COCKPIT_DIR / "credentials.json"  # V1 legacy, one account only
-ACCOUNTS_INDEX_PATH = _COCKPIT_DIR / "accounts.json"  # V2 account index
-ACCOUNTS_DIR = _COCKPIT_DIR / "accounts"  # V2 per-account credential files
 
 
 class AntigravityModel(TypedDict):
@@ -71,18 +56,6 @@ class AntigravityModel(TypedDict):
 
 class AntigravityRaw(TypedDict):
     models: list[AntigravityModel]
-
-
-class CockpitAccount(TypedDict):
-    email: str
-    accessToken: str
-    refreshToken: str
-    expiresAt: str
-    projectId: str
-
-
-class CockpitCredentials(TypedDict):
-    accounts: dict[str, CockpitAccount]
 
 
 class TokenResponse(TypedDict):
@@ -164,7 +137,7 @@ class AntigravityAccount(ProviderAccount):
     """Antigravity usage checker for a single account.
 
     One instance per credential email. Use ``resolve_accounts()`` to
-    discover all accounts from the V2 cockpit-tools file layout
+    discover all accounts from the credential store
     (``accounts.json`` + ``accounts/<uuid>.json``).
     """
 
@@ -180,39 +153,36 @@ class AntigravityAccount(ProviderAccount):
     def provider_name(self) -> str:
         return "Antigravity"
 
-    @staticmethod
-    def _read_account_token(email: str) -> V2Token:
-        """Read the token dict for an account email from V2 account files.
-
-        Looks up the account UUID in ``accounts.json``, then reads
-        ``accounts/<uuid>.json`` to get the OAuth token.
-        """
-        index = cast(V2AccountIndex, json.loads(ACCOUNTS_INDEX_PATH.read_text()))
-        uuid: str | None = None
-        for entry in index["accounts"]:
-            if entry["email"] == email:
-                uuid = entry["id"]
-                break
-        if uuid is None:
-            raise KeyError(f"Account {email!r} not found in cockpit accounts index")
-        acct_file = cast(V2AccountFile, json.loads((ACCOUNTS_DIR / f"{uuid}.json").read_text()))
-        return acct_file["token"]
-
     def _get_access_token(self) -> str:
         """Get a fresh access token for ``self.account_id``."""
+        from usage_limits.auth.oauth import LocalhostBrowserFlow
+        from usage_limits.auth.store import CredentialStore
         from usage_limits.config import settings as _cfg
 
-        token = self._read_account_token(self.account_id)
-        resp = requests.post(
-            _cfg.antigravity.oauth_token_endpoint,
-            json={
-                "client_id": _cfg.antigravity.client_id,
-                "client_secret": _cfg.antigravity.client_secret,
-                "refresh_token": token["refresh_token"],
-                "grant_type": "refresh_token",
-            },
+        store = CredentialStore()
+        cred = store.get("antigravity", self.account_id)
+
+        refresh_token = cred.get("refresh_token")
+        if not refresh_token:
+            raise RuntimeError(f"No refresh token for account {self.account_id}")
+
+        cfg = _cfg.antigravity
+        flow = LocalhostBrowserFlow(
+            client_id=cfg.client_id,
+            client_secret=cfg.client_secret,
+            scopes=[],
+            auth_url="",
+            token_url=cfg.oauth_token_endpoint,
+            use_pkce=False,
         )
-        return cast(TokenResponse, resp.json())["access_token"]
+
+        new_access, new_expires = flow.refresh(refresh_token)
+        cred["access_token"] = new_access
+        if new_expires:
+            cred["expires_at"] = new_expires
+        store.save("antigravity", self.account_id, cred)
+
+        return new_access
 
     def _fetch_models(self, token: str) -> list[AntigravityModel]:
         """Fetch and parse model quota data for this account."""
@@ -387,20 +357,13 @@ class AntigravityAccount(ProviderAccount):
     def resolve_accounts(cls) -> Sequence[AntigravityAccount]:
         """Return one ``AntigravityAccount`` per credential email.
 
-        Reads the V2 ``accounts.json`` index and skips accounts whose
-        individual file has ``disabled: true``.
+        Reads from the CredentialStore.
         """
-        index = cast(V2AccountIndex, json.loads(ACCOUNTS_INDEX_PATH.read_text()))
-        accounts: list[AntigravityAccount] = []
-        for entry in index["accounts"]:
-            acct_file = cast(
-                V2AccountFile,
-                json.loads((ACCOUNTS_DIR / f"{entry['id']}.json").read_text()),
-            )
-            if acct_file.get("disabled", False):
-                continue
-            accounts.append(cls(entry["email"]))
-        return accounts
+        from usage_limits.auth.store import CredentialStore
+
+        store = CredentialStore()
+        accounts = store.list_accounts("antigravity")
+        return [cls(acct) for acct in accounts]
 
 
 # Backward-compat alias

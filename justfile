@@ -2,6 +2,8 @@
 default:
     @just --list
 
+qc-type := "python"
+
 # Set up the project (uv venv + install)
 setup:
     uv venv

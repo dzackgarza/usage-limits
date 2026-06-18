@@ -76,8 +76,8 @@ class AntigravitySettings(BaseModel):
 class GeminiSettings(BaseModel):
     """OAuth and API values for the Gemini CLI provider.
 
-    Uses cockpit-tools OAuth app credentials to match what the
-    existing credential files were created against.
+    Uses identical OAuth app credentials to match what the
+    Cloud Code extension expects.
     """
 
     client_id: str = "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com"
@@ -149,15 +149,13 @@ class PathsSettings(BaseModel):
     Relative paths are resolved relative to ``$HOME``.
     """
 
-    antigravity_cockpit_dir: str = "~/.antigravity_cockpit"
+    credentials_dir: str = "~/.config/usage-limits/credentials"
     claude_credentials: str = "~/.claude/.credentials.json"
     codex_auth: str = "~/.codex/auth.json"
     cursor_state_db: str = "~/.config/Cursor/User/globalStorage/state.vscdb"
     kiro_db: str = "~/.local/share/kiro-cli/data.sqlite3"
     trae_storage: str = "~/.config/Trae/User/globalStorage/storage.json"
     openrouter_state_file: str = "~/.local/state/openrouter_usage/traces.json"
-    gemini_cockpit_accounts_index: str = "~/.antigravity_cockpit/gemini_accounts.json"
-    gemini_cockpit_accounts_dir: str = "~/.antigravity_cockpit/gemini_accounts"
 
 
 # ---------------------------------------------------------------------------

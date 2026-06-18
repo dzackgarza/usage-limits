@@ -1,7 +1,6 @@
-"""Gemini CLI usage limits provider.
+"""Provider for Gemini CLI usage metrics.
 
-Uses cockpit-tools credential storage for account discovery and OAuth
-tokens. Reads the following files from ``~/.antigravity_cockpit/``:
+Reads OAuth refresh tokens from the credential store.
 
 =========================== ===============================================
 File                        Role
@@ -19,14 +18,12 @@ Each account independently refreshes its own OAuth token and fetches quota
 from the Gemini ``retrieveUserQuota`` endpoint (not Antigravity's
 ``loadCodeAssist`` + ``fetchAvailableModels`` flow).
 
-The OAuth client ID and secret are hardcoded in config — they match the
-values embedded in cockpit-tools ``gemini_oauth.rs``. These are public;
+The OAuth client ID and secret are hardcoded. These are public;
 the actual secret is each account's refresh token.
 """
 
 from __future__ import annotations
 
-import json
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any, TypedDict, cast
@@ -34,7 +31,6 @@ from typing import Any, TypedDict, cast
 import requests
 
 from usage_limits.base import ProviderAccount
-from usage_limits.config import resolve_path
 from usage_limits.table import ModelAvailability, UsageRow
 
 # ---------------------------------------------------------------------------
@@ -43,7 +39,7 @@ from usage_limits.table import ModelAvailability, UsageRow
 
 
 class GeminiAccountFile(TypedDict):
-    """Per-account credential file from cockpit-tools Gemini storage.
+    """Per-account credential file from legacy storage.
 
     The real on-disk format stores OAuth fields as top-level keys
     (not nested under a ``token`` dict).
@@ -114,8 +110,7 @@ class GeminiAccount(ProviderAccount):
     """Gemini CLI usage checker for a single account.
 
     One instance per credential email. Use ``resolve_accounts()`` to
-    discover all accounts from the cockpit-tools Gemini file layout
-    (``gemini_accounts.json`` + ``gemini_accounts/<uuid>.json``).
+    discover all accounts from the credential store.
     """
 
     slug = "gemini-cli"
@@ -131,61 +126,12 @@ class GeminiAccount(ProviderAccount):
         return "Gemini CLI"
 
     # ------------------------------------------------------------------
-    # Credential helpers
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _resolve_paths() -> tuple[Any, Any]:
-        """Resolve cockpit-tools gemini account paths from config."""
-        from usage_limits.config import settings as _cfg
-
-        index_path = resolve_path(_cfg.paths.gemini_cockpit_accounts_index)
-        accounts_dir = resolve_path(_cfg.paths.gemini_cockpit_accounts_dir)
-        return index_path, accounts_dir
-
-    @staticmethod
-    def _read_account_file(email: str) -> GeminiAccountFile:
-        """Read the per-account credential file for the given email."""
-        index_path, accounts_dir = GeminiAccount._resolve_paths()
-        index = cast(GeminiAccountIndex, json.loads(index_path.read_text()))
-        uuid: str | None = None
-        for entry in index["accounts"]:
-            if entry["email"] == email:
-                uuid = entry["id"]
-                break
-        if uuid is None:
-            raise KeyError(f"Gemini account {email!r} not found in cockpit-tools account index")
-        return cast(
-            GeminiAccountFile,
-            json.loads((accounts_dir / f"{uuid}.json").read_text()),
-        )
-
-    # ------------------------------------------------------------------
     # OAuth / API
     # ------------------------------------------------------------------
 
-    def _get_access_token(self) -> str:
-        """Refresh the OAuth access token for ``self.account_id``."""
-        from usage_limits.config import settings as _cfg
-
-        acct = self._read_account_file(self.account_id)
-        resp = requests.post(
-            _cfg.gemini.oauth_token_endpoint,
-            json={
-                "client_id": _cfg.gemini.client_id,
-                "client_secret": _cfg.gemini.client_secret,
-                "refresh_token": acct["refresh_token"],
-                "grant_type": "refresh_token",
-            },
-        )
-        return cast(TokenResponse, resp.json())["access_token"]
-
-    def _fetch_quota(self, access_token: str) -> GeminiRaw:
+    def _fetch_quota(self, access_token: str, project_id: str) -> GeminiRaw:
         """Fetch per-model quota buckets for the given account."""
         from usage_limits.config import settings as _cfg
-
-        acct = self._read_account_file(self.account_id)
-        project_id = acct["project_id"]
 
         headers: dict[str, str] = {
             "Authorization": f"Bearer {access_token}",
@@ -196,6 +142,7 @@ class GeminiAccount(ProviderAccount):
             headers=headers,
             json={"project": project_id},
         )
+        resp.raise_for_status()
         quota_resp = cast(RetrieveQuotaResponse, resp.json())
         return cast(GeminiRaw, {"buckets": quota_resp.get("buckets", [])})
 
@@ -204,8 +151,48 @@ class GeminiAccount(ProviderAccount):
     # ------------------------------------------------------------------
 
     def fetch_raw(self) -> GeminiRaw:
-        token = self._get_access_token()
-        return self._fetch_quota(token)
+        from usage_limits.auth.oauth import LocalhostBrowserFlow
+        from usage_limits.auth.store import CredentialStore
+
+        store = CredentialStore()
+        try:
+            cred = store.get("gemini-cli", self.account_id)
+        except FileNotFoundError as e:
+            raise KeyError(
+                f"Gemini account {self.account_id!r} not found in CredentialStore"
+            ) from e
+
+        access_token = cred["access_token"]
+        project_id = cred.get("extra", {}).get("project_id", "")
+        if not project_id:
+            raise RuntimeError(f"Missing project_id for Gemini account {self.account_id}")
+
+        try:
+            return self._fetch_quota(access_token, project_id)
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code == 401:
+                flow = LocalhostBrowserFlow(
+                    client_id="681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com",
+                    client_secret="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",
+                    scopes=[],
+                    auth_url="https://accounts.google.com/o/oauth2/v2/auth",
+                    token_url="https://oauth2.googleapis.com/token",
+                    use_pkce=False,
+                )
+                refresh_token = cred.get("refresh_token")
+                if not refresh_token:
+                    raise RuntimeError(
+                        f"No refresh token available for gemini account {self.account_id}"
+                    ) from e
+
+                new_access_token, new_expires_at = flow.refresh(refresh_token)
+
+                cred["access_token"] = new_access_token
+                cred["expires_at"] = new_expires_at
+                store.save("gemini-cli", self.account_id, cred)
+
+                return self._fetch_quota(new_access_token, project_id)
+            raise
 
     @staticmethod
     def _bucket_model_name(bucket: BucketInfo) -> str:
@@ -276,14 +263,11 @@ class GeminiAccount(ProviderAccount):
 
     @classmethod
     def resolve_accounts(cls) -> Sequence[GeminiAccount]:
-        """Return one ``GeminiAccount`` per credential email.
-
-        Reads the cockpit-tools ``gemini_accounts.json`` index and returns
-        one instance per account.
-        """
-        index_path, _ = cls._resolve_paths()
-        index = cast(GeminiAccountIndex, json.loads(index_path.read_text()))
-        return [cls(entry["email"]) for entry in index["accounts"]]
+        """Return one ``GeminiAccount`` per credential email."""
+        from usage_limits.auth.store import CredentialStore
+        store = CredentialStore()
+        accounts = store.list_accounts("gemini-cli")
+        return [cls(acct) for acct in accounts]
 
 
 # Backward-compat alias

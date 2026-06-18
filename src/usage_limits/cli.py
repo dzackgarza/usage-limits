@@ -7,6 +7,8 @@ from typing import Annotated
 
 import typer
 
+from usage_limits.auth.login import login_app
+from usage_limits.auth.migrate import migrate_app
 from usage_limits.config import settings
 from usage_limits.doctor import doctor as doctor_checks
 from usage_limits.registry import collect_all, collect_provider, list_providers
@@ -39,6 +41,8 @@ providers_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(providers_app, name="providers")
+app.add_typer(login_app, name="login")
+app.add_typer(migrate_app, name="migrate")
 
 
 def _emit_json(payload: object) -> None:
@@ -114,8 +118,8 @@ def doctor() -> None:
             Panel(
                 "Some checks failed. Follow the remediation steps above for each\n"
                 "provider you want to use. Most issues are resolved by:\n"
-                "  - Installing or running cockpit-tools and adding accounts\n"
-                "  - Running provider-specific login commands",
+                "  - Checking if you need to run `usage-limits login <provider>`\n"
+                "  - Checking ~/.config/usage-limits/config.toml for typos\n",
                 title="Summary",
                 border_style="yellow",
             )

@@ -6,8 +6,8 @@ Uniform quota collection and rendering for CLI- and API-backed LLM providers.
 
 ## Quick start
 
-1. Install [cockpit-tools](https://github.com/jlcodes99/cockpit-tools) and add accounts
-   via the UI. This populates the OAuth tokens that Antigravity, Codex, and Kiro need.
+1. Run `uvx git+https://github.com/dzackgarza/usage-limits login <provider>` for any providers
+   you wish to connect (e.g., `antigravity`, `codex`, `gemini`).
 2. Run `uvx git+https://github.com/dzackgarza/usage-limits doctor` — checks provider
    readiness and points out anything missing.
 3. Run `uvx git+https://github.com/dzackgarza/usage-limits --help` — available commands
@@ -15,17 +15,20 @@ Uniform quota collection and rendering for CLI- and API-backed LLM providers.
 4. Run `uvx git+https://github.com/dzackgarza/usage-limits` — collects and displays
    usage data from all available providers.
 
+*(If you were previously using `cockpit-tools` for authentication, run `usage-limits migrate` to copy your existing credentials over.)*
+
 ## Provider coverage
 
 | Provider | Strategy | How to set up |
 | :--- | :--- | :--- |
-| Antigravity | cockpit-tools OAuth | Install cockpit-tools, add a Google account via its UI |
+| Antigravity | Local OAuth | Run `usage-limits login antigravity` |
 | Claude Code | OAuth credential | Run `claude login` |
-| Codex | OAuth credential | Run `codex login` (or add a Codex account in cockpit-tools) |
+| Codex | Local OAuth | Run `usage-limits login codex` (or `codex login`) |
 | Copilot | GitHub CLI token | Run `gh auth login` |
 | Cursor | SQLite database | Have Cursor installed and logged in |
 | DeepSeek | API key + balance query | Set `DEEPSEEK_API_KEY` environment variable |
-| Kiro | SQLite + OAuth | Have Kiro CLI installed and logged in (or cockpit-tools) |
+| Gemini CLI | Local OAuth | Run `usage-limits login gemini` |
+| Kiro | SQLite | Have Kiro CLI installed and logged in |
 | Ollama Cloud | Cookie scrape | Visit ollama.com and log in via Chromium |
 | OpenCode Go | Cookie scrape | Visit opencode.ai and log in via Chromium |
 | OpenCode Zen | API probe | Nothing — pings a free endpoint, no auth needed |
@@ -36,14 +39,12 @@ Uniform quota collection and rendering for CLI- and API-backed LLM providers.
 
 ### Antigravity
 
-Reads OAuth refresh tokens from cockpit-tools credential files, then calls the Google
+Reads OAuth refresh tokens from the internal credential store, then calls the Google
 Cloud Code API (`loadCodeAssist`, `fetchAvailableModels`). Supports multiple accounts
 and multi-model quotas (Flash, Pro, Claude, GPT-OSS).
 
-- **Setup**: Install [cockpit-tools](https://github.com/jlcodes99/cockpit-tools), launch
-  it, and add a Google account via its UI.
-- **Files**: `~/.antigravity_cockpit/accounts.json` (account index) +
-  `accounts/<uuid>.json` (per-account OAuth refresh tokens).
+- **Setup**: Run `usage-limits login antigravity` and complete the Google OAuth login.
+- **Files**: `~/.config/usage-limits/credentials/antigravity/<account>.json`
 
 ### Claude Code
 
@@ -54,12 +55,10 @@ Reads the OAuth credential file produced by `claude login`.
 
 ### Codex
 
-Reads a ChatGPT WHAM API auth file, using either `codex login` or cockpit-tools account
-files.
+Reads a ChatGPT WHAM API auth file, using either `usage-limits login codex` or the `codex login` command.
 
-- **Setup**: Run `codex login`, or add a Codex account in cockpit-tools.
-- **Files**: `~/.codex/auth.json` — or cockpit-tools
-  `~/.antigravity_cockpit/codex_accounts/<id>.json`
+- **Setup**: Run `usage-limits login codex` (for multi-account support) or `codex login`.
+- **Files**: `~/.config/usage-limits/credentials/codex/<account>.json` and fallback to `~/.codex/auth.json`.
 
 ### Copilot
 
@@ -77,15 +76,20 @@ them for API access to Cursor's usage-summary endpoint.
 - **Database**: `~/.config/Cursor/User/globalStorage/state.vscdb` (Linux) or equivalent
   per-platform VS Code global storage path.
 
+### Gemini CLI
+
+Reads OAuth refresh tokens from the internal credential store and automatically
+determines the `project_id` associated with the Gemini account.
+
+- **Setup**: Run `usage-limits login gemini` and complete the Google OAuth login.
+- **Files**: `~/.config/usage-limits/credentials/gemini/<account>.json`
+
 ### Kiro
 
-Reads OAuth tokens from the Kiro CLI SQLite database or from cockpit-tools account
-files.
+Reads OAuth tokens from the Kiro CLI SQLite database.
 
-- **Setup**: Install Kiro CLI and run `kiro login`, or add a Kiro account in
-  cockpit-tools.
-- **Files**: `~/.local/share/kiro-cli/data.sqlite3` — or cockpit-tools
-  `~/.antigravity_cockpit/kiro_accounts/<id>.json`
+- **Setup**: Install Kiro CLI and run `kiro login`.
+- **Files**: `~/.local/share/kiro-cli/data.sqlite3`
 
 ### DeepSeek
 

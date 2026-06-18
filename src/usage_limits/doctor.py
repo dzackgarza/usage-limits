@@ -6,15 +6,14 @@ the CLI ``usage-limits doctor`` command renders as a Rich table.
 
 from __future__ import annotations
 
-import json
 import shutil
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import NamedTuple
 
+from usage_limits.auth.store import CredentialStore
 from usage_limits.config import resolve_path, settings
-
-_COCKPIT_DIR = resolve_path(settings.paths.antigravity_cockpit_dir)
 
 
 class Check(NamedTuple):
@@ -36,186 +35,6 @@ class Result(NamedTuple):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _cockpit_tool() -> str | None:
-    """Return the path to cockpit-tools, or None."""
-    return shutil.which("cockpit-tools")
-
-
-def _json_load(path: Path) -> dict[str, Any] | list[Any] | None:
-    """Safely load a JSON file, returning None on any failure."""
-    try:
-        data = json.loads(path.read_text())
-        if isinstance(data, (dict, list)):
-            return data
-        return None
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return None
-
-
-def _check_cockpit_dir() -> list[Check]:
-    """Check the cockpit-tools installation and data directory."""
-    checks: list[Check] = []
-
-    cockpit = _cockpit_tool()
-    if cockpit:
-        checks.append(
-            Check(
-                description=f"cockpit-tools installed at {cockpit}",
-                status="ok",
-            )
-        )
-    else:
-        checks.append(
-            Check(
-                description="cockpit-tools not found in PATH",
-                status="error",
-                remediation=(
-                    "Install from https://github.com/jlcodes99/cockpit-tools\n"
-                    "  - Download the latest release for your OS\n"
-                    "  - Or build from source: cargo build --release\n"
-                    "  - The binary should be placed in your PATH"
-                ),
-            )
-        )
-        return checks  # no point checking further
-
-    if _COCKPIT_DIR.is_dir():
-        checks.append(
-            Check(
-                description=f"config directory exists at {_COCKPIT_DIR}",
-                status="ok",
-            )
-        )
-    else:
-        checks.append(
-            Check(
-                description="cockpit config directory missing",
-                status="error",
-                remediation=(
-                    "Run cockpit-tools at least once to create the config directory\n"
-                    "  - Launch cockpit-tools and complete the Google OAuth login\n"
-                    "  - After logging in, accounts appear in ~/.antigravity_cockpit/"
-                ),
-            )
-        )
-    return checks
-
-
-def _check_cockpit_account_index(name: str, label: str) -> list[Check]:
-    """Check a service-specific account index under the cockpit dir."""
-    checks: list[Check]
-    path = _COCKPIT_DIR / f"{name}.json"
-    data = _json_load(path)
-    if data is None:
-        checks = [
-            Check(
-                description=f"{label} account index missing at {path}",
-                status="error",
-                remediation=(
-                    f"Add a {label} account in the cockpit-tools UI.\n"
-                    f"  - Open cockpit-tools → add a {label} account via OAuth\n"
-                    f"  - Once added, {path} is created automatically"
-                ),
-            )
-        ]
-        return checks
-
-    accounts = data.get("accounts") if isinstance(data, dict) else None
-    if not accounts:
-        checks = [
-            Check(
-                description=f"{label} index exists but contains no accounts ({path})",
-                status="warning",
-                remediation=(f"Add at least one {label} account in cockpit-tools."),
-            )
-        ]
-        return checks
-
-    count = len(accounts)
-    emails: list[str] = []
-    for a in accounts:
-        if isinstance(a, dict):
-            emails.append(str(a.get("email", a.get("id", "?"))))
-        else:
-            emails.append(str(a))
-    checks = [
-        Check(
-            description=f"{label} account index found: {count} account(s)",
-            status="ok",
-        ),
-        Check(
-            description=f"  accounts: {', '.join(emails)}",
-            status="ok",
-        ),
-    ]
-
-    # Check individual account files
-    acct_dir = _COCKPIT_DIR / name
-    missing_files = 0
-    expired_tokens = 0
-    for entry in accounts:
-        if not isinstance(entry, dict):
-            continue
-        acct_id = entry.get("id")
-        if not acct_id:
-            continue
-        acct_path = acct_dir / f"{acct_id}.json"
-        acct_data = _json_load(acct_path)
-        if acct_data is None:
-            missing_files += 1
-            continue
-        # Check for a usable credential
-        token = None
-        if isinstance(acct_data, dict):
-            token = (
-                acct_data.get("tokens")
-                or acct_data.get("access_token")
-                or (acct_data.get("token") or {}).get("access_token")
-            )
-        if not token:
-            expired_tokens += 1
-
-    if missing_files:
-        checks.append(
-            Check(
-                description=f"{missing_files} account file(s) missing in {acct_dir}",
-                status="error",
-                remediation=(
-                    "Re-add the affected accounts in cockpit-tools.\n"
-                    "  The missing files indicate credentials were not stored."
-                ),
-            )
-        )
-    else:
-        checks.append(
-            Check(
-                description=f"account files present ({acct_dir})",
-                status="ok",
-            )
-        )
-
-    if expired_tokens:
-        checks.append(
-            Check(
-                description=f"{expired_tokens} account(s) have no usable OAuth tokens",
-                status="error",
-                remediation=(
-                    "Re-authenticate the affected accounts in cockpit-tools.\n"
-                    "  The tokens may have expired and need refreshing."
-                ),
-            )
-        )
-    else:
-        checks.append(
-            Check(
-                description="accounts have OAuth tokens",
-                status="ok",
-            )
-        )
-
-    return checks
 
 
 def _check_standalone_file(
@@ -243,6 +62,55 @@ def _check_standalone_file(
         )
 
 
+def _check_store_provider(store: CredentialStore, provider: str) -> list[Check]:
+    accounts = store.list_accounts(provider)
+    if not accounts:
+        return [
+            Check(
+                description=f"No {provider} accounts found in store",
+                status="error",
+                remediation=f"Run `usage-limits login {provider}` to authenticate.",
+            )
+        ]
+
+    checks = [
+        Check(
+            description=f"Found {len(accounts)} {provider} account(s): {', '.join(accounts)}",
+            status="ok",
+        )
+    ]
+
+    expired = 0
+    for account_id in accounts:
+        try:
+            cred = store.get(provider, account_id)
+            expires_at = cred["expires_at"]
+            if expires_at is not None:
+                exp = datetime.fromisoformat(expires_at)
+                if exp < datetime.now(UTC):
+                    expired += 1
+        except Exception:
+            pass
+
+    if expired > 0:
+        checks.append(
+            Check(
+                description=f"{expired} account(s) have expired tokens",
+                status="warning",
+                remediation="Tokens will be auto-refreshed on next use.",
+            )
+        )
+    else:
+        checks.append(
+            Check(
+                description="Tokens appear valid",
+                status="ok",
+            )
+        )
+
+    return checks
+
+
 # ---------------------------------------------------------------------------
 # Provider checks
 # ---------------------------------------------------------------------------
@@ -251,39 +119,47 @@ def _check_standalone_file(
 def doctor() -> list[Result]:
     """Run all diagnostic checks and return per-component results."""
     results: list[Result] = []
-    checks: list[Check]
 
-    # ---- cockpit-tools infrastructure ----
-    checks = _check_cockpit_dir()
-    status = "ok" if all(c.status == "ok" for c in checks) else "error"
-    results.append(Result(component="cockpit-tools", status=status, checks=checks))
+    store = CredentialStore(resolve_path(settings.paths.credentials_dir))
 
-    # Bail early if cockpit-tools is not installed
-    if _cockpit_tool() is None:
-        return results
+    # ---- Credential Store (Global) ----
+    if store.root_dir.is_dir():
+        checks = [Check(description=f"Credential store exists at {store.root_dir}", status="ok")]
+        status = "ok"
+    else:
+        checks = [
+            Check(
+                description=f"Credential store missing at {store.root_dir}",
+                status="warning",
+                remediation="Log in to any provider to create the store.",
+            )
+        ]
+        status = "warning"
+    results.append(Result(component="store", status=status, checks=checks))
 
     # ---- Antigravity ----
-    checks = _check_cockpit_account_index(
-        "accounts", "Antigravity"
-    )  # file: accounts.json, dir: accounts/
+    checks = _check_store_provider(store, "antigravity")
     status = "ok" if all(c.status == "ok" for c in checks) else "error"
     results.append(Result(component="antigravity", status=status, checks=checks))
 
-    # ---- Codex (cockpit path) ----
-    checks = list(_check_cockpit_account_index("codex_accounts", "Codex"))
-    # Also check standalone fallback
+    # ---- Codex ----
+    checks = _check_store_provider(store, "codex")
     checks.append(
         _check_standalone_file(
             resolve_path(settings.paths.codex_auth),
             "Codex CLI auth (fallback)",
         )
     )
-    status = "ok" if all(c.status == "ok" for c in checks) else "error"
+    status = "ok" if any(c.status == "ok" for c in checks) else "error"
     results.append(Result(component="codex", status=status, checks=checks))
 
-    # ---- Kiro (cockpit path) ----
-    checks = list(_check_cockpit_account_index("kiro_accounts", "Kiro"))
-    # Also check standalone SQLite fallback
+    # ---- Gemini CLI ----
+    checks = _check_store_provider(store, "gemini")
+    status = "ok" if all(c.status == "ok" for c in checks) else "error"
+    results.append(Result(component="gemini", status=status, checks=checks))
+
+    # ---- Kiro ----
+    checks = []
     kiro_db = resolve_path(settings.paths.kiro_db)
     try:
         conn = sqlite3.connect(kiro_db)
@@ -301,12 +177,8 @@ def doctor() -> list[Result]:
         checks.append(
             Check(
                 description=f"Kiro CLI SQLite DB: {kiro_db} not found or corrupt",
-                status="warning",
-                remediation=(
-                    "Install kiro-cli and log in, or add a Kiro account in cockpit-tools.\n"
-                    "  The cockpit kiro_accounts files currently lack usable API tokens\n"
-                    "  and a full per-account conversion is pending."
-                ),
+                status="error",
+                remediation="Install kiro-cli and log in.",
             )
         )
     status = "ok" if all(c.status == "ok" for c in checks) else "error"

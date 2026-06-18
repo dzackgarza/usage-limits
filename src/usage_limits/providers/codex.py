@@ -1,20 +1,12 @@
-"""Codex usage limits provider.
+"""Provider for Codex usage metrics.
 
-Depends on cockpit-tools for multi-account credential storage.
-Reads the following files from ``~/.antigravity_cockpit/``:
+Reads OAuth tokens from the credential store and fallbacks.
 
 ========================= ===========================================
 File                      Role
 ========================= ===========================================
-``codex_accounts.json``   V2 account index — lists every known Codex
-                          account with an ID, email, and plan type.
-                         ``resolve_accounts()`` reads this to
-                          discover which accounts exist.
-``codex_accounts/<id>.json``  Per-account credential file. Contains
-                          the OAuth ``tokens`` dict (with
-                          ``access_token``) and cached quota data.
-                         ``get_credentials()`` reads this to obtain
-                          the access token for each account.
+``credentials/codex/``    CredentialStore backend directory.
+                          Contains OAuth tokens.
 ========================= ===========================================
 
 When constructed directly (``account_id="default"``), falls back to
@@ -35,10 +27,6 @@ from usage_limits.base import ProviderAccount
 from usage_limits.config import resolve_path
 from usage_limits.table import UsageRow
 
-_COCKPIT_DIR = resolve_path("~/.antigravity_cockpit")
-CODEX_ACCOUNTS_INDEX_PATH = _COCKPIT_DIR / "codex_accounts.json"
-CODEX_ACCOUNTS_DIR = _COCKPIT_DIR / "codex_accounts"
-
 
 class CodexTokens(TypedDict):
     access_token: str
@@ -49,28 +37,6 @@ class CodexTokens(TypedDict):
 
 class CodexCredentials(TypedDict):
     access_token: str
-
-
-class CodexAccountEntry(TypedDict):
-    id: str
-    email: str
-    plan_type: str
-    subscription_active_until: str
-    created_at: int
-    last_used: int
-
-
-class CodexAccountIndex(TypedDict):
-    version: str
-    accounts: list[CodexAccountEntry]
-    current_account_id: str | None
-
-
-class CodexAccountFile(TypedDict):
-    id: str
-    email: str
-    tokens: CodexTokens
-    quota: dict[str, Any]
 
 
 class WhamWindow(TypedDict):
@@ -91,8 +57,7 @@ class CodexProvider(ProviderAccount):
     """Codex CLI usage checker (5-hour and 7-day WHAM windows).
 
     One instance per credential email. Use ``resolve_accounts()`` to
-    discover all accounts from the cockpit-tools codex accounts file
-    layout (``codex_accounts.json`` + ``codex_accounts/<id>.json``).
+    discover all accounts from CredentialStore.
     """
 
     slug = "codex"
@@ -110,8 +75,7 @@ class CodexProvider(ProviderAccount):
 
         When ``account_id=="default"``, reads from the standard Codex
         CLI auth file (``~/.codex/auth.json``).
-        Otherwise reads from the cockpit-tools account file
-        (``codex_accounts/<id>.json``).
+        Otherwise reads from the CredentialStore.
         """
         if self.account_id == "default":
             from usage_limits.config import settings as _cfg
@@ -119,32 +83,66 @@ class CodexProvider(ProviderAccount):
             data: dict[str, Any] = json.loads(resolve_path(_cfg.paths.codex_auth).read_text())
             return cast(CodexTokens, data["tokens"])
 
-        # Cockpit V2 path — look up the account entry by email
-        index = cast(CodexAccountIndex, json.loads(CODEX_ACCOUNTS_INDEX_PATH.read_text()))
-        entry_id: str | None = None
-        for entry in index["accounts"]:
-            if entry["email"] == self.account_id:
-                entry_id = entry["id"]
-                break
-        if entry_id is None:
-            raise KeyError(f"Codex account {self.account_id!r} not found in cockpit index")
-        acct_file = cast(
-            CodexAccountFile,
-            json.loads((CODEX_ACCOUNTS_DIR / f"{entry_id}.json").read_text()),
-        )
-        return acct_file["tokens"]
+        from usage_limits.auth.store import CredentialStore
+        store = CredentialStore()
+        try:
+            cred = store.get("codex", self.account_id)
+            return cast(CodexTokens, {
+                "access_token": cred["access_token"],
+                "refresh_token": cred["refresh_token"],
+                "id_token": "",
+                "account_id": self.account_id,
+            })
+        except FileNotFoundError as e:
+            raise KeyError(f"Codex account {self.account_id!r} not found in CredentialStore") from e
 
     def fetch_raw(self) -> WhamUsageResponse:
         from usage_limits.config import settings as _cfg
 
         creds = self.get_credentials()
-        resp = requests.get(
-            _cfg.codex.api_url,
-            headers={"Authorization": f"Bearer {creds['access_token']}"},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        return cast(WhamUsageResponse, resp.json())
+        try:
+            resp = requests.get(
+                _cfg.codex.api_url,
+                headers={"Authorization": f"Bearer {creds['access_token']}"},
+                timeout=30,
+            )
+            resp.raise_for_status()
+            return cast(WhamUsageResponse, resp.json())
+        except requests.HTTPError as e:
+            if e.response.status_code == 401 and self.account_id != "default":
+                from usage_limits.auth.oauth import LocalhostBrowserFlow
+                from usage_limits.auth.store import CredentialStore
+                store = CredentialStore()
+                cred = store.get("codex", self.account_id)
+                flow = LocalhostBrowserFlow(
+                    client_id="app_EMoamEEZ73f0CkXaXp7hrann",
+                    client_secret=None,
+                    scopes=[],
+                    auth_url="https://auth.openai.com/oauth/authorize",
+                    token_url="https://auth.openai.com/oauth/token",
+                )
+                refresh_token = cred.get("refresh_token")
+                if not refresh_token:
+                    raise RuntimeError(
+                        f"No refresh token available for codex account {self.account_id}"
+                    ) from e
+
+                new_access_token, new_expires_at = flow.refresh(refresh_token)
+
+
+                # Update credential in store
+                cred["access_token"] = new_access_token
+                cred["expires_at"] = new_expires_at
+                store.save("codex", self.account_id, cred)
+
+                resp = requests.get(
+                    _cfg.codex.api_url,
+                    headers={"Authorization": f"Bearer {new_access_token}"},
+                    timeout=30,
+                )
+                resp.raise_for_status()
+                return cast(WhamUsageResponse, resp.json())
+            raise e
 
     def to_rows(self, raw: WhamUsageResponse) -> list[UsageRow]:
         rate_limit = raw["rate_limit"]
@@ -186,9 +184,10 @@ class CodexProvider(ProviderAccount):
 
     @classmethod
     def resolve_accounts(cls) -> Sequence[CodexProvider]:
-        """Return one ``CodexProvider`` per cockpit-tools Codex account."""
-        index = cast(CodexAccountIndex, json.loads(CODEX_ACCOUNTS_INDEX_PATH.read_text()))
-        return [cls(entry["email"]) for entry in index["accounts"]]
+        """Return one ``CodexProvider`` per CredentialStore Codex account."""
+        from usage_limits.auth.store import CredentialStore
+        store = CredentialStore()
+        return [cls(email) for email in store.list_accounts("codex")]
 
 
 def _ts_to_dt(ts: int | None) -> datetime | None:

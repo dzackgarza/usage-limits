@@ -41,6 +41,7 @@ dev = [
     "mypy>=1.13",
     "types-requests>=2.32",
     "httpx>=0.28.1",
+    "responses>=0.25",
 ]
 
 [project.scripts]
