@@ -77,9 +77,9 @@ nullable — it crashes with a clear assertion failure at the exact point of vio
 
 ### Do not retry or recover
 
-If a token is expired, a network request fails, or a 401 is returned — propagate the
-error. Do not attempt re-auth, retry, or any recovery logic.
-The user runs the tool again after fixing the issue.
+If a network request fails, or a 401 is returned due to a non-refreshable or failed authentication error — propagate the error. Do not attempt retry or recovery logic for true failures.
+
+Note that for token-based OAuth credentials, token expiration (resulting in an expected HTTP 401 status) is a natural part of the token lifecycle. In these specific cases, the app is expected to refresh the token internally using its cached refresh tokens. Once refreshed, the request is retried. If the refresh itself fails, or the token is non-refreshable, the resulting failure must propagate loudly. The user runs the tool again after fixing the issue.
 
 ## Testing Requirements
 
@@ -128,7 +128,7 @@ The only acceptable failure mode is visible failure.
 | `try/except` that prints a custom message | Catches the real error, replaces it with a guess that will go stale. The real traceback is always more informative. |
 | `# type: ignore` | Hides a real type error instead of fixing the type definition. |
 | `print("Error: ..."); sys.exit(1)` | Interprets the failure for the user. The interpretation will be wrong when the API changes. |
-| Retry/re-auth logic on HTTP 401 | Attempts recovery from a stale credential instead of propagating the error. The user should run `login` and try again. |
+| Retry/re-auth logic on HTTP 401 for non-refreshable credentials | Attempts recovery or prompts the user for credentials during a background/hot path instead of propagating the error. Real authentication failures (e.g., invalid client secret, expired refresh token) must propagate loudly. Internally refreshing an expired access token via a valid refresh token is allowed and expected. |
 | `dict[str, Any]` for structured data | Every key access is untyped — a missing key becomes a runtime KeyError instead of a type-checker error. |
 
 ### What constitutes a provider test
