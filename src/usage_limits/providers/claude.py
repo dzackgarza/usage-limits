@@ -49,8 +49,8 @@ class ClaudeProvider(ProviderAccount):
         data: dict[str, Any] = json.loads(self.cred_file.read_text())
         return cast(ClaudeCredentials, data["claudeAiOauth"])
 
-    def _reset_rate_limit(self) -> bool:
-        """Run a minimal Claude CLI turn to reset the rate-limit window.
+    def _wake_cli(self) -> bool:
+        """Run a minimal Claude CLI turn to refresh tokens or reset rate limit.
 
         Runs in a temp directory with empty setting sources to minimize
         token overhead. Only attempts once.
@@ -59,22 +59,24 @@ class ClaudeProvider(ProviderAccount):
             result = subprocess.run(
                 [
                     "claude",
-                    "--setting-sources",
+                    "--safe-mode",
+                    "--tools",
                     "",
+                    "--no-session-persistence",
+                    "--system-prompt",
+                    "You are a minimal token refresher. Reply only with 'ok'.",
                     "-p",
-                    "Say hello and nothing more, do not take any other actions",
+                    "ok",
                 ],
                 cwd=tmpdir,
                 capture_output=True,
                 text=True,
-                timeout=60,
+                timeout=30,
             )
             return result.returncode == 0
 
     def fetch_raw(self) -> ClaudeUsageResponse:
-        creds = self.get_credentials()
-
-        def _call() -> requests.Response:
+        def _call(creds: ClaudeCredentials) -> requests.Response:
             return requests.get(
                 settings.claude.api_url,
                 headers={
@@ -84,10 +86,12 @@ class ClaudeProvider(ProviderAccount):
                 timeout=30,
             )
 
-        resp = _call()
-        if resp.status_code == 429:
-            self._reset_rate_limit()
-            resp = _call()
+        creds = self.get_credentials()
+        resp = _call(creds)
+        if resp.status_code in (401, 429):
+            self._wake_cli()
+            creds = self.get_credentials()
+            resp = _call(creds)
         resp.raise_for_status()
         return cast(ClaudeUsageResponse, resp.json())
 
@@ -121,7 +125,17 @@ class ClaudeProvider(ProviderAccount):
             )
 
     def anchor_command(self) -> list[str]:
-        return ["claude", "--setting-sources", "", "Say hello and do nothing else"]
+        return [
+            "claude",
+            "--safe-mode",
+            "--tools",
+            "",
+            "--no-session-persistence",
+            "--system-prompt",
+            "You are a minimal token refresher. Reply only with 'ok'.",
+            "-p",
+            "ok",
+        ]
 
 
 def _parse_dt(ts: str | None) -> datetime | None:

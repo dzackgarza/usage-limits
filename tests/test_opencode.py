@@ -30,6 +30,22 @@ def test_opencode_go_to_rows_extracts_usage_windows() -> None:
     assert thirty_day.reset_at is not None
 
 
+def test_opencode_go_to_rows_promo_page_fails_loudly() -> None:
+    provider = OpenCodeGoProvider()
+    html = (FIXTURE_DIR / "opencode-go-promo.html").read_text()
+    import pytest
+    with pytest.raises(RuntimeError, match="subscription required"):
+        provider.to_rows({"html": html})
+
+
+def test_opencode_go_to_rows_empty_page_fails_loudly() -> None:
+    provider = OpenCodeGoProvider()
+    html = "<html><body><div>Some other format</div></body></html>"
+    import pytest
+    with pytest.raises(ValueError, match="Could not find any usage items"):
+        provider.to_rows({"html": html})
+
+
 def test_opencode_zen_to_rows() -> None:
     """A successful probe yields 0% (nothing consumed)."""
     provider = OpenCodeZenProvider()

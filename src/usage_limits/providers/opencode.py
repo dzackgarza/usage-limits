@@ -1,6 +1,6 @@
 """OpenCode Go / Zen usage limits providers.
 
-* OpenCodeGoProvider — fetches /workspace/{id}/go (the free tier)
+* OpenCodeGoProvider — fetches /workspace/{id}/go
 * OpenCodeZenProvider — pings the free inference endpoint; a real response
   means the service is available (100%). No auth required.
 """
@@ -34,7 +34,7 @@ WINDOW_MAP: dict[str, str] = {
 
 
 class OpenCodeGoProvider(ProviderAccount):
-    """OpenCode Go (free tier) usage checker via console cookie scraping."""
+    """OpenCode Go usage checker via console cookie scraping."""
 
     slug = "opencode-go"
     name = "OpenCode Go"
@@ -102,6 +102,10 @@ class OpenCodeGoProvider(ProviderAccount):
 
     def to_rows(self, raw: OpenCodeRaw) -> list[UsageRow]:
         soup = BeautifulSoup(raw["html"], "html.parser")
+        
+        if soup.find(attrs={"data-slot": "subscribe-button"}):
+            raise RuntimeError("OpenCode Go subscription required. Your account does not have an active subscription.")
+
         rows: list[UsageRow] = []
 
         for item in soup.find_all(attrs={"data-slot": "usage-item"}):
@@ -131,6 +135,9 @@ class OpenCodeGoProvider(ProviderAccount):
                     reset_at=reset_at,
                 )
             )
+
+        if not rows:
+            raise ValueError("Could not find any usage items in the OpenCode HTML response.")
 
         return rows
 
