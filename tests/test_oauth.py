@@ -292,3 +292,68 @@ def test_login_flow_can_omit_google_params(monkeypatch: pytest.MonkeyPatch) -> N
     assert "access_type" not in query
     assert "prompt" not in query
 
+
+def test_codex_authorize_url_resolves_correctly_on_live_openai() -> None:
+    import urllib.parse
+    import requests
+    from usage_limits.auth.oauth import LocalhostBrowserFlow
+
+    # Simulate the actual flow construction from login_codex
+    flow = LocalhostBrowserFlow(
+        client_id="app_EMoamEEZ73f0CkXaXp7hrann",
+        client_secret=None,
+        scopes=[
+            "openid",
+            "profile",
+            "email",
+            "offline_access",
+            "api.connectors.read",
+            "api.connectors.invoke",
+        ],
+        auth_url="https://auth.openai.com/oauth/authorize",
+        token_url="https://auth.openai.com/oauth/token",
+        use_pkce=True,
+        extra_params={
+            "id_token_add_organizations": "true",
+            "codex_cli_simplified_flow": "true",
+            "originator": "codex_vscode",
+        },
+        port=1455,
+        callback_path="/auth/callback",
+        access_type=None,
+        prompt=None,
+    )
+
+    # Replicate url generation logic from login()
+    port = flow.port
+    redirect_host = getattr(flow, "redirect_host", "127.0.0.1")
+    redirect_uri = f"http://{redirect_host}:{port}{flow.callback_path}"
+
+    params = {
+        "response_type": "code",
+        "client_id": flow.client_id,
+        "redirect_uri": redirect_uri,
+        "scope": " ".join(flow.scopes),
+        "state": "test_state",
+    }
+    if flow.access_type is not None:
+        params["access_type"] = flow.access_type
+    if flow.prompt is not None:
+        params["prompt"] = flow.prompt
+    params.update(flow.extra_params)
+    if flow.use_pkce:
+        params["code_challenge"] = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWBuGJSstw-cM"
+        params["code_challenge_method"] = "S256"
+
+    url_parts = list(urllib.parse.urlparse(flow.auth_url))
+    query = urllib.parse.parse_qsl(url_parts[4])
+    query.extend(params.items())
+    url_parts[4] = urllib.parse.urlencode(query)
+    auth_url = urllib.parse.urlunparse(url_parts)
+
+    resp = requests.get(auth_url, timeout=10)
+    assert "error" not in resp.url
+    assert "authorize_hydra_invalid_request" not in resp.text
+    assert resp.status_code == 200
+
+
