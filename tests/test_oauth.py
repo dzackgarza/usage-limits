@@ -252,3 +252,43 @@ def test_login_flow_invalid_state(monkeypatch: pytest.MonkeyPatch) -> None:
     t.join(timeout=2.0)
     assert len(exc) == 1
     assert "Invalid state parameter" in str(exc[0])
+
+
+def test_login_flow_can_omit_google_params(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("BROWSER", "true")
+    cap = StderrCapture()
+    monkeypatch.setattr("sys.stderr", cap)
+
+    # Codex needs to omit these Google-specific parameters to avoid authorize_hydra_invalid_request
+    flow = LocalhostBrowserFlow(
+        client_id="test_client",
+        client_secret="test_secret",
+        scopes=[],
+        auth_url="https://auth.example.com/auth",
+        token_url="https://token.example.com/token",
+        access_type=None,
+        prompt=None,
+    )
+
+    def run_flow():
+        try:
+            flow.login()
+        except Exception:
+            pass
+
+    t = threading.Thread(target=run_flow)
+    t.daemon = True
+    t.start()
+
+    for _ in range(50):
+        if cap.auth_url:
+            break
+        time.sleep(0.05)
+
+    assert cap.auth_url is not None
+    parsed = urllib.parse.urlparse(cap.auth_url)
+    query = urllib.parse.parse_qs(parsed.query)
+
+    assert "access_type" not in query
+    assert "prompt" not in query
+
