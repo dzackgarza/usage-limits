@@ -26,21 +26,51 @@ def test_refresh_success() -> None:
             status=200,
         )
 
-        access_token, expires_at = flow.refresh("old_refresh_123")
+        result = flow.refresh("old_refresh_123")
 
-        assert access_token == "new_access_123"
-        assert expires_at is not None
-        assert "T" in expires_at  # ISO format
+        assert result["access_token"] == "new_access_123"
+        assert result["expires_at"] is not None
+        assert "T" in result["expires_at"]  # ISO format
+        assert result["new_refresh_token"] is None
 
         # Verify the POST request was correct
         assert len(rsps.calls) == 1
         req = rsps.calls[0].request
-        # requests sends form-encoded data by default for dictionaries
         body = urllib.parse.parse_qs(req.body)
         assert body["grant_type"][0] == "refresh_token"
         assert body["refresh_token"][0] == "old_refresh_123"
         assert body["client_id"][0] == "test_client"
         assert body["client_secret"][0] == "test_secret"
+
+
+def test_refresh_success_rotating() -> None:
+    flow = LocalhostBrowserFlow(
+        client_id="test_client",
+        client_secret="test_secret",
+        scopes=[],
+        auth_url="https://auth.example.com",
+        token_url="https://token.example.com/token",
+    )
+
+    with responses.RequestsMock() as rsps:
+        rsps.add(
+            responses.POST,
+            "https://token.example.com/token",
+            json={
+                "access_token": "new_access_123",
+                "refresh_token": "new_refresh_123",
+                "expires_in": 3600,
+            },
+            status=200,
+        )
+
+        result = flow.refresh("old_refresh_123")
+
+        assert result["access_token"] == "new_access_123"
+        assert result["expires_at"] is not None
+        assert "T" in result["expires_at"]
+        assert result["new_refresh_token"] == "new_refresh_123"
+
 
 
 def test_refresh_missing_keys_raises_keyerror() -> None:

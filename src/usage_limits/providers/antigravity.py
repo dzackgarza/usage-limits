@@ -176,13 +176,15 @@ class AntigravityAccount(ProviderAccount):
             use_pkce=False,
         )
 
-        new_access, new_expires = flow.refresh(refresh_token)
-        cred["access_token"] = new_access
-        if new_expires:
-            cred["expires_at"] = new_expires
+        result = flow.refresh(refresh_token)
+        cred["access_token"] = result["access_token"]
+        if result["expires_at"]:
+            cred["expires_at"] = result["expires_at"]
+        if result["new_refresh_token"] is not None:
+            cred["refresh_token"] = result["new_refresh_token"]
         store.save("antigravity", self.account_id, cred)
 
-        return new_access
+        return result["access_token"]
 
     def _fetch_models(self, token: str) -> list[AntigravityModel]:
         """Fetch and parse model quota data for this account."""

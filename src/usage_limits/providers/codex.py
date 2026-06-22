@@ -19,7 +19,10 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Any, TypedDict, cast
+from typing import TYPE_CHECKING, Any, TypedDict, cast
+
+if TYPE_CHECKING:
+    from usage_limits.auth.oauth import LocalhostBrowserFlow
 
 import requests
 
@@ -100,53 +103,85 @@ class CodexProvider(ProviderAccount):
         except FileNotFoundError as e:
             raise KeyError(f"Codex account {self.account_id!r} not found in CredentialStore") from e
 
+    def _make_flow(self) -> LocalhostBrowserFlow:
+        from usage_limits.auth.oauth import LocalhostBrowserFlow
+
+        return LocalhostBrowserFlow(
+            client_id="app_EMoamEEZ73f0CkXaXp7hrann",
+            client_secret=None,
+            scopes=[],
+            auth_url="https://auth.openai.com/oauth/authorize",
+            token_url="https://auth.openai.com/oauth/token",
+        )
+
+    def _refresh_default(self, e: requests.HTTPError) -> str:
+        """Refresh the default account's tokens in ~/.codex/auth.json."""
+        from usage_limits.config import settings as _cfg
+
+        auth_path = resolve_path(_cfg.paths.codex_auth)
+        data: dict[str, Any] = json.loads(auth_path.read_text())
+        tokens = data["tokens"]
+
+        refresh_token = tokens.get("refresh_token")
+        if not refresh_token:
+            raise RuntimeError("No refresh token in ~/.codex/auth.json") from e
+
+        result = self._make_flow().refresh(refresh_token)
+
+        tokens["access_token"] = result["access_token"]
+        if result["new_refresh_token"] is not None:
+            tokens["refresh_token"] = result["new_refresh_token"]
+        auth_path.write_text(json.dumps(data))
+
+        return result["access_token"]
+
+    def _refresh_store(self, e: requests.HTTPError) -> str:
+        """Refresh a CredentialStore account's tokens."""
+        from usage_limits.auth.store import CredentialStore
+
+        store = CredentialStore()
+        cred = store.get("codex", self.account_id)
+
+        refresh_token = cred.get("refresh_token")
+        if not refresh_token:
+            raise RuntimeError(
+                f"No refresh token available for codex account {self.account_id}"
+            ) from e
+
+        result = self._make_flow().refresh(refresh_token)
+
+        cred["access_token"] = result["access_token"]
+        cred["expires_at"] = result["expires_at"]
+        if result["new_refresh_token"] is not None:
+            cred["refresh_token"] = result["new_refresh_token"]
+        store.save("codex", self.account_id, cred)
+
+        return result["access_token"]
+
     def fetch_raw(self) -> WhamUsageResponse:
         from usage_limits.config import settings as _cfg
 
         creds = self.get_credentials()
-        try:
+        resp = requests.get(
+            _cfg.codex.api_url,
+            headers={"Authorization": f"Bearer {creds['access_token']}"},
+            timeout=30,
+        )
+
+        if resp.status_code == 401:
+            if self.account_id == "default":
+                new_token = self._refresh_default(requests.HTTPError(response=resp))
+            else:
+                new_token = self._refresh_store(requests.HTTPError(response=resp))
+
             resp = requests.get(
                 _cfg.codex.api_url,
-                headers={"Authorization": f"Bearer {creds['access_token']}"},
+                headers={"Authorization": f"Bearer {new_token}"},
                 timeout=30,
             )
-            resp.raise_for_status()
-            return cast(WhamUsageResponse, resp.json())
-        except requests.HTTPError as e:
-            if e.response.status_code == 401 and self.account_id != "default":
-                from usage_limits.auth.oauth import LocalhostBrowserFlow
-                from usage_limits.auth.store import CredentialStore
 
-                store = CredentialStore()
-                cred = store.get("codex", self.account_id)
-                flow = LocalhostBrowserFlow(
-                    client_id="app_EMoamEEZ73f0CkXaXp7hrann",
-                    client_secret=None,
-                    scopes=[],
-                    auth_url="https://auth.openai.com/oauth/authorize",
-                    token_url="https://auth.openai.com/oauth/token",
-                )
-                refresh_token = cred.get("refresh_token")
-                if not refresh_token:
-                    raise RuntimeError(
-                        f"No refresh token available for codex account {self.account_id}"
-                    ) from e
-
-                new_access_token, new_expires_at = flow.refresh(refresh_token)
-
-                # Update credential in store
-                cred["access_token"] = new_access_token
-                cred["expires_at"] = new_expires_at
-                store.save("codex", self.account_id, cred)
-
-                resp = requests.get(
-                    _cfg.codex.api_url,
-                    headers={"Authorization": f"Bearer {new_access_token}"},
-                    timeout=30,
-                )
-                resp.raise_for_status()
-                return cast(WhamUsageResponse, resp.json())
-            raise e
+        resp.raise_for_status()
+        return cast(WhamUsageResponse, resp.json())
 
     def to_rows(self, raw: WhamUsageResponse) -> list[UsageRow]:
         rate_limit = raw["rate_limit"]

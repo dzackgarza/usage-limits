@@ -185,13 +185,15 @@ class GeminiAccount(ProviderAccount):
                         f"No refresh token available for gemini account {self.account_id}"
                     ) from e
 
-                new_access_token, new_expires_at = flow.refresh(refresh_token)
+                result = flow.refresh(refresh_token)
 
-                cred["access_token"] = new_access_token
-                cred["expires_at"] = new_expires_at
+                cred["access_token"] = result["access_token"]
+                cred["expires_at"] = result["expires_at"]
+                if result["new_refresh_token"] is not None:
+                    cred["refresh_token"] = result["new_refresh_token"]
                 store.save("gemini-cli", self.account_id, cred)
 
-                return self._fetch_quota(new_access_token, project_id)
+                return self._fetch_quota(result["access_token"], project_id)
             raise
 
     @staticmethod

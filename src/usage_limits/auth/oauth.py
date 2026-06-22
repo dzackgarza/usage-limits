@@ -9,11 +9,20 @@ import urllib.parse
 import webbrowser
 from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Any
+from typing import Any, TypedDict
 
 import requests
 
 from usage_limits.auth.store import StoredCredential
+
+
+class RefreshResult(TypedDict):
+    """Result of an OAuth token refresh."""
+
+    access_token: str
+    expires_at: str | None
+    new_refresh_token: str | None
+    """Non-None when the provider rotates refresh tokens (e.g. OpenAI)."""
 
 
 class OAuthCallbackHandler(BaseHTTPRequestHandler):
@@ -214,8 +223,16 @@ class LocalhostBrowserFlow:
             "email": email,
         }
 
-    def refresh(self, refresh_token: str) -> tuple[str, str | None]:
-        """Refresh an access_token. Returns (access_token, new_expires_at_iso)."""
+    def refresh(self, refresh_token: str) -> RefreshResult:
+        """Refresh an access token.
+
+        Returns a ``RefreshResult`` containing the new access token,
+        optional expiry, and — critically — the rotated refresh token
+        when the provider issues one (e.g. OpenAI).  Callers **must**
+        persist ``new_refresh_token`` when it is not ``None``; failing
+        to do so will cause ``refresh_token_invalidated`` on the next
+        attempt.
+        """
         data = {
             "grant_type": "refresh_token",
             "refresh_token": refresh_token,
@@ -238,4 +255,15 @@ class LocalhostBrowserFlow:
                 now + float(resp_data["expires_in"]), tz=UTC
             ).isoformat()
 
-        return access_token, expires_at
+        # OpenAI (and other providers) rotate refresh tokens: the old
+        # token is invalidated and a new one is returned.  If we don't
+        # capture it, the next refresh attempt fails.
+        new_refresh_token: str | None = None
+        if "refresh_token" in resp_data:
+            new_refresh_token = str(resp_data["refresh_token"])
+
+        return RefreshResult(
+            access_token=access_token,
+            expires_at=expires_at,
+            new_refresh_token=new_refresh_token,
+        )
