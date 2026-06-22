@@ -111,6 +111,8 @@ def login_codex() -> None:
         },
         port=1455,
         callback_path="/auth/callback",
+        access_type=None,
+        prompt=None,
     )
 
     cred = flow.login()

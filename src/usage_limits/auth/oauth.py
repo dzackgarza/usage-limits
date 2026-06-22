@@ -88,6 +88,8 @@ class LocalhostBrowserFlow:
         extra_params: dict[str, str] | None = None,
         port: int | None = None,
         callback_path: str = "/oauth2callback",
+        access_type: str | None = "offline",
+        prompt: str | None = "consent",
     ) -> None:
         self.client_id = client_id
         self.client_secret = client_secret
@@ -98,6 +100,8 @@ class LocalhostBrowserFlow:
         self.extra_params = extra_params or {}
         self.port = port
         self.callback_path = callback_path
+        self.access_type = access_type
+        self.prompt = prompt
 
     def _get_free_port(self) -> int:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -148,9 +152,11 @@ class LocalhostBrowserFlow:
             "redirect_uri": redirect_uri,
             "scope": " ".join(self.scopes),
             "state": state,
-            "access_type": "offline",  # Needed for Google refresh token
-            "prompt": "consent",  # Needed to ensure refresh token is returned
         }
+        if self.access_type is not None:
+            params["access_type"] = self.access_type
+        if self.prompt is not None:
+            params["prompt"] = self.prompt
         params.update(self.extra_params)
 
         code_verifier = None
