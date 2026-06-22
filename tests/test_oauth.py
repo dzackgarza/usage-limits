@@ -322,6 +322,7 @@ def test_codex_authorize_url_resolves_correctly_on_live_openai() -> None:
         callback_path="/auth/callback",
         access_type=None,
         prompt=None,
+        redirect_host="localhost",
     )
 
     # Replicate url generation logic from login()

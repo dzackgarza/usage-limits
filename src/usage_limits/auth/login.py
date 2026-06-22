@@ -113,6 +113,7 @@ def login_codex() -> None:
         callback_path="/auth/callback",
         access_type=None,
         prompt=None,
+        redirect_host="localhost",
     )
 
     cred = flow.login()

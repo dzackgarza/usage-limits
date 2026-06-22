@@ -90,6 +90,7 @@ class LocalhostBrowserFlow:
         callback_path: str = "/oauth2callback",
         access_type: str | None = "offline",
         prompt: str | None = "consent",
+        redirect_host: str = "127.0.0.1",
     ) -> None:
         self.client_id = client_id
         self.client_secret = client_secret
@@ -102,6 +103,7 @@ class LocalhostBrowserFlow:
         self.callback_path = callback_path
         self.access_type = access_type
         self.prompt = prompt
+        self.redirect_host = redirect_host
 
     def _get_free_port(self) -> int:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -135,7 +137,7 @@ class LocalhostBrowserFlow:
     def login(self) -> StoredCredential:
         """Run the interactive flow. Blocks until user authorizes."""
         port = self.port if self.port is not None else self._get_free_port()
-        redirect_uri = f"http://127.0.0.1:{port}{self.callback_path}"
+        redirect_uri = f"http://{self.redirect_host}:{port}{self.callback_path}"
 
         state = secrets.token_urlsafe(32)
 
