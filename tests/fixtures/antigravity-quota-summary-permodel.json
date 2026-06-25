@@ -1,0 +1,67 @@
+{
+  "groups": [
+    {
+      "buckets": [
+        {
+          "bucketId": "gemini-3.5-flash-low",
+          "displayName": "Gemini 3.5 Flash (Medium)",
+          "resetTime": "2026-07-02T13:55:25Z",
+          "description": "Quota resets in 6 days, 23 hours.",
+          "remainingFraction": 1
+        },
+        {
+          "bucketId": "gemini-3-flash-agent",
+          "displayName": "Gemini 3.5 Flash (High)",
+          "resetTime": "2026-07-02T13:55:25Z",
+          "description": "Quota resets in 6 days, 23 hours.",
+          "remainingFraction": 1
+        },
+        {
+          "bucketId": "gemini-3.5-flash-extra-low",
+          "displayName": "Gemini 3.5 Flash (Low)",
+          "resetTime": "2026-07-02T13:55:25Z",
+          "description": "Quota resets in 6 days, 23 hours.",
+          "remainingFraction": 1
+        },
+        {
+          "bucketId": "gemini-3.1-pro-low",
+          "displayName": "Gemini 3.1 Pro (Low)",
+          "resetTime": "2026-07-02T13:55:25Z",
+          "description": "Quota resets in 6 days, 23 hours.",
+          "remainingFraction": 1
+        },
+        {
+          "bucketId": "gemini-pro-agent",
+          "displayName": "Gemini 3.1 Pro (High)",
+          "resetTime": "2026-07-02T13:55:25Z",
+          "description": "Quota resets in 6 days, 23 hours.",
+          "remainingFraction": 1
+        },
+        {
+          "bucketId": "claude-sonnet-4-6",
+          "displayName": "Claude Sonnet 4.6 (Thinking)",
+          "resetTime": "2026-07-02T13:55:25Z",
+          "description": "Quota resets in 6 days, 23 hours.",
+          "remainingFraction": 1
+        },
+        {
+          "bucketId": "claude-opus-4-6-thinking",
+          "displayName": "Claude Opus 4.6 (Thinking)",
+          "resetTime": "2026-07-02T13:55:25Z",
+          "description": "Quota resets in 6 days, 23 hours.",
+          "remainingFraction": 1
+        },
+        {
+          "bucketId": "gpt-oss-120b-medium",
+          "displayName": "GPT-OSS 120B (Medium)",
+          "resetTime": "2026-07-02T13:55:25Z",
+          "description": "Quota resets in 6 days, 23 hours.",
+          "remainingFraction": 1
+        }
+      ],
+      "displayName": "All Models",
+      "description": "Gemini Pro, Gemini Flash, and Claude/GPT models have separate quota pools, each with a per-week and per-5-hour cap; this shows the one closest to being reached."
+    }
+  ],
+  "description": "View your available model quota. Quota refreshes periodically based on your plan."
+}

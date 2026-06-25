@@ -1,12 +1,17 @@
 """Provider normalization tests for Antigravity.
 
-Uses captured real API responses to exercise the
-``fetch_raw`` → ``to_rows`` pipeline.
+Uses captured real ``retrieveUserQuotaSummary`` responses to exercise the
+``fetch_raw`` -> ``to_rows`` -> ``availability`` pipeline.
+
+The authoritative source is the enforced *individual* quota
+(``retrieveUserQuotaSummary``), not ``fetchAvailableModels`` (which reports
+every model as fully available even when the account is rate-limited).
 """
 
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 from usage_limits.base import ProviderAccount
@@ -16,89 +21,91 @@ from usage_limits.registry import collect_all
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 
 
-def test_antigravity_to_rows_single_account() -> None:
-    """to_rows produces rows with model-label identifiers for a single-account fixture."""
+def test_antigravity_pooled_surfaces_exhausted_weekly_pool() -> None:
+    """Real pooled-quota response: an exhausted weekly pool renders as 100% used.
+
+    Regression: the provider previously read ``fetchAvailableModels``, which
+    reported every model as available (``remainingPercentage: 1``) even while the
+    account's enforced individual quota was exhausted — so the dashboard showed
+    "100% available" while the CLI returned "Individual quota reached".
+    """
     provider = AntigravityAccount(account_id="test@example.com")
-    raw = json.loads((FIXTURE_DIR / "antigravity-quota.json").read_text())
+    raw = json.loads((FIXTURE_DIR / "antigravity-quota-summary-pooled.json").read_text())
     rows = provider.to_rows(raw)
+    by_id = {r.identifier: r for r in rows}
 
-    assert len(rows) == 7
+    # Pooled plan -> one row per (pool, window).
+    assert set(by_id) == {
+        "Gemini Models (Weekly)",
+        "Gemini Models (5h)",
+        "Claude and GPT models (Weekly)",
+        "Claude and GPT models (5h)",
+    }
 
-    # Identifiers are model labels (no email prefix — account is on snapshot)
-    for row in rows:
-        assert not row.identifier.startswith("Antigravity")
-        assert row.identifier != ""
+    # Gemini pool fully available.
+    assert by_id["Gemini Models (Weekly)"].pct_used == 0
+    assert by_id["Gemini Models (5h)"].pct_used == 0
 
-    # Models with remainingPercentage → calculated from (1 - remaining) * 100
-    gemini = {r.identifier: r for r in rows if "Gemini" in r.identifier}
-    assert len(gemini) == 4
-    for g in gemini.values():
-        assert g.pct_used == 40.0  # fixture has remainingPercentage=0.6
-        assert g.is_exhausted is False
-        assert g.reset_at is not None
+    # Claude/GPT weekly pool exhausted (remainingFraction 0).
+    claude_weekly = by_id["Claude and GPT models (Weekly)"]
+    assert claude_weekly.pct_used == 100
+    assert claude_weekly.is_exhausted is True
+    assert claude_weekly.reset_at == datetime(2026, 6, 28, 23, 55, 58, tzinfo=UTC)
 
-    # Models without remainingPercentage (upstream tool bug) → 100% used
-    exhausted = {r.identifier: r for r in rows if "Gemini" not in r.identifier}
-    assert len(exhausted) == 3
-    for e in exhausted.values():
-        assert e.pct_used == 100.0
-        assert e.is_exhausted is True
-        assert e.reset_at is not None
-
-    # Verify identifiers include model labels only
-    identifiers = [r.identifier for r in rows]
-    assert "Claude Sonnet 4.6 (Thinking)" in identifiers
-    assert "Gemini 3.5 Flash (High)" in identifiers
+    # The disabled 5h window inherits the binding (weekly) limit, not its own
+    # raw remainingFraction (0.108) — the group is blocked until the weekly reset.
+    claude_5h = by_id["Claude and GPT models (5h)"]
+    assert claude_5h.pct_used == 100
+    assert claude_5h.reset_at == datetime(2026, 6, 28, 23, 55, 58, tzinfo=UTC)
 
 
-def test_antigravity_to_rows_with_fixture_account() -> None:
-    """to_rows with a per-account fixture produces correct model data."""
-    provider = AntigravityAccount(account_id="alpha@example.com")
-    raw = json.loads((FIXTURE_DIR / "antigravity-quota-multi.json").read_text())
+def test_antigravity_permodel_shape() -> None:
+    """Older per-model plans render one row per model label, all available here."""
+    provider = AntigravityAccount(account_id="test@example.com")
+    raw = json.loads((FIXTURE_DIR / "antigravity-quota-summary-permodel.json").read_text())
+    rows = provider.to_rows(raw)
+    ids = {r.identifier for r in rows}
 
-    # Filter to this account's models only (as fetch_raw would)
-    account_models = [m for m in raw["models"] if m["accountEmail"] == "alpha@example.com"]
-    account_raw = {"models": account_models}
-    rows = provider.to_rows(account_raw)
+    assert "Gemini 3.5 Flash (High)" in ids
+    assert "Claude Sonnet 4.6 (Thinking)" in ids
+    assert "GPT-OSS 120B (Medium)" in ids
+    # Fixture has remainingFraction 1 across the board.
+    assert all(r.pct_used == 0 for r in rows)
 
-    assert len(rows) == 7
 
-    # Alpha account: Gemini are 40%, others are 100%
-    for row in rows:
-        if "Gemini" in row.identifier:
-            assert row.pct_used == 40.0
-        else:
-            assert row.pct_used == 100.0
+def test_antigravity_availability_reflects_exhausted_pool() -> None:
+    """availability() marks the exhausted Claude/GPT family unavailable, Gemini available."""
+    provider = AntigravityAccount(account_id="test@example.com")
+    raw = json.loads((FIXTURE_DIR / "antigravity-quota-summary-pooled.json").read_text())
+    rows = provider.to_rows(raw)
+    avail = {a.name: a for a in provider.availability(rows)}
+
+    assert avail["Antigravity: Gemini"].available_now is True
+    assert avail["Antigravity: Claude/GPT"].available_now is False
+    assert avail["Antigravity: Claude/GPT"].available_when == datetime(
+        2026, 6, 28, 23, 55, 58, tzinfo=UTC
+    )
 
 
 def test_antigravity_fetch_raw_returns_data() -> None:
-    """Live API test: fetch_raw must return real quota data, not raise."""
-    # Use resolve_accounts to get the first account
+    """Live API test: fetch_raw must return the quota-summary groups, not raise."""
     accounts = AntigravityAccount.resolve_accounts()
     assert len(accounts) >= 1
     provider = accounts[0]
     raw = provider.fetch_raw()
 
-    # Must have models key with at least one model
-    assert "models" in raw
-    assert len(raw["models"]) >= 1
+    assert "groups" in raw
+    assert len(raw["groups"]) >= 1
+    for group in raw["groups"]:
+        assert "buckets" in group
+        for bucket in group["buckets"]:
+            assert "remainingFraction" in bucket
 
-    # Each model must have required fields
-    for model in raw["models"]:
-        assert "label" in model
-        assert "modelId" in model
-        assert "isExhausted" in model
-        assert "resetTime" in model
-        assert model.get("accountEmail") == provider.account_id
-
-    # Parse the raw data through to_rows and verify output
     rows = provider.to_rows(raw)
     assert len(rows) >= 1
-
     for row in rows:
-        # Identifiers are model labels only (no email prefix)
         assert not row.identifier.startswith("Antigravity")
-        assert 0.0 <= row.pct_used <= 100.0
+        assert 0 <= row.pct_used <= 100
 
 
 def test_antigravity_has_resolve_accounts_classmethod() -> None:
