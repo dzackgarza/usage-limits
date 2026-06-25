@@ -60,7 +60,11 @@ class AntigravitySettings(BaseModel):
 
     client_id: str = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
     client_secret: str = "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"
-    cloudcode_base_url: str = "https://cloudcode-pa.googleapis.com"
+    # Antigravity CLI runs on the "daily" release channel, which enforces quota
+    # against daily-cloudcode-pa — a *separate* backend from production
+    # cloudcode-pa with its own pools. Querying production reports quota as fully
+    # available while the CLI is rate-limited, so we must hit the same host.
+    cloudcode_base_url: str = "https://daily-cloudcode-pa.googleapis.com"
     oauth_token_endpoint: str = "https://oauth2.googleapis.com/token"
 
 
