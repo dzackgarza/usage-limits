@@ -1,136 +1,65 @@
 """Provider for Google Cloud Code / Antigravity usage metrics.
 
-Reads OAuth refresh tokens from the credential store to fetch limits.
+Reads OAuth refresh tokens from the credential store, then queries the enforced
+*individual* quota via ``v1internal:retrieveUserQuotaSummary``.
 
-==================== ===============================================
-File                 Role
-==================== ===============================================
-``accounts.json``    V2 account index — lists every known account
-                     with a UUID, email, name, and timestamps.
-                     Read by ``resolve_accounts()`` to discover
-                     which accounts exist.
-``accounts/<id>.json``  Per-account credential file (one per UUID).
-                     Contains the OAuth ``token`` dict (with
-                     ``refresh_token``) plus a ``disabled`` flag.
-                     Read by ``_get_access_token()`` to obtain the
-                     refresh token for each account.
-==================== ===============================================
+Why this endpoint and not ``fetchAvailableModels``:
+``fetchAvailableModels`` reports a per-model ``remainingPercentage`` that does
+*not* reflect the enforced individual quota — it returns ``1`` (100% available)
+even when the account is fully rate-limited, so the dashboard would show "100%
+available" while the CLI returns "Individual quota reached".
+``retrieveUserQuotaSummary`` is the authoritative source the Antigravity CLI
+itself uses: it exposes the real quota *pools* with their reset times and
+exhaustion descriptions.
 
-Account resolution:
-  ``resolve_accounts()`` parses ``accounts.json``, reads each
-  account's individual file, skips those with ``"disabled": true``,
-  and returns one ``AntigravityAccount(email)`` per remaining entry.
-  Each instance independently refreshes its own OAuth token and
-  fetches quota from the Google Cloud Code API.
+Response shapes (both are ``groups[].buckets[]``):
+  * Pooled plans: one group per model family ("Gemini Models", "Claude and GPT
+    models"), each with a ``weekly`` and a ``5h`` bucket carrying a ``window``
+    field. Models in a family share the pool.
+  * Per-model plans: a single "All Models" group with one bucket per model
+    (no ``window`` field; the bucket ``displayName`` is the model label).
+
+A bucket marked ``disabled`` is not the active limiter for its group (another
+window already blocks it); we render it with the binding bucket's limit and
+reset so the row reflects when the family actually frees up.
 
 The OAuth client ID and secret are hardcoded. These are public; the actual
 secret is each account's refresh token.
-
-Known upstream quirk:
-Anthropic models (Claude Sonnet, Opus, GPT-OSS) stopped including
-``remainingPercentage`` and report ``isExhausted: false`` even when
-they are fully exhausted. We treat a missing ``remainingPercentage``
-as 100% used regardless of the ``isExhausted`` field.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Any, NotRequired, TypedDict, cast
+from typing import TypedDict, cast
 
 import requests
 
 from usage_limits.base import ProviderAccount
 from usage_limits.table import ModelAvailability, UsageRow
 
+# Display label per quota window; absent on older per-model plans.
+WINDOW_LABELS: dict[str, str] = {"weekly": "Weekly", "5h": "5h"}
 
-class AntigravityModel(TypedDict):
-    label: str
-    modelId: str
-    remainingPercentage: NotRequired[float]  # absent -> tool bug -> treat as exhausted
-    isExhausted: bool
-    resetTime: str | None
-    accountEmail: str
+
+class QuotaBucket(TypedDict, total=False):
+    bucketId: str
+    displayName: str
+    window: str  # "weekly" | "5h"; absent on per-model plans
+    resetTime: str
+    description: str
+    disabled: bool
+    remainingFraction: float
+
+
+class QuotaGroup(TypedDict, total=False):
+    buckets: list[QuotaBucket]
+    displayName: str
+    description: str
 
 
 class AntigravityRaw(TypedDict):
-    models: list[AntigravityModel]
-
-
-class TokenResponse(TypedDict):
-    access_token: str
-    expires_in: int
-    token_type: str
-
-
-class LoadCodeAssistResponse(TypedDict, total=False):
-    codeAssistEnabled: bool
-    planInfo: dict[str, object]
-    availablePromptCredits: float
-    cloudaicompanionProject: str | dict[str, str]
-    currentTier: dict[str, str]
-    paidTier: dict[str, str]
-    allowedTiers: list[dict[str, str]]
-
-
-class ModelQuotaInfo(TypedDict, total=False):
-    remainingFraction: float
-    resetTime: str
-    isExhausted: bool
-
-
-class ModelInfo(TypedDict, total=False):
-    displayName: str
-    model: str
-    label: str
-    quotaInfo: ModelQuotaInfo
-    maxTokens: int
-    recommended: bool
-    supportsImages: bool
-    supportsThinking: bool
-    modelProvider: str
-
-
-class FetchAvailableModelsResponse(TypedDict, total=False):
-    models: dict[str, ModelInfo]
-    defaultAgentModelId: str
-
-
-class V2AccountEntry(TypedDict):
-    id: str
-    email: str
-    name: str
-    created_at: int
-    last_used: int
-
-
-class V2AccountIndex(TypedDict):
-    version: float
-    accounts: list[V2AccountEntry]
-    current_account_id: str | None
-
-
-class V2Token(TypedDict):
-    access_token: str
-    refresh_token: str
-    expires_in: int
-    expiry_timestamp: int
-    token_type: str
-    email: str
-
-
-class V2AccountFile(TypedDict):
-    id: str
-    email: str
-    name: str
-    token: V2Token
-    fingerprint_id: str
-    disabled: bool
-    quota_error: NotRequired[dict[str, Any]]
-    usage_updated_at: int
-    created_at: int
-    last_used: int
+    groups: list[QuotaGroup]
 
 
 class AntigravityAccount(ProviderAccount):
@@ -186,146 +115,80 @@ class AntigravityAccount(ProviderAccount):
 
         return result["access_token"]
 
-    def _fetch_models(self, token: str) -> list[AntigravityModel]:
-        """Fetch and parse model quota data for this account."""
+    def fetch_raw(self) -> AntigravityRaw:
         from usage_limits.config import settings as _cfg
 
-        headers: dict[str, str] = {
+        token = self._get_access_token()
+        cfg = _cfg.antigravity
+        headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
             "User-Agent": "antigravity",
         }
-
-        cfg = _cfg.antigravity
-
-        # Step 1: Load code assist (gets plan info, project ID)
         resp = requests.post(
-            f"{cfg.cloudcode_base_url}/v1internal:loadCodeAssist",
+            f"{cfg.cloudcode_base_url}/v1internal:retrieveUserQuotaSummary",
             headers=headers,
-            json={
-                "metadata": {
-                    "ideType": cfg.metadata_ide_type,
-                    "platform": cfg.metadata_platform,
-                    "pluginType": cfg.metadata_plugin_type,
-                }
-            },
+            json={},
         )
-        code_assist = cast(LoadCodeAssistResponse, resp.json())
-
-        # Extract project ID
-        project_info = code_assist.get("cloudaicompanionProject")
-        project_id: str | None = None
-        if isinstance(project_info, str):
-            project_id = project_info
-        elif isinstance(project_info, dict):
-            project_id = project_info.get("id")
-
-        # Step 2: Fetch available models (gets per-model quota)
-        body: dict[str, object] = {}
-        if project_id:
-            body["project"] = project_id
-
-        resp = requests.post(
-            f"{cfg.cloudcode_base_url}/v1internal:fetchAvailableModels",
-            headers=headers,
-            json=body,
-        )
-        models_data = cast(FetchAvailableModelsResponse, resp.json())
-
-        # Convert to the raw format that to_rows expects
-        # Deduplicate by label and filter out deprecated/experimental models
-        seen_labels: set[str] = set()
-        models: list[AntigravityModel] = []
-        for model_id, info in models_data.get("models", {}).items():
-            label = info.get("label", info.get("displayName", model_id))
-
-            # Skip internal/experimental models
-            if label.startswith(("chat_", "tab_", "gemini-")):
-                continue
-            # Skip deprecated models
-            if label in cfg.deprecated_models:
-                continue
-            # Skip duplicates within this account (keep first seen)
-            if label in seen_labels:
-                continue
-            seen_labels.add(label)
-
-            quota = info.get("quotaInfo", {})
-            reset_time = quota.get("resetTime")
-            is_exhausted = quota.get("isExhausted", False)
-
-            model: AntigravityModel = {
-                "label": label,
-                "modelId": model_id,
-                "isExhausted": is_exhausted,
-                "resetTime": reset_time,
-                "accountEmail": self.account_id,
-            }
-
-            remaining = quota.get("remainingFraction")
-            if remaining is not None:
-                model["remainingPercentage"] = remaining
-
-            models.append(model)
-
-        return models
-
-    def fetch_raw(self) -> AntigravityRaw:
-        token = self._get_access_token()
-        models = self._fetch_models(token)
-        return cast(AntigravityRaw, {"models": models})
+        resp.raise_for_status()
+        return cast(AntigravityRaw, resp.json())
 
     @staticmethod
-    def _model_sort_key(identifier: str) -> tuple[int, int, str]:
-        """Sort key: all Gemini (Flash before Pro) first, then Claude, then GPT OSS."""
+    def _model_sort_key(identifier: str) -> tuple[int, str]:
+        """Sort key: Gemini families first, then Claude/GPT, then anything else."""
         label = identifier.lower()
-        if "gemini" in label or label.startswith(("flash", "pro", "2.5", "3")):
-            sub = 0 if "flash" in label else 1
-            return 0, sub, label
-        if "claude" in label:
-            return 1, 0, label
-        if "gpt-oss" in label or "gpt oss" in label:
-            return 2, 0, label
-        return 3, 0, label
+        if "gemini" in label:
+            return 0, label
+        if "claude" in label or "gpt" in label:
+            return 1, label
+        return 2, label
+
+    @staticmethod
+    def _parse_reset(reset_time: str | None) -> datetime | None:
+        if not reset_time:
+            return None
+        return datetime.fromisoformat(reset_time.replace("Z", "+00:00")).astimezone(UTC)
 
     def to_rows(self, raw: AntigravityRaw) -> list[UsageRow]:
         rows: list[UsageRow] = []
-        for model in raw["models"]:
-            label = model["label"]
-            remaining_percentage = model.get("remainingPercentage")  # absent = tool bug = exhausted
-            is_exhausted = model["isExhausted"]
-            if remaining_percentage is None or is_exhausted:
-                pct_used = 100.0
-            else:
-                pct_used = (1.0 - remaining_percentage) * 100.0
-
-            reset_time = model["resetTime"]
-            if reset_time:
-                reset_at = datetime.fromisoformat(reset_time.replace("Z", "+00:00")).astimezone(UTC)
-            else:
-                reset_at = None
-
-            rows.append(
-                UsageRow(
-                    identifier=label,
-                    pct_used=round(pct_used),
-                    reset_at=reset_at,
-                )
+        for group in raw.get("groups", []):
+            buckets = group.get("buckets", [])
+            group_name = group.get("displayName", "")
+            # Within a group, a disabled window is superseded by the binding
+            # (most-restrictive active) window — render it with that limit/reset.
+            active = [b for b in buckets if not b.get("disabled")]
+            binding = (
+                min(active, key=lambda b: b.get("remainingFraction", 0.0)) if active else None
             )
+            for bucket in buckets:
+                source = binding if (bucket.get("disabled") and binding is not None) else bucket
+                remaining = source.get("remainingFraction")
+                pct_used = 100.0 if remaining is None else (1.0 - remaining) * 100.0
+                reset_at = self._parse_reset(source.get("resetTime"))
+
+                window = bucket.get("window")
+                if window:
+                    identifier = f"{group_name} ({WINDOW_LABELS.get(window, window)})"
+                else:
+                    identifier = bucket.get("displayName") or bucket.get("bucketId", "")
+
+                rows.append(
+                    UsageRow(identifier=identifier, pct_used=round(pct_used), reset_at=reset_at)
+                )
 
         rows.sort(key=lambda r: self._model_sort_key(r.identifier))
         return rows
 
     def availability(self, rows: list[UsageRow]) -> list[ModelAvailability]:
-        buckets: list[tuple[str, tuple[str, ...]]] = [
-            ("Flash (All)", ("flash",)),
-            ("Pro (2.5)", ("2.5 pro",)),
-            ("Pro (3)", ("3 pro", "3.1 pro")),
-            ("Claude (All)", ("claude", "gpt-oss")),
+        # Pooled plans share quota per family; per-model plans expose model rows.
+        # Either way these keywords classify a row into one of two families.
+        families: list[tuple[str, tuple[str, ...]]] = [
+            ("Gemini", ("gemini",)),
+            ("Claude/GPT", ("claude", "gpt")),
         ]
 
         availability_rows: list[ModelAvailability] = []
-        for bucket_name, keywords in buckets:
+        for family_name, keywords in families:
             matches = [
                 row
                 for row in rows
@@ -333,13 +196,21 @@ class AntigravityAccount(ProviderAccount):
             ]
             if not matches:
                 continue
-            sample = matches[0]
-            available_now = sample.pct_used < 99.0
+            exhausted = [row for row in matches if row.pct_used >= 99]
+            available_now = not exhausted
+            available_when = (
+                None
+                if available_now
+                else min(
+                    (row.reset_at for row in exhausted if row.reset_at is not None),
+                    default=None,
+                )
+            )
             availability_rows.append(
                 ModelAvailability(
-                    name=f"Antigravity: {bucket_name}",
+                    name=f"Antigravity: {family_name}",
                     available_now=available_now,
-                    available_when=None if available_now else sample.reset_at,
+                    available_when=available_when,
                 )
             )
         return availability_rows

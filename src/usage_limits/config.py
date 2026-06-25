@@ -62,15 +62,6 @@ class AntigravitySettings(BaseModel):
     client_secret: str = "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"
     cloudcode_base_url: str = "https://cloudcode-pa.googleapis.com"
     oauth_token_endpoint: str = "https://oauth2.googleapis.com/token"
-    metadata_ide_type: str = "ANTIGRAVITY"
-    metadata_platform: str = "PLATFORM_UNSPECIFIED"
-    metadata_plugin_type: str = "GEMINI"
-    deprecated_models: list[str] = [
-        "Gemini 2.5 Pro",
-        "Gemini 3 Flash",
-        "Gemini 3.1 Flash Lite",
-        "Gemini 3.1 Flash Image",
-    ]
 
 
 class GeminiSettings(BaseModel):
