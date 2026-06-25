@@ -153,11 +153,6 @@ def doctor() -> list[Result]:
     status = "ok" if any(c.status == "ok" for c in checks) else "error"
     results.append(Result(component="codex", status=status, checks=checks))
 
-    # ---- Gemini CLI ----
-    checks = _check_store_provider(store, "gemini")
-    status = "ok" if all(c.status == "ok" for c in checks) else "error"
-    results.append(Result(component="gemini", status=status, checks=checks))
-
     # ---- Kiro ----
     checks = []
     kiro_db = resolve_path(settings.paths.kiro_db)

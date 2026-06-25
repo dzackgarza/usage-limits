@@ -68,20 +68,6 @@ class AntigravitySettings(BaseModel):
     oauth_token_endpoint: str = "https://oauth2.googleapis.com/token"
 
 
-class GeminiSettings(BaseModel):
-    """OAuth and API values for the Gemini CLI provider.
-
-    Uses identical OAuth app credentials to match what the
-    Cloud Code extension expects.
-    """
-
-    client_id: str = "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com"
-    client_secret: str = "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"
-    cloudcode_base_url: str = "https://cloudcode-pa.googleapis.com"
-    oauth_token_endpoint: str = "https://oauth2.googleapis.com/token"
-    cache_ttl_seconds: int = 300
-
-
 class ClaudeSettings(BaseModel):
     api_url: str = "https://api.anthropic.com/api/oauth/usage"
     beta_header: str = "oauth-2025-04-20"
@@ -164,7 +150,6 @@ class Settings(BaseModel):
     server: ServerSettings = ServerSettings()
     paths: PathsSettings = PathsSettings()
     antigravity: AntigravitySettings = AntigravitySettings()
-    gemini: GeminiSettings = GeminiSettings()
     claude: ClaudeSettings = ClaudeSettings()
     codex: CodexSettings = CodexSettings()
     copilot: CopilotSettings = CopilotSettings()

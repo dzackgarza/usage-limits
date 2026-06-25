@@ -115,18 +115,21 @@ class AntigravityAccount(ProviderAccount):
 
         return result["access_token"]
 
-    def fetch_raw(self) -> AntigravityRaw:
+    def _base_url(self) -> str:
+        """Cloud Code host to query. Overridable by subclasses (e.g. the secret pool)."""
         from usage_limits.config import settings as _cfg
 
+        return _cfg.antigravity.cloudcode_base_url
+
+    def fetch_raw(self) -> AntigravityRaw:
         token = self._get_access_token()
-        cfg = _cfg.antigravity
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
             "User-Agent": "antigravity",
         }
         resp = requests.post(
-            f"{cfg.cloudcode_base_url}/v1internal:retrieveUserQuotaSummary",
+            f"{self._base_url()}/v1internal:retrieveUserQuotaSummary",
             headers=headers,
             json={},
         )
@@ -208,7 +211,7 @@ class AntigravityAccount(ProviderAccount):
             )
             availability_rows.append(
                 ModelAvailability(
-                    name=f"Antigravity: {family_name}",
+                    name=f"{self.name}: {family_name}",
                     available_now=available_now,
                     available_when=available_when,
                 )

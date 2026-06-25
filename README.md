@@ -7,7 +7,7 @@ Uniform quota collection and rendering for CLI- and API-backed LLM providers.
 ## Quick start
 
 1. Run `uvx git+https://github.com/dzackgarza/usage-limits login <provider>` for any providers
-   you wish to connect (e.g., `antigravity`, `codex`, `gemini`).
+   you wish to connect (e.g., `antigravity`, `codex`).
 2. Run `uvx git+https://github.com/dzackgarza/usage-limits doctor` — checks provider
    readiness and points out anything missing.
 3. Run `uvx git+https://github.com/dzackgarza/usage-limits --help` — available commands
@@ -22,12 +22,12 @@ Uniform quota collection and rendering for CLI- and API-backed LLM providers.
 | Provider | Strategy | How to set up |
 | :--- | :--- | :--- |
 | Antigravity | Local OAuth | Run `usage-limits login antigravity` |
+| Agy Secret Pool | Local OAuth (shares Antigravity) | Run `usage-limits login antigravity` |
 | Claude Code | OAuth credential | Run `claude login` |
 | Codex | Local OAuth | Run `usage-limits login codex` (or `codex login`) |
 | Copilot | GitHub CLI token | Run `gh auth login` |
 | Cursor | SQLite database | Have Cursor installed and logged in |
 | DeepSeek | API key + balance query | Set `DEEPSEEK_API_KEY` environment variable |
-| Gemini CLI | Local OAuth | Run `usage-limits login gemini` |
 | Kiro | SQLite | Have Kiro CLI installed and logged in |
 | Ollama Cloud | Cookie scrape | Visit ollama.com and log in via Chromium |
 | OpenCode Go | Cookie scrape | Visit opencode.ai and log in via Chromium |
@@ -76,13 +76,15 @@ them for API access to Cursor's usage-summary endpoint.
 - **Database**: `~/.config/Cursor/User/globalStorage/state.vscdb` (Linux) or equivalent
   per-platform VS Code global storage path.
 
-### Gemini CLI
+### Agy Secret Pool
 
-Reads OAuth refresh tokens from the internal credential store and automatically
-determines the `project_id` associated with the Gemini account.
+Surfaces a second, independently-metered Gemini quota pool that lives on production
+`cloudcode-pa` and is reachable with the same Antigravity credentials. The Antigravity
+CLI enforces against its daily-channel host, so this pool sits unused by `agy` but is
+fully usable for direct inference — it shows up here as spare capacity.
 
-- **Setup**: Run `usage-limits login gemini` and complete the Google OAuth login.
-- **Files**: `~/.config/usage-limits/credentials/gemini/<account>.json`
+- **Setup**: None beyond `usage-limits login antigravity` — it reuses those credentials.
+- **Files**: shares `~/.config/usage-limits/credentials/antigravity/<account>.json`
 
 ### Kiro
 
