@@ -66,6 +66,48 @@ def test_codex_to_rows_handles_missing_secondary_window() -> None:
     assert rows[0].reset_at is None
 
 
+def test_codex_to_rows_includes_additional_spark_bucket() -> None:
+    """to_rows parses the Codex Spark additional window as its own two rows."""
+    provider = CodexProvider(account_id="test@example.com")
+    raw = {
+        "rate_limit": {
+            "primary_window": {
+                "used_percent": 15.4,
+                "reset_at": 1718712345,
+            },
+            "secondary_window": {
+                "used_percent": 65.6,
+                "reset_at": 1718798765,
+            },
+        },
+        "additional_rate_limits": [
+            {
+                "limit_name": "GPT-5.3-Codex-Spark",
+                "metered_feature": "codex_bengalfox",
+                "rate_limit": {
+                    "primary_window": {
+                        "used_percent": 18.0,
+                        "reset_at": 1718720000,
+                        "limit_window_seconds": 432000,
+                    },
+                    "secondary_window": {
+                        "used_percent": 5.0,
+                        "reset_at": 1718798765,
+                        "limit_window_seconds": 604800,
+                    },
+                },
+            }
+        ],
+    }
+    rows = provider.to_rows(raw)
+
+    assert len(rows) == 4
+    assert rows[2].identifier == "Codex Spark (5d)"
+    assert rows[2].pct_used == 18
+    assert rows[3].identifier == "Codex Spark (7d)"
+    assert rows[3].pct_used == 5
+
+
 def test_codex_default_refresh_persists_rotated_token(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

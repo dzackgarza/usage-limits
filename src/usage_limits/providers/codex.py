@@ -51,13 +51,24 @@ class WhamWindow(TypedDict):
     reset_at: int | None
 
 
+class WhamWindowWithWindowSeconds(WhamWindow, total=False):
+    limit_window_seconds: int | None
+
+
 class WhamRateLimit(TypedDict):
     primary_window: WhamWindow
     secondary_window: WhamWindow | None
 
 
+class AdditionalCodexRateLimit(TypedDict):
+    limit_name: str
+    metered_feature: str
+    rate_limit: WhamRateLimit
+
+
 class WhamUsageResponse(TypedDict):
     rate_limit: WhamRateLimit
+    additional_rate_limits: list[AdditionalCodexRateLimit]
 
 
 class CodexProvider(ProviderAccount):
@@ -219,6 +230,37 @@ class CodexProvider(ProviderAccount):
                     reset_at=_ts_to_dt(secondary["reset_at"]),
                 )
             )
+
+        if "additional_rate_limits" in raw:
+            for additional in raw["additional_rate_limits"]:
+                limit_name = additional["limit_name"].replace("-", " ")
+                codex_idx = limit_name.find("Codex")
+                limit_label = limit_name[codex_idx:] if codex_idx != -1 else limit_name
+
+                additional_rate_limit = additional["rate_limit"]
+                additional_primary = additional_rate_limit["primary_window"]
+                additional_secondary = additional_rate_limit["secondary_window"]
+                primary_window = cast(WhamWindowWithWindowSeconds, additional_primary)
+
+                rows.append(
+                    UsageRow(
+                        identifier=f"{limit_label} ({_window_label(primary_window, '5d')})",
+                        pct_used=round(additional_primary["used_percent"]),
+                        reset_at=_ts_to_dt(additional_primary["reset_at"]),
+                    )
+                )
+                if additional_secondary:
+                    secondary_window = cast(WhamWindowWithWindowSeconds, additional_secondary)
+                    rows.append(
+                        UsageRow(
+                            identifier=(
+                                f"{limit_label} "
+                                f"({_window_label(secondary_window, '7d')})"
+                            ),
+                            pct_used=round(additional_secondary["used_percent"]),
+                            reset_at=_ts_to_dt(additional_secondary["reset_at"]),
+                        )
+                    )
         return rows
 
     def should_anchor(self, rows: list[UsageRow]) -> bool:
@@ -292,3 +334,14 @@ def _ts_to_dt(ts: int | None) -> datetime | None:
     if ts is None:
         return None
     return datetime.fromtimestamp(ts, tz=UTC)
+
+
+def _window_label(window: WhamWindowWithWindowSeconds, fallback: str) -> str:
+    if "limit_window_seconds" in window:
+        limit_window_seconds = window["limit_window_seconds"]
+        if limit_window_seconds is not None:
+            if limit_window_seconds % 86400 == 0:
+                return f"{limit_window_seconds // 86400}d"
+            if limit_window_seconds % 3600 == 0:
+                return f"{limit_window_seconds // 3600}h"
+    return fallback
