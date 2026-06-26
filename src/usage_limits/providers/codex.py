@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, TypedDict, cast
+from typing import TYPE_CHECKING, TypedDict, cast
 
 if TYPE_CHECKING:
     from usage_limits.auth.oauth import LocalhostBrowserFlow
@@ -36,6 +36,10 @@ class CodexTokens(TypedDict):
     refresh_token: str
     id_token: str
     account_id: str
+
+
+class CodexAuthFile(TypedDict):
+    tokens: CodexTokens
 
 
 class CodexCredentials(TypedDict):
@@ -83,8 +87,8 @@ class CodexProvider(ProviderAccount):
         if self.account_id == "default":
             from usage_limits.config import settings as _cfg
 
-            data: dict[str, Any] = json.loads(resolve_path(_cfg.paths.codex_auth).read_text())
-            return cast(CodexTokens, data["tokens"])
+            data = cast(CodexAuthFile, json.loads(resolve_path(_cfg.paths.codex_auth).read_text()))
+            return data["tokens"]
 
         from usage_limits.auth.store import CredentialStore
 
@@ -114,12 +118,24 @@ class CodexProvider(ProviderAccount):
             token_url="https://auth.openai.com/oauth/token",
         )
 
+    @classmethod
+    def _active_auth_account(cls) -> str | None:
+        """Read the account id from the fallback Codex auth file, if available."""
+        from usage_limits.config import settings as _cfg
+
+        auth_path = resolve_path(_cfg.paths.codex_auth)
+        if not auth_path.exists():
+            return None
+
+        data = cast(CodexAuthFile, json.loads(auth_path.read_text()))
+        return data["tokens"]["account_id"]
+
     def _refresh_default(self, e: requests.HTTPError) -> str:
         """Refresh the default account's tokens in ~/.codex/auth.json."""
         from usage_limits.config import settings as _cfg
 
         auth_path = resolve_path(_cfg.paths.codex_auth)
-        data: dict[str, Any] = json.loads(auth_path.read_text())
+        data = cast(CodexAuthFile, json.loads(auth_path.read_text()))
         tokens = data["tokens"]
 
         refresh_token = tokens.get("refresh_token")
@@ -223,11 +239,53 @@ class CodexProvider(ProviderAccount):
 
     @classmethod
     def resolve_accounts(cls) -> Sequence[CodexProvider]:
-        """Return one ``CodexProvider`` per CredentialStore Codex account."""
+        """Return one ``CodexProvider`` per resolved Codex credential.
+
+        Resolution prefers the most recently used credential source:
+        - Active CLI-auth account first (if present and freshest).
+        - Other stored accounts by credential file mtime descending.
+        - ``~/.codex/auth.json`` as ``default`` when no matching store entry exists.
+        """
         from usage_limits.auth.store import CredentialStore
 
         store = CredentialStore()
-        return [cls(email) for email in store.list_accounts("codex")]
+        accounts = store.list_accounts("codex")
+
+        account_priority: dict[str, float] = {}
+        for email in accounts:
+            path = store._credential_path("codex", email)
+            account_priority[email] = path.stat().st_mtime
+
+        active_auth_account = cls._active_auth_account()
+        try:
+            from usage_limits.config import settings as _cfg
+
+            auth_path = resolve_path(_cfg.paths.codex_auth)
+            if auth_path.exists():
+                auth_account_seen = auth_path.stat().st_mtime
+                if active_auth_account is None:
+                    account_priority["default"] = auth_account_seen
+                elif active_auth_account in account_priority:
+                    latest_stored_account = max(account_priority.values())
+                    if auth_account_seen >= latest_stored_account:
+                        account_priority[active_auth_account] = auth_account_seen
+                else:
+                    account_priority["default"] = auth_account_seen
+        except (json.JSONDecodeError, KeyError, TypeError, FileNotFoundError):
+            # Ignore malformed/incomplete auth files here; account selection should
+            # still fall back to stored credentials when present.
+            if not account_priority:
+                return []
+
+        if not account_priority:
+            return []
+
+        sorted_accounts = sorted(
+            account_priority,
+            key=lambda account_id: account_priority[account_id],
+            reverse=True,
+        )
+        return [cls(email) for email in sorted_accounts]
 
 
 def _ts_to_dt(ts: int | None) -> datetime | None:

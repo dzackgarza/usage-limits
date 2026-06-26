@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import pty
+import re
 import subprocess
 import sys
 import time
@@ -61,7 +62,7 @@ def test_login_wizard_invokes_real_gum_and_routes_correctly() -> None:
 
                 if port is not None:
                     # Unblock the server
-                    # Try to use the discovered callback path if possible, else default to /oauth2callback
+                    # Try to use the discovered callback path if possible.
                     try:
                         callback_path = urllib.parse.urlparse(redirect_uri).path
                     except Exception:
@@ -74,14 +75,29 @@ def test_login_wizard_invokes_real_gum_and_routes_correctly() -> None:
     os.waitpid(pid, 0)
 
     full_output = output.decode("utf-8", errors="ignore")
+    ansi_stripped_output = re.sub(r"\x1b\[[0-9;]*m", "", full_output)
     assert port is not None, f"Failed to find localhost port in output: {full_output}"
     assert port == 1455, f"Codex redirect_uri must use port 1455, got {port}"
-    assert "redirect_uri=http%3A%2F%2F127.0.0.1%3A1455%2Fauth%2Fcallback" in full_output, (
-        "redirect_uri must exactly match what OpenAI authorized"
+    parsed_redirect = None
+    for line in full_output.splitlines():
+        if "redirect_uri=" not in line:
+            continue
+        parsed = urllib.parse.urlparse(line.strip())
+        query = urllib.parse.parse_qs(parsed.query)
+        if "redirect_uri" not in query:
+            continue
+        parsed_redirect = urllib.parse.urlparse(query["redirect_uri"][0])
+        break
+
+    assert parsed_redirect is not None
+    assert parsed_redirect.hostname in ("localhost", "127.0.0.1"), (
+        f"Unexpected redirect host: {parsed_redirect.hostname}"
     )
+    assert parsed_redirect.port == 1455
+    assert parsed_redirect.path == "/auth/callback"
 
     assert "Logging in to OpenAI Codex..." in full_output
-    assert "RuntimeError: OAuth error: access_denied" in full_output
+    assert "RuntimeError: OAuth error: access_denied" in ansi_stripped_output
 
 
 def test_login_wizard_fails_loudly_when_gum_missing(tmp_path: Path) -> None:

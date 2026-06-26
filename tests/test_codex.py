@@ -7,10 +7,11 @@ rotated OAuth refresh tokens during 401 token refresh.
 from __future__ import annotations
 
 import json
+import os
+import time
 from pathlib import Path
-from typing import Any
+
 import pytest
-import requests
 import responses
 
 from usage_limits.auth.store import CredentialStore
@@ -65,7 +66,9 @@ def test_codex_to_rows_handles_missing_secondary_window() -> None:
     assert rows[0].reset_at is None
 
 
-def test_codex_default_refresh_persists_rotated_token(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_codex_default_refresh_persists_rotated_token(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Default account (~/.codex/auth.json) refreshes on 401 and saves rotated refresh token."""
     # Override the auth file path to a temp file
     auth_file = tmp_path / "auth.json"
@@ -124,7 +127,9 @@ def test_codex_default_refresh_persists_rotated_token(monkeypatch: pytest.Monkey
         assert saved["tokens"]["refresh_token"] == "new_refresh"
 
 
-def test_codex_store_refresh_persists_rotated_token(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_codex_store_refresh_persists_rotated_token(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """CredentialStore account refreshes on 401 and saves rotated refresh token."""
     # Direct CredentialStore to a temp directory
     monkeypatch.setattr(
@@ -182,3 +187,96 @@ def test_codex_store_refresh_persists_rotated_token(monkeypatch: pytest.MonkeyPa
         saved = store.get("codex", "test@example.com")
         assert saved["access_token"] == "new_access"
         assert saved["refresh_token"] == "new_refresh"
+
+
+def test_codex_resolve_accounts_prefers_recent_login(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Recent auth context should be selected before older store entries."""
+    monkeypatch.setattr(
+        CredentialStore,
+        "__init__",
+        lambda self, root_dir=None: setattr(self, "root_dir", tmp_path / "credentials"),
+    )
+
+    store = CredentialStore()
+    now = time.time()
+
+    old_cred = {
+        "access_token": "old_access",
+        "refresh_token": "old_refresh",
+        "expires_at": "2026-06-18T12:00:00Z",
+        "email": "alpha@example.com",
+        "extra": {},
+    }
+    new_cred = {
+        "access_token": "new_access",
+        "refresh_token": "new_refresh",
+        "expires_at": "2026-06-18T12:00:00Z",
+        "email": "zeta@example.com",
+        "extra": {},
+    }
+
+    store.save("codex", "alpha@example.com", old_cred)
+    store.save("codex", "zeta@example.com", new_cred)
+
+    os.utime(
+        store._credential_path("codex", "alpha@example.com"),
+        (now - 7200, now - 7200),
+    )
+    os.utime(
+        store._credential_path("codex", "zeta@example.com"),
+        (now - 3600, now - 3600),
+    )
+
+    auth_file = tmp_path / "auth.json"
+    auth_file.write_text(
+        json.dumps(
+            {
+                "tokens": {
+                    "access_token": "cli_access",
+                    "refresh_token": "cli_refresh",
+                    "id_token": "cli-id-token",
+                    "account_id": "zeta@example.com",
+                }
+            }
+        )
+    )
+    os.utime(auth_file, (now, now))
+    monkeypatch.setattr(settings.paths, "codex_auth", str(auth_file))
+
+    accounts = CodexProvider.resolve_accounts()
+    assert [acct.account_id for acct in accounts] == [
+        "zeta@example.com",
+        "alpha@example.com",
+    ]
+
+
+def test_codex_resolve_accounts_falls_back_to_default_without_store(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """With only Codex CLI auth on disk, usage-limits should still resolve default."""
+    monkeypatch.setattr(
+        CredentialStore,
+        "__init__",
+        lambda self, root_dir=None: setattr(self, "root_dir", tmp_path / "credentials"),
+    )
+    _ = CredentialStore()
+
+    auth_file = tmp_path / "auth.json"
+    auth_file.write_text(
+        json.dumps(
+            {
+                "tokens": {
+                    "access_token": "cli_access",
+                    "refresh_token": "cli_refresh",
+                    "id_token": "cli-id-token",
+                    "account_id": "alpha@example.com",
+                }
+            }
+        )
+    )
+    monkeypatch.setattr(settings.paths, "codex_auth", str(auth_file))
+
+    accounts = CodexProvider.resolve_accounts()
+    assert [acct.account_id for acct in accounts] == ["default"]
