@@ -105,7 +105,8 @@ class OpenCodeGoProvider(ProviderAccount):
 
         if soup.find(attrs={"data-slot": "subscribe-button"}):
             raise RuntimeError(
-                "OpenCode Go subscription required. Your account does not have an active subscription."
+                "OpenCode Go subscription required. "
+                "Your account does not have an active subscription."
             )
 
         rows: list[UsageRow] = []

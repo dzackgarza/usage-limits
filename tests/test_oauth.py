@@ -1,3 +1,4 @@
+import contextlib
 import threading
 import time
 import urllib.parse
@@ -271,10 +272,8 @@ def test_login_flow_can_omit_google_params(monkeypatch: pytest.MonkeyPatch) -> N
     )
 
     def run_flow():
-        try:
+        with contextlib.suppress(Exception):
             flow.login()
-        except Exception:
-            pass
 
     t = threading.Thread(target=run_flow)
     t.daemon = True
@@ -294,8 +293,6 @@ def test_login_flow_can_omit_google_params(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 def test_codex_authorize_url_resolves_correctly_on_live_openai() -> None:
-    import urllib.parse
-    import requests
     from usage_limits.auth.oauth import LocalhostBrowserFlow
 
     # Simulate the actual flow construction from login_codex
@@ -356,5 +353,4 @@ def test_codex_authorize_url_resolves_correctly_on_live_openai() -> None:
     assert "error" not in resp.url
     assert "authorize_hydra_invalid_request" not in resp.text
     assert resp.status_code == 200
-
 
