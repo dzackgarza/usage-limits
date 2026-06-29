@@ -6,6 +6,7 @@ rotated OAuth refresh tokens during 401 token refresh.
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import time
@@ -17,6 +18,20 @@ import responses
 from usage_limits.auth.store import CredentialStore
 from usage_limits.config import settings
 from usage_limits.providers.codex import CodexProvider
+
+
+def _id_token_for_email(email: str) -> str:
+    def encode_json(payload: object) -> str:
+        raw = json.dumps(payload, separators=(",", ":")).encode()
+        return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+    return ".".join(
+        [
+            encode_json({"alg": "none"}),
+            encode_json({"email": email}),
+            "signature",
+        ]
+    )
 
 
 def test_codex_to_rows_parses_wham_windows() -> None:
@@ -108,10 +123,10 @@ def test_codex_to_rows_includes_additional_spark_bucket() -> None:
     assert rows[3].pct_used == 5
 
 
-def test_codex_default_refresh_persists_rotated_token(
+def test_codex_cli_auth_refresh_persists_rotated_token(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Default account (~/.codex/auth.json) refreshes on 401 and saves rotated refresh token."""
+    """CLI auth refreshes on 401 and saves the rotated refresh token."""
     # Override the auth file path to a temp file
     auth_file = tmp_path / "auth.json"
     monkeypatch.setattr(settings.paths, "codex_auth", str(auth_file))
@@ -121,13 +136,13 @@ def test_codex_default_refresh_persists_rotated_token(
         "tokens": {
             "access_token": "old_access",
             "refresh_token": "old_refresh",
-            "id_token": "some_id",
-            "account_id": "default",
+            "id_token": _id_token_for_email("cli@example.com"),
+            "account_id": "3b84abab-e9c2-46f7-a810-88a418eaafce",
         }
     }
     auth_file.write_text(json.dumps(initial_data))
 
-    provider = CodexProvider(account_id="default")
+    provider = CodexProvider(account_id="cli@example.com")
 
     with responses.RequestsMock() as rsps:
         # First request to Codex API fails with 401
@@ -231,6 +246,50 @@ def test_codex_store_refresh_persists_rotated_token(
         assert saved["refresh_token"] == "new_refresh"
 
 
+def test_codex_matching_cli_auth_supersedes_stale_store_account(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The Codex CLI auth file is a credential source for its email, not a default account."""
+    monkeypatch.setattr(
+        CredentialStore,
+        "__init__",
+        lambda self, root_dir=None: setattr(self, "root_dir", tmp_path / "credentials"),
+    )
+
+    store = CredentialStore()
+    store.save(
+        "codex",
+        "dzackgarza@gmail.com",
+        {
+            "access_token": "stale_store_access",
+            "refresh_token": "stale_store_refresh",
+            "expires_at": "2026-06-18T12:00:00Z",
+            "email": "dzackgarza@gmail.com",
+            "extra": {},
+        },
+    )
+
+    auth_file = tmp_path / "auth.json"
+    auth_file.write_text(
+        json.dumps(
+            {
+                "tokens": {
+                    "access_token": "cli_access",
+                    "refresh_token": "cli_refresh",
+                    "id_token": _id_token_for_email("dzackgarza@gmail.com"),
+                    "account_id": "3b84abab-e9c2-46f7-a810-88a418eaafce",
+                }
+            }
+        )
+    )
+    monkeypatch.setattr(settings.paths, "codex_auth", str(auth_file))
+
+    credentials = CodexProvider(account_id="dzackgarza@gmail.com").get_credentials()
+
+    assert credentials["access_token"] == "cli_access"
+    assert credentials["refresh_token"] == "cli_refresh"
+
+
 def test_codex_resolve_accounts_prefers_recent_login(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -278,8 +337,8 @@ def test_codex_resolve_accounts_prefers_recent_login(
                 "tokens": {
                     "access_token": "cli_access",
                     "refresh_token": "cli_refresh",
-                    "id_token": "cli-id-token",
-                    "account_id": "zeta@example.com",
+                    "id_token": _id_token_for_email("zeta@example.com"),
+                    "account_id": "3b84abab-e9c2-46f7-a810-88a418eaafce",
                 }
             }
         )
@@ -294,10 +353,10 @@ def test_codex_resolve_accounts_prefers_recent_login(
     ]
 
 
-def test_codex_resolve_accounts_falls_back_to_default_without_store(
+def test_codex_resolve_accounts_uses_cli_auth_email_without_store(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """With only Codex CLI auth on disk, usage-limits should still resolve default."""
+    """With only Codex CLI auth on disk, usage-limits resolves the token email."""
     monkeypatch.setattr(
         CredentialStore,
         "__init__",
@@ -312,8 +371,8 @@ def test_codex_resolve_accounts_falls_back_to_default_without_store(
                 "tokens": {
                     "access_token": "cli_access",
                     "refresh_token": "cli_refresh",
-                    "id_token": "cli-id-token",
-                    "account_id": "alpha@example.com",
+                    "id_token": _id_token_for_email("alpha@example.com"),
+                    "account_id": "3b84abab-e9c2-46f7-a810-88a418eaafce",
                 }
             }
         )
@@ -321,4 +380,4 @@ def test_codex_resolve_accounts_falls_back_to_default_without_store(
     monkeypatch.setattr(settings.paths, "codex_auth", str(auth_file))
 
     accounts = CodexProvider.resolve_accounts()
-    assert [acct.account_id for acct in accounts] == ["default"]
+    assert [acct.account_id for acct in accounts] == ["alpha@example.com"]

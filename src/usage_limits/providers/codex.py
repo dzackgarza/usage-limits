@@ -1,21 +1,20 @@
 """Provider for Codex usage metrics.
 
-Reads OAuth tokens from the credential store and fallbacks.
+Reads OAuth tokens from the credential store and the Codex CLI auth file.
 
 ========================= ===========================================
 File                      Role
 ========================= ===========================================
 ``credentials/codex/``    CredentialStore backend directory.
                           Contains OAuth tokens.
+``~/.codex/auth.json``    Codex CLI auth file. Identified by the email
+                          claim in its ID token.
 ========================= ===========================================
-
-When constructed directly (``account_id="default"``), falls back to
-``~/.codex/auth.json`` for backward compatibility with the standard
-Codex CLI auth file.
 """
 
 from __future__ import annotations
 
+import base64
 import json
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -42,8 +41,8 @@ class CodexAuthFile(TypedDict):
     tokens: CodexTokens
 
 
-class CodexCredentials(TypedDict):
-    access_token: str
+class CodexIdTokenPayload(TypedDict):
+    email: str
 
 
 class WhamWindow(TypedDict):
@@ -82,7 +81,7 @@ class CodexProvider(ProviderAccount):
     name = "Codex"
     state_dir = "codex_usage"
 
-    def __init__(self, account_id: str = "default") -> None:
+    def __init__(self, account_id: str) -> None:
         super().__init__(account_id=account_id)
 
     def provider_name(self) -> str:
@@ -91,15 +90,12 @@ class CodexProvider(ProviderAccount):
     def get_credentials(self) -> CodexTokens:
         """Read the OAuth token dict for this account.
 
-        When ``account_id=="default"``, reads from the standard Codex
-        CLI auth file (``~/.codex/auth.json``).
+        If the standard Codex CLI auth file identifies this account's
+        email, it is the freshest credential source for that account.
         Otherwise reads from the CredentialStore.
         """
-        if self.account_id == "default":
-            from usage_limits.config import settings as _cfg
-
-            data = cast(CodexAuthFile, json.loads(resolve_path(_cfg.paths.codex_auth).read_text()))
-            return data["tokens"]
+        if self._codex_auth_matches_account():
+            return self._read_codex_auth()["tokens"]
 
         from usage_limits.auth.store import CredentialStore
 
@@ -129,31 +125,47 @@ class CodexProvider(ProviderAccount):
             token_url="https://auth.openai.com/oauth/token",
         )
 
+    @staticmethod
+    def _email_from_id_token(id_token: str) -> str:
+        parts = id_token.split(".")
+        assert len(parts) == 3, f"Codex ID token must be a JWT; found {len(parts)} parts"
+        payload_segment = parts[1] + "=" * ((4 - len(parts[1]) % 4) % 4)
+        payload = cast(
+            CodexIdTokenPayload,
+            json.loads(base64.urlsafe_b64decode(payload_segment)),
+        )
+        email = payload["email"]
+        assert email, "Codex ID token email claim must be non-empty"
+        return email
+
     @classmethod
-    def _active_auth_account(cls) -> str | None:
-        """Read the account id from the fallback Codex auth file, if available."""
+    def _read_codex_auth(cls) -> CodexAuthFile:
+        from usage_limits.config import settings as _cfg
+
+        auth_path = resolve_path(_cfg.paths.codex_auth)
+        return cast(CodexAuthFile, json.loads(auth_path.read_text()))
+
+    @classmethod
+    def _codex_auth_email(cls) -> str:
+        return cls._email_from_id_token(cls._read_codex_auth()["tokens"]["id_token"])
+
+    def _codex_auth_matches_account(self) -> bool:
         from usage_limits.config import settings as _cfg
 
         auth_path = resolve_path(_cfg.paths.codex_auth)
         if not auth_path.exists():
-            return None
+            return False
+        return self._codex_auth_email() == self.account_id
 
-        data = cast(CodexAuthFile, json.loads(auth_path.read_text()))
-        return data["tokens"]["account_id"]
-
-    def _refresh_default(self, e: requests.HTTPError) -> str:
-        """Refresh the default account's tokens in ~/.codex/auth.json."""
+    def _refresh_codex_auth(self) -> str:
+        """Refresh the Codex CLI auth file's tokens."""
         from usage_limits.config import settings as _cfg
 
         auth_path = resolve_path(_cfg.paths.codex_auth)
-        data = cast(CodexAuthFile, json.loads(auth_path.read_text()))
+        data = self._read_codex_auth()
         tokens = data["tokens"]
 
-        refresh_token = tokens.get("refresh_token")
-        if not refresh_token:
-            raise RuntimeError("No refresh token in ~/.codex/auth.json") from e
-
-        result = self._make_flow().refresh(refresh_token)
+        result = self._make_flow().refresh(tokens["refresh_token"])
 
         tokens["access_token"] = result["access_token"]
         if result["new_refresh_token"] is not None:
@@ -162,18 +174,15 @@ class CodexProvider(ProviderAccount):
 
         return result["access_token"]
 
-    def _refresh_store(self, e: requests.HTTPError) -> str:
+    def _refresh_store(self) -> str:
         """Refresh a CredentialStore account's tokens."""
         from usage_limits.auth.store import CredentialStore
 
         store = CredentialStore()
         cred = store.get("codex", self.account_id)
 
-        refresh_token = cred.get("refresh_token")
-        if not refresh_token:
-            raise RuntimeError(
-                f"No refresh token available for codex account {self.account_id}"
-            ) from e
+        refresh_token = cred["refresh_token"]
+        assert refresh_token is not None, f"No refresh token for codex account {self.account_id}"
 
         result = self._make_flow().refresh(refresh_token)
 
@@ -196,10 +205,10 @@ class CodexProvider(ProviderAccount):
         )
 
         if resp.status_code == 401:
-            if self.account_id == "default":
-                new_token = self._refresh_default(requests.HTTPError(response=resp))
+            if self._codex_auth_matches_account():
+                new_token = self._refresh_codex_auth()
             else:
-                new_token = self._refresh_store(requests.HTTPError(response=resp))
+                new_token = self._refresh_store()
 
             resp = requests.get(
                 _cfg.codex.api_url,
@@ -284,9 +293,8 @@ class CodexProvider(ProviderAccount):
         """Return one ``CodexProvider`` per resolved Codex credential.
 
         Resolution prefers the most recently used credential source:
-        - Active CLI-auth account first (if present and freshest).
+        - Active CLI-auth email first (if present and freshest).
         - Other stored accounts by credential file mtime descending.
-        - ``~/.codex/auth.json`` as ``default`` when no matching store entry exists.
         """
         from usage_limits.auth.store import CredentialStore
 
@@ -298,26 +306,11 @@ class CodexProvider(ProviderAccount):
             path = store._credential_path("codex", email)
             account_priority[email] = path.stat().st_mtime
 
-        active_auth_account = cls._active_auth_account()
-        try:
-            from usage_limits.config import settings as _cfg
+        from usage_limits.config import settings as _cfg
 
-            auth_path = resolve_path(_cfg.paths.codex_auth)
-            if auth_path.exists():
-                auth_account_seen = auth_path.stat().st_mtime
-                if active_auth_account is None:
-                    account_priority["default"] = auth_account_seen
-                elif active_auth_account in account_priority:
-                    latest_stored_account = max(account_priority.values())
-                    if auth_account_seen >= latest_stored_account:
-                        account_priority[active_auth_account] = auth_account_seen
-                else:
-                    account_priority["default"] = auth_account_seen
-        except (json.JSONDecodeError, KeyError, TypeError, FileNotFoundError):
-            # Ignore malformed/incomplete auth files here; account selection should
-            # still fall back to stored credentials when present.
-            if not account_priority:
-                return []
+        auth_path = resolve_path(_cfg.paths.codex_auth)
+        if auth_path.exists():
+            account_priority[cls._codex_auth_email()] = auth_path.stat().st_mtime
 
         if not account_priority:
             return []
