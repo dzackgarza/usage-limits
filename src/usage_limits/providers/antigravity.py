@@ -69,6 +69,16 @@ class LoadCodeAssistResponse(TypedDict):
     cloudaicompanionProject: str
 
 
+class LoadCodeAssistMetadata(TypedDict):
+    ideType: str
+    platform: str
+    pluginType: str
+
+
+class LoadCodeAssistRequest(TypedDict):
+    metadata: LoadCodeAssistMetadata
+
+
 class RetrieveUserQuotaSummaryRequest(TypedDict):
     project: str
 
@@ -132,22 +142,38 @@ class AntigravityAccount(ProviderAccount):
 
         return _cfg.antigravity.cloudcode_base_url
 
-    def fetch_raw(self) -> AntigravityRaw:
+    def _request_headers(self) -> dict[str, str]:
         token = self._get_access_token()
-        headers = {
+        return {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
             "User-Agent": "antigravity",
         }
+
+    @staticmethod
+    def _load_code_assist_request() -> LoadCodeAssistRequest:
+        return {
+            "metadata": {
+                "ideType": "ANTIGRAVITY",
+                "platform": "PLATFORM_UNSPECIFIED",
+                "pluginType": "GEMINI",
+            }
+        }
+
+    def _load_code_assist(self, headers: dict[str, str]) -> LoadCodeAssistResponse:
         load_resp = requests.post(
             f"{self._base_url()}/v1internal:loadCodeAssist",
             headers=headers,
-            json={},
+            json=self._load_code_assist_request(),
         )
         load_resp.raise_for_status()
-        load_raw = cast(LoadCodeAssistResponse, load_resp.json())
-        summary_request = self._quota_summary_request(load_raw)
+        return cast(LoadCodeAssistResponse, load_resp.json())
 
+    def _retrieve_user_quota_summary(
+        self,
+        headers: dict[str, str],
+        summary_request: RetrieveUserQuotaSummaryRequest,
+    ) -> AntigravityRaw:
         resp = requests.post(
             f"{self._base_url()}/v1internal:retrieveUserQuotaSummary",
             headers=headers,
@@ -155,6 +181,12 @@ class AntigravityAccount(ProviderAccount):
         )
         resp.raise_for_status()
         return cast(AntigravityRaw, resp.json())
+
+    def fetch_raw(self) -> AntigravityRaw:
+        headers = self._request_headers()
+        load_raw = self._load_code_assist(headers)
+        summary_request = self._quota_summary_request(load_raw)
+        return self._retrieve_user_quota_summary(headers, summary_request)
 
     @staticmethod
     def _quota_summary_request(

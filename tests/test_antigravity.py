@@ -19,6 +19,7 @@ from usage_limits.providers.antigravity import AntigravityAccount
 from usage_limits.registry import collect_all
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
+NCTS_AGY_ACCOUNT = "zack@ncts.ntu.edu.tw"
 
 
 def test_antigravity_pooled_surfaces_exhausted_weekly_pool() -> None:
@@ -78,6 +79,16 @@ def test_antigravity_quota_summary_request_uses_load_code_assist_project() -> No
     assert AntigravityAccount._quota_summary_request(
         {"cloudaicompanionProject": "speedy-ally-1jts2"}
     ) == {"project": "speedy-ally-1jts2"}
+
+
+def test_antigravity_ncts_load_code_assist_returns_project() -> None:
+    """Live NCTS account response includes the project needed for quota scoping."""
+    accounts = {account.account_id: account for account in AntigravityAccount.resolve_accounts()}
+    provider = accounts[NCTS_AGY_ACCOUNT]
+
+    raw = provider._load_code_assist(provider._request_headers())
+
+    assert raw["cloudaicompanionProject"] != ""
 
 
 def test_antigravity_availability_reflects_exhausted_pool() -> None:
