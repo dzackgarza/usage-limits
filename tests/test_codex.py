@@ -300,10 +300,10 @@ def test_codex_matching_cli_auth_supersedes_stale_store_account(
     assert credentials["refresh_token"] == "cli_refresh"
 
 
-def test_codex_cockpit_account_revalidates_stale_store_account(
+def test_codex_ignores_cockpit_accounts_and_revalidates_owned_store(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Cockpit-managed Codex credentials revalidate stale migrated store credentials."""
+    """Codex revalidation uses usage-limits-owned storage, not cockpit runtime files."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(
         CredentialStore,
@@ -326,8 +326,7 @@ def test_codex_cockpit_account_revalidates_stale_store_account(
 
     cockpit_dir = tmp_path / ".antigravity_cockpit" / "codex_accounts"
     cockpit_dir.mkdir(parents=True)
-    cockpit_file = cockpit_dir / "codex_account.json"
-    cockpit_file.write_text(
+    (cockpit_dir / "codex_account.json").write_text(
         json.dumps(
             {
                 "email": "zack@ncts.ntu.edu.tw",
@@ -353,14 +352,18 @@ def test_codex_cockpit_account_revalidates_stale_store_account(
             responses.GET,
             settings.codex.api_url,
             status=401,
-            match=[responses.matchers.header_matcher({"Authorization": "Bearer cockpit_access"})],
+            match=[
+                responses.matchers.header_matcher(
+                    {"Authorization": "Bearer stale_store_access"}
+                )
+            ],
         )
         rsps.add(
             responses.POST,
             "https://auth.openai.com/oauth/token",
             json={
-                "access_token": "cockpit_new_access",
-                "refresh_token": "cockpit_new_refresh",
+                "access_token": "owned_new_access",
+                "refresh_token": "owned_new_refresh",
                 "expires_in": 3600,
             },
             status=200,
@@ -368,7 +371,7 @@ def test_codex_cockpit_account_revalidates_stale_store_account(
                 responses.matchers.urlencoded_params_matcher(
                     {
                         "grant_type": "refresh_token",
-                        "refresh_token": "cockpit_refresh",
+                        "refresh_token": "stale_store_refresh",
                         "client_id": "app_EMoamEEZ73f0CkXaXp7hrann",
                     }
                 )
@@ -386,7 +389,7 @@ def test_codex_cockpit_account_revalidates_stale_store_account(
             status=200,
             match=[
                 responses.matchers.header_matcher(
-                    {"Authorization": "Bearer cockpit_new_access"}
+                    {"Authorization": "Bearer owned_new_access"}
                 )
             ],
         )
@@ -395,13 +398,9 @@ def test_codex_cockpit_account_revalidates_stale_store_account(
 
     assert raw["rate_limit"]["primary_window"]["used_percent"] == 25.0
 
-    saved_cockpit = json.loads(cockpit_file.read_text())
-    assert saved_cockpit["tokens"]["access_token"] == "cockpit_new_access"
-    assert saved_cockpit["tokens"]["refresh_token"] == "cockpit_new_refresh"
-
     saved_store = store.get("codex", "zack@ncts.ntu.edu.tw")
-    assert saved_store["access_token"] == "cockpit_new_access"
-    assert saved_store["refresh_token"] == "cockpit_new_refresh"
+    assert saved_store["access_token"] == "owned_new_access"
+    assert saved_store["refresh_token"] == "owned_new_refresh"
 
 
 def test_codex_resolve_accounts_prefers_recent_login(
@@ -499,10 +498,10 @@ def test_codex_resolve_accounts_uses_cli_auth_email_without_store(
     assert [acct.account_id for acct in accounts] == ["alpha@example.com"]
 
 
-def test_codex_resolve_accounts_includes_cockpit_accounts(
+def test_codex_resolve_accounts_ignores_cockpit_accounts(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Cockpit-managed Codex accounts are first-class provider accounts."""
+    """Cockpit account files are migration/reference input, not runtime accounts."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(
         CredentialStore,
@@ -534,4 +533,4 @@ def test_codex_resolve_accounts_includes_cockpit_accounts(
     )
 
     accounts = CodexProvider.resolve_accounts()
-    assert [acct.account_id for acct in accounts] == ["cockpit@example.com"]
+    assert [acct.account_id for acct in accounts] == []
