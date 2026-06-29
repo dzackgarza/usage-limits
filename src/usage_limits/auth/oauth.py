@@ -9,7 +9,7 @@ import urllib.parse
 import webbrowser
 from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 
 import requests
 
@@ -23,6 +23,34 @@ class RefreshResult(TypedDict):
     expires_at: str | None
     new_refresh_token: str | None
     """Non-None when the provider rotates refresh tokens (e.g. OpenAI)."""
+
+
+class OAuthTokenError(TypedDict):
+    """OAuth token endpoint error body."""
+
+    message: str
+    type: str
+    param: str | None
+    code: str
+
+
+class OAuthTokenErrorResponse(TypedDict):
+    """OAuth token endpoint error response."""
+
+    error: OAuthTokenError
+
+
+class OAuthReauthRequiredError(RuntimeError):
+    """Raised when a refresh token is invalidated and login is required."""
+
+    def __init__(self, *, status_code: int, error_code: str, error_message: str) -> None:
+        self.status_code = status_code
+        self.error_code = error_code
+        self.error_message = error_message
+        super().__init__(
+            "OAuth reauthorization required after refresh failed: "
+            f"{status_code} {error_code}: {error_message}"
+        )
 
 
 class OAuthCallbackHandler(BaseHTTPRequestHandler):
@@ -251,6 +279,15 @@ class LocalhostBrowserFlow:
 
         resp = requests.post(self.token_url, data=data, timeout=30)
         if not resp.ok:
+            if resp.status_code == 401:
+                error_response = cast(OAuthTokenErrorResponse, resp.json())
+                error = error_response["error"]
+                if error["code"] == "refresh_token_invalidated":
+                    raise OAuthReauthRequiredError(
+                        status_code=resp.status_code,
+                        error_code=error["code"],
+                        error_message=error["message"],
+                    )
             raise RuntimeError(f"Token refresh failed: {resp.status_code} {resp.text}")
 
         resp_data = resp.json()

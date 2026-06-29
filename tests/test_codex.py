@@ -256,6 +256,96 @@ def test_codex_store_refresh_persists_rotated_token(
         assert saved["refresh_token"] == "new_refresh"
 
 
+def test_codex_store_refresh_marks_invalidated_token_reauth_required(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Invalidated refresh tokens become owned reauth-required credential state."""
+    monkeypatch.setattr(
+        CredentialStore,
+        "__init__",
+        lambda self, root_dir=None: setattr(self, "root_dir", tmp_path / "credentials"),
+    )
+
+    store = CredentialStore()
+    store.save(
+        "codex",
+        "test@example.com",
+        {
+            "access_token": "old_access",
+            "refresh_token": "old_refresh",
+            "expires_at": None,
+            "email": "test@example.com",
+        },
+    )
+
+    provider = CodexProvider(account_id="test@example.com")
+
+    with responses.RequestsMock() as rsps:
+        rsps.add(
+            responses.GET,
+            settings.codex.api_url,
+            status=401,
+        )
+        rsps.add(
+            responses.POST,
+            "https://auth.openai.com/oauth/token",
+            json={
+                "error": {
+                    "message": "Your session has ended. Please log in again.",
+                    "type": "invalid_request_error",
+                    "param": None,
+                    "code": "refresh_token_invalidated",
+                }
+            },
+            status=401,
+        )
+
+        with pytest.raises(RuntimeError):
+            provider.fetch_raw()
+
+    saved = store.get("codex", "test@example.com")
+    assert saved["access_token"] == "old_access"
+    assert saved["refresh_token"] == "old_refresh"
+    assert saved["requires_reauth"] is True
+    assert saved["reauth_error_code"] == "refresh_token_invalidated"
+    assert saved["reauth_status_code"] == 401
+
+
+def test_codex_reauth_required_store_account_fails_before_network(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A known reauth-required account must not keep probing Codex with stale tokens."""
+    monkeypatch.setattr(
+        CredentialStore,
+        "__init__",
+        lambda self, root_dir=None: setattr(self, "root_dir", tmp_path / "credentials"),
+    )
+
+    store = CredentialStore()
+    store.save(
+        "codex",
+        "test@example.com",
+        {
+            "access_token": "old_access",
+            "refresh_token": "old_refresh",
+            "expires_at": None,
+            "email": "test@example.com",
+            "requires_reauth": True,
+            "reauth_error_code": "refresh_token_invalidated",
+            "reauth_status_code": 401,
+            "reauth_at": "2026-06-29T06:00:00+00:00",
+        },
+    )
+
+    provider = CodexProvider(account_id="test@example.com")
+
+    with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
+        with pytest.raises(RuntimeError):
+            provider.fetch_raw()
+
+        assert len(rsps.calls) == 0
+
+
 def test_codex_matching_cli_auth_supersedes_stale_store_account(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -464,6 +554,73 @@ def test_codex_resolve_accounts_prefers_recent_login(
     assert [acct.account_id for acct in accounts] == [
         "zeta@example.com",
         "alpha@example.com",
+    ]
+
+
+def test_codex_resolve_accounts_keeps_reauth_required_accounts_after_usable_accounts(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Reauth markers remain visible without becoming the default account."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(
+        CredentialStore,
+        "__init__",
+        lambda self, root_dir=None: setattr(self, "root_dir", tmp_path / "credentials"),
+    )
+
+    store = CredentialStore()
+    now = time.time()
+    usable_cred = {
+        "access_token": "usable_access",
+        "refresh_token": "usable_refresh",
+        "expires_at": "2026-06-18T12:00:00Z",
+        "email": "usable@example.com",
+        "extra": {},
+    }
+    reauth_cred = {
+        "access_token": "reauth_access",
+        "refresh_token": "reauth_refresh",
+        "expires_at": "2026-06-18T12:00:00Z",
+        "email": "reauth@example.com",
+        "requires_reauth": True,
+        "reauth_error_code": "refresh_token_invalidated",
+        "reauth_status_code": 401,
+        "reauth_at": "2026-06-29T06:00:00+00:00",
+        "extra": {},
+    }
+
+    store.save("codex", "usable@example.com", usable_cred)
+    store.save("codex", "reauth@example.com", reauth_cred)
+
+    os.utime(
+        store._credential_path("codex", "usable@example.com"),
+        (now - 7200, now - 7200),
+    )
+    os.utime(
+        store._credential_path("codex", "reauth@example.com"),
+        (now, now),
+    )
+
+    auth_file = tmp_path / "auth.json"
+    auth_file.write_text(
+        json.dumps(
+            {
+                "tokens": {
+                    "access_token": "usable_cli_access",
+                    "refresh_token": "usable_cli_refresh",
+                    "id_token": _id_token_for_email("usable@example.com"),
+                    "account_id": "3b84abab-e9c2-46f7-a810-88a418eaafce",
+                }
+            }
+        )
+    )
+    os.utime(auth_file, (now - 3600, now - 3600))
+    monkeypatch.setattr(settings.paths, "codex_auth", str(auth_file))
+
+    accounts = CodexProvider.resolve_accounts()
+    assert [acct.account_id for acct in accounts] == [
+        "usable@example.com",
+        "reauth@example.com",
     ]
 
 

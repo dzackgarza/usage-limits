@@ -10,6 +10,10 @@ class StoredCredential(TypedDict):
     refresh_token: str | None
     expires_at: str | None  # ISO8601 string
     email: str
+    requires_reauth: NotRequired[bool]
+    reauth_error_code: NotRequired[str]
+    reauth_status_code: NotRequired[int]
+    reauth_at: NotRequired[str]
     extra: NotRequired[dict[str, Any]]
 
 

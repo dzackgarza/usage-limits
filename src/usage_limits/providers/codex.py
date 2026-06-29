@@ -21,7 +21,8 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, TypedDict, cast
 
 if TYPE_CHECKING:
-    from usage_limits.auth.oauth import LocalhostBrowserFlow
+    from usage_limits.auth.oauth import LocalhostBrowserFlow, OAuthReauthRequiredError
+    from usage_limits.auth.store import CredentialStore, StoredCredential
 
 import requests
 
@@ -97,14 +98,19 @@ class CodexProvider(ProviderAccount):
         email, it is the freshest credential source for that account.
         Otherwise reads from the CredentialStore.
         """
-        if self._codex_auth_matches_account():
-            return self._read_codex_auth()["tokens"]
-
         from usage_limits.auth.store import CredentialStore
 
         store = CredentialStore()
         try:
             cred = store.get("codex", self.account_id)
+            self._raise_if_reauth_required(cred)
+        except FileNotFoundError:
+            cred = None
+
+        if self._codex_auth_matches_account():
+            return self._read_codex_auth()["tokens"]
+
+        if cred is not None:
             refresh_token = cred["refresh_token"]
             assert refresh_token is not None, (
                 f"No refresh token for codex account {self.account_id}"
@@ -117,8 +123,23 @@ class CodexProvider(ProviderAccount):
                     "id_token": "",
                 },
             )
-        except FileNotFoundError as e:
-            raise KeyError(f"Codex account {self.account_id!r} not found in CredentialStore") from e
+        raise KeyError(f"Codex account {self.account_id!r} not found in CredentialStore")
+
+    def _raise_if_reauth_required(self, cred: StoredCredential) -> None:
+        if "requires_reauth" in cred:
+            assert cred["requires_reauth"] is True, (
+                f"Unexpected false reauth marker for codex account {self.account_id}"
+            )
+            from usage_limits.auth.oauth import OAuthReauthRequiredError
+
+            raise OAuthReauthRequiredError(
+                status_code=cred["reauth_status_code"],
+                error_code=cred["reauth_error_code"],
+                error_message=(
+                    f"Codex account {self.account_id} requires "
+                    "`usage-limits login codex`."
+                ),
+            )
 
     def _make_flow(self) -> LocalhostBrowserFlow:
         from usage_limits.auth.oauth import LocalhostBrowserFlow
@@ -179,15 +200,42 @@ class CodexProvider(ProviderAccount):
         )
         CredentialStore().save("codex", self.account_id, cred)
 
+    def _mark_reauth_required(
+        self,
+        store: CredentialStore,
+        cred: StoredCredential,
+        error: OAuthReauthRequiredError,
+    ) -> None:
+        cred["requires_reauth"] = True
+        cred["reauth_error_code"] = error.error_code
+        cred["reauth_status_code"] = error.status_code
+        cred["reauth_at"] = datetime.now(UTC).isoformat()
+        store.save("codex", self.account_id, cred)
+
     def _refresh_codex_auth(self) -> str:
         """Refresh the Codex CLI auth file's tokens."""
+        from usage_limits.auth.oauth import OAuthReauthRequiredError
+        from usage_limits.auth.store import CredentialStore, StoredCredential
         from usage_limits.config import settings as _cfg
 
         auth_path = resolve_path(_cfg.paths.codex_auth)
         data = self._read_codex_auth()
         tokens = data["tokens"]
 
-        result = self._make_flow().refresh(tokens["refresh_token"])
+        try:
+            result = self._make_flow().refresh(tokens["refresh_token"])
+        except OAuthReauthRequiredError as error:
+            cred = cast(
+                StoredCredential,
+                {
+                    "access_token": tokens["access_token"],
+                    "refresh_token": tokens["refresh_token"],
+                    "expires_at": None,
+                    "email": self.account_id,
+                },
+            )
+            self._mark_reauth_required(CredentialStore(), cred, error)
+            raise
 
         tokens["access_token"] = result["access_token"]
         if result["new_refresh_token"] is not None:
@@ -201,15 +249,21 @@ class CodexProvider(ProviderAccount):
 
     def _refresh_store(self) -> str:
         """Refresh a CredentialStore account's tokens."""
+        from usage_limits.auth.oauth import OAuthReauthRequiredError
         from usage_limits.auth.store import CredentialStore
 
         store = CredentialStore()
         cred = store.get("codex", self.account_id)
+        self._raise_if_reauth_required(cred)
 
         refresh_token = cred["refresh_token"]
         assert refresh_token is not None, f"No refresh token for codex account {self.account_id}"
 
-        result = self._make_flow().refresh(refresh_token)
+        try:
+            result = self._make_flow().refresh(refresh_token)
+        except OAuthReauthRequiredError as error:
+            self._mark_reauth_required(store, cred, error)
+            raise
 
         cred["access_token"] = result["access_token"]
         cred["expires_at"] = result["expires_at"]
@@ -326,24 +380,30 @@ class CodexProvider(ProviderAccount):
         store = CredentialStore()
         accounts = store.list_accounts("codex")
 
-        account_priority: dict[str, float] = {}
+        account_priority: dict[str, tuple[int, float]] = {}
         for email in accounts:
             path = store._credential_path("codex", email)
-            account_priority[email] = path.stat().st_mtime
+            cred = store.get("codex", email)
+            reauth_rank = 1 if "requires_reauth" in cred else 0
+            account_priority[email] = (reauth_rank, path.stat().st_mtime)
 
         from usage_limits.config import settings as _cfg
 
         auth_path = resolve_path(_cfg.paths.codex_auth)
         if auth_path.exists():
-            account_priority[cls._codex_auth_email()] = auth_path.stat().st_mtime
+            auth_email = cls._codex_auth_email()
+            if auth_email not in account_priority or account_priority[auth_email][0] == 0:
+                account_priority[auth_email] = (0, auth_path.stat().st_mtime)
 
         if not account_priority:
             return []
 
         sorted_accounts = sorted(
             account_priority,
-            key=lambda account_id: account_priority[account_id],
-            reverse=True,
+            key=lambda account_id: (
+                account_priority[account_id][0],
+                -account_priority[account_id][1],
+            ),
         )
         return [cls(email) for email in sorted_accounts]
 
