@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import subprocess
 import tempfile
 from datetime import UTC, datetime
@@ -49,16 +51,21 @@ class ClaudeProvider(ProviderAccount):
         data: dict[str, Any] = json.loads(self.cred_file.read_text())
         return cast(ClaudeCredentials, data["claudeAiOauth"])
 
+    def _get_claude_bin(self) -> str:
+        """Find the claude executable."""
+        return shutil.which("claude") or os.path.expanduser("~/.local/bin/claude")
+
     def _wake_cli(self) -> bool:
         """Run a minimal Claude CLI turn to refresh tokens or reset rate limit.
 
         Runs in a temp directory with empty setting sources to minimize
         token overhead. Only attempts once.
         """
+        claude_bin = self._get_claude_bin()
         with tempfile.TemporaryDirectory() as tmpdir:
             result = subprocess.run(
                 [
-                    "claude",
+                    claude_bin,
                     "--safe-mode",
                     "--tools",
                     "",
@@ -125,8 +132,9 @@ class ClaudeProvider(ProviderAccount):
             )
 
     def anchor_command(self) -> list[str]:
+        claude_bin = self._get_claude_bin()
         return [
-            "claude",
+            claude_bin,
             "--safe-mode",
             "--tools",
             "",

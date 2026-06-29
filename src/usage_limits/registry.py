@@ -154,6 +154,8 @@ def _is_rate_limited(error: BaseException) -> bool:
 def _error_snapshot(
     provider_class: type[UsageProvider],
     error: BaseException,
+    *,
+    account: str | None = None,
 ) -> ProviderSnapshot:
     """Build a normalized error snapshot for a failed provider."""
     if _is_rate_limited(error):
@@ -161,6 +163,7 @@ def _error_snapshot(
             provider=provider_class.slug,
             display_name=provider_class.name,
             status="rate_limited",
+            account=account,
             errors=[
                 ProviderError(
                     type="rate_limited",
@@ -172,6 +175,7 @@ def _error_snapshot(
         provider=provider_class.slug,
         display_name=provider_class.name,
         status="error",
+        account=account,
         errors=[ProviderError(type=_error_type(error), message=_error_message(error))],
     )
 
@@ -230,7 +234,8 @@ def _collect_instance(
     try:
         return instance.collect_snapshot(notify=notify, anchor=anchor)
     except BaseException as error:
-        return _error_snapshot(type(instance), error)
+        account = instance.account_id if isinstance(instance, ProviderAccount) else None
+        return _error_snapshot(type(instance), error, account=account)
 
 
 def collect_all(
