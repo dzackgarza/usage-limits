@@ -18,7 +18,7 @@ import base64
 import json
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, TypedDict, cast
+from typing import TYPE_CHECKING, NotRequired, TypedDict, cast
 
 if TYPE_CHECKING:
     from usage_limits.auth.oauth import LocalhostBrowserFlow, OAuthReauthRequiredError
@@ -71,7 +71,7 @@ class AdditionalCodexRateLimit(TypedDict):
 
 class WhamUsageResponse(TypedDict):
     rate_limit: WhamRateLimit
-    additional_rate_limits: list[AdditionalCodexRateLimit]
+    additional_rate_limits: NotRequired[list[AdditionalCodexRateLimit] | None]
 
 
 class CodexProvider(ProviderAccount):
@@ -319,7 +319,7 @@ class CodexProvider(ProviderAccount):
                 )
             )
 
-        if "additional_rate_limits" in raw:
+        if "additional_rate_limits" in raw and raw["additional_rate_limits"] is not None:
             for additional in raw["additional_rate_limits"]:
                 limit_name = additional["limit_name"].replace("-", " ")
                 codex_idx = limit_name.find("Codex")

@@ -81,6 +81,33 @@ def test_codex_to_rows_handles_missing_secondary_window() -> None:
     assert rows[0].reset_at is None
 
 
+def test_codex_to_rows_handles_null_additional_rate_limits() -> None:
+    """to_rows accepts the live WHAM shape where no extra model bucket is null."""
+    provider = CodexProvider(account_id="test@example.com")
+    raw = {
+        "rate_limit": {
+            "primary_window": {
+                "used_percent": 41.0,
+                "reset_at": 1782715196,
+                "limit_window_seconds": 18000,
+                "reset_after_seconds": 15200,
+            },
+            "secondary_window": {
+                "used_percent": 29.0,
+                "reset_at": 1783295537,
+                "limit_window_seconds": 604800,
+                "reset_after_seconds": 595541,
+            },
+        },
+        "additional_rate_limits": None,
+    }
+
+    rows = provider.to_rows(raw)
+
+    assert [row.identifier for row in rows] == ["Codex (5h)", "Codex (7d)"]
+    assert [row.pct_used for row in rows] == [41, 29]
+
+
 def test_codex_to_rows_includes_additional_spark_bucket() -> None:
     """to_rows parses the Codex Spark additional window as its own two rows."""
     provider = CodexProvider(account_id="test@example.com")
