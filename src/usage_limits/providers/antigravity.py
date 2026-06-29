@@ -1,16 +1,19 @@
 """Provider for Google Cloud Code / Antigravity usage metrics.
 
-Reads OAuth refresh tokens from the credential store, then queries the enforced
-*individual* quota via ``v1internal:retrieveUserQuotaSummary``.
+Reads OAuth refresh tokens from the credential store, then follows the same
+quota handshake as agy: ``v1internal:loadCodeAssist`` first, then
+``v1internal:retrieveUserQuotaSummary`` with the returned project string.
 
-Why this endpoint and not ``fetchAvailableModels``:
-``fetchAvailableModels`` reports a per-model ``remainingPercentage`` that does
-*not* reflect the enforced individual quota — it returns ``1`` (100% available)
-even when the account is fully rate-limited, so the dashboard would show "100%
-available" while the CLI returns "Individual quota reached".
-``retrieveUserQuotaSummary`` is the authoritative source the Antigravity CLI
-itself uses: it exposes the real quota *pools* with their reset times and
-exhaustion descriptions.
+Why the project-scoped summary request:
+An empty ``retrieveUserQuotaSummary`` request returns the stale per-model
+"everything available" shape for accounts whose real agy quota is exhausted.
+The agy runtime cache for quota summary depends on ``loadCodeAssistResponse``;
+passing ``{"project": cloudaicompanionProject}`` returns the enforced quota
+pools that match agy's visible limit state.
+
+``fetchAvailableModels`` is still part of agy's startup path, but it is a model
+configuration/listing call. It does not by itself provide the enforced quota
+summary rendered here.
 
 Response shapes (both are ``groups[].buckets[]``):
   * Pooled plans: one group per model family ("Gemini Models", "Claude and GPT
@@ -60,6 +63,14 @@ class QuotaGroup(TypedDict, total=False):
 
 class AntigravityRaw(TypedDict):
     groups: list[QuotaGroup]
+
+
+class LoadCodeAssistResponse(TypedDict):
+    cloudaicompanionProject: str
+
+
+class RetrieveUserQuotaSummaryRequest(TypedDict):
+    project: str
 
 
 class AntigravityAccount(ProviderAccount):
@@ -128,13 +139,28 @@ class AntigravityAccount(ProviderAccount):
             "Content-Type": "application/json",
             "User-Agent": "antigravity",
         }
-        resp = requests.post(
-            f"{self._base_url()}/v1internal:retrieveUserQuotaSummary",
+        load_resp = requests.post(
+            f"{self._base_url()}/v1internal:loadCodeAssist",
             headers=headers,
             json={},
         )
+        load_resp.raise_for_status()
+        load_raw = cast(LoadCodeAssistResponse, load_resp.json())
+        summary_request = self._quota_summary_request(load_raw)
+
+        resp = requests.post(
+            f"{self._base_url()}/v1internal:retrieveUserQuotaSummary",
+            headers=headers,
+            json=summary_request,
+        )
         resp.raise_for_status()
         return cast(AntigravityRaw, resp.json())
+
+    @staticmethod
+    def _quota_summary_request(
+        load_raw: LoadCodeAssistResponse,
+    ) -> RetrieveUserQuotaSummaryRequest:
+        return {"project": load_raw["cloudaicompanionProject"]}
 
     @staticmethod
     def _model_sort_key(identifier: str) -> tuple[int, str]:
@@ -154,26 +180,24 @@ class AntigravityAccount(ProviderAccount):
 
     def to_rows(self, raw: AntigravityRaw) -> list[UsageRow]:
         rows: list[UsageRow] = []
-        for group in raw.get("groups", []):
-            buckets = group.get("buckets", [])
-            group_name = group.get("displayName", "")
+        for group in raw["groups"]:
+            buckets = group["buckets"]
+            group_name = group["displayName"]
             # Within a group, a disabled window is superseded by the binding
             # (most-restrictive active) window — render it with that limit/reset.
             active = [b for b in buckets if not b.get("disabled")]
-            binding = (
-                min(active, key=lambda b: b.get("remainingFraction", 0.0)) if active else None
-            )
+            binding = min(active, key=lambda b: b["remainingFraction"]) if active else None
             for bucket in buckets:
                 source = binding if (bucket.get("disabled") and binding is not None) else bucket
-                remaining = source.get("remainingFraction")
-                pct_used = 100.0 if remaining is None else (1.0 - remaining) * 100.0
-                reset_at = self._parse_reset(source.get("resetTime"))
+                remaining = source["remainingFraction"]
+                pct_used = (1.0 - remaining) * 100.0
+                reset_at = self._parse_reset(source["resetTime"])
 
                 window = bucket.get("window")
                 if window:
                     identifier = f"{group_name} ({WINDOW_LABELS.get(window, window)})"
                 else:
-                    identifier = bucket.get("displayName") or bucket.get("bucketId", "")
+                    identifier = bucket["displayName"]
 
                 rows.append(
                     UsageRow(identifier=identifier, pct_used=round(pct_used), reset_at=reset_at)

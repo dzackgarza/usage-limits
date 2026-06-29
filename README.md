@@ -40,8 +40,8 @@ Uniform quota collection and rendering for CLI- and API-backed LLM providers.
 ### Antigravity
 
 Reads OAuth refresh tokens from the internal credential store, then calls the Google
-Cloud Code API (`loadCodeAssist`, `fetchAvailableModels`). Supports multiple accounts
-and multi-model quotas (Flash, Pro, Claude, GPT-OSS).
+Cloud Code API (`loadCodeAssist`, then project-scoped `retrieveUserQuotaSummary`).
+Supports multiple accounts and AGY's Gemini vs. Claude/GPT quota pools.
 
 - **Setup**: Run `usage-limits login antigravity` and complete the Google OAuth login.
 - **Files**: `~/.config/usage-limits/credentials/antigravity/<account>.json`

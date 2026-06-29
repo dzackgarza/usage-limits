@@ -15,9 +15,10 @@ a **separate, independently-metered** quota pool on production
 
 This provider surfaces that pool. It reuses everything from
 :class:`~usage_limits.providers.antigravity.AntigravityAccount` (the same
-``antigravity`` credentials, OAuth refresh, and ``retrieveUserQuotaSummary``
-parsing) and only swaps the host, so no separate login is required — logging in
-with ``usage-limits login antigravity`` covers it.
+``antigravity`` credentials, OAuth refresh, ``loadCodeAssist`` project lookup,
+and project-scoped ``retrieveUserQuotaSummary`` parsing) and only swaps the
+host, so no separate login is required — logging in with
+``usage-limits login antigravity`` covers it.
 """
 
 from __future__ import annotations

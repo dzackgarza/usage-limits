@@ -1,11 +1,11 @@
 """Provider normalization tests for Antigravity.
 
-Uses captured real ``retrieveUserQuotaSummary`` responses to exercise the
+Uses captured real project-scoped ``retrieveUserQuotaSummary`` responses to exercise the
 ``fetch_raw`` -> ``to_rows`` -> ``availability`` pipeline.
 
-The authoritative source is the enforced *individual* quota
-(``retrieveUserQuotaSummary``), not ``fetchAvailableModels`` (which reports
-every model as fully available even when the account is rate-limited).
+The enforced quota source is ``loadCodeAssist`` followed by
+``retrieveUserQuotaSummary`` with the returned project string. An empty summary
+request returns a misleading per-model/all-available view for exhausted accounts.
 """
 
 from __future__ import annotations
@@ -24,10 +24,10 @@ FIXTURE_DIR = Path(__file__).parent / "fixtures"
 def test_antigravity_pooled_surfaces_exhausted_weekly_pool() -> None:
     """Real pooled-quota response: an exhausted weekly pool renders as 100% used.
 
-    Regression: the provider previously read ``fetchAvailableModels``, which
-    reported every model as available (``remainingPercentage: 1``) even while the
-    account's enforced individual quota was exhausted — so the dashboard showed
-    "100% available" while the CLI returned "Individual quota reached".
+    Regression: the provider previously posted an empty
+    ``retrieveUserQuotaSummary`` request, which reported every model as
+    available while agy's project-scoped quota summary reported the exhausted
+    Claude/GPT pool.
     """
     provider = AntigravityAccount(account_id="test@example.com")
     raw = json.loads((FIXTURE_DIR / "antigravity-quota-summary-pooled.json").read_text())
@@ -71,6 +71,13 @@ def test_antigravity_permodel_shape() -> None:
     assert "GPT-OSS 120B (Medium)" in ids
     # Fixture has remainingFraction 1 across the board.
     assert all(r.pct_used == 0 for r in rows)
+
+
+def test_antigravity_quota_summary_request_uses_load_code_assist_project() -> None:
+    """The quota summary request is scoped by the project returned from loadCodeAssist."""
+    assert AntigravityAccount._quota_summary_request(
+        {"cloudaicompanionProject": "speedy-ally-1jts2"}
+    ) == {"project": "speedy-ally-1jts2"}
 
 
 def test_antigravity_availability_reflects_exhausted_pool() -> None:
