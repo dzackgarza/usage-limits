@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 import pty
 import re
+import select
+import signal
 import subprocess
 import sys
 import time
@@ -28,53 +30,82 @@ def test_login_wizard_invokes_real_gum_and_routes_correctly() -> None:
     output = b""
     port = None
 
-    # Wait a bit for gum to initialize and draw the UI
-    time.sleep(0.5)
-
-    # Send "j" (down arrow in gum/vim-mode) then Enter to select the second option (codex)
-    os.write(fd, b"j\r")
-
     # Read output until the process exits or we find the URL
+    deadline = time.monotonic() + 20.0
+    child_exited = False
+    sent_selection = False
+    timed_out = False
     try:
         while True:
-            chunk = os.read(fd, 1024)
-            if not chunk:
+            if time.monotonic() >= deadline:
+                timed_out = True
                 break
-            output += chunk
-            out_str = output.decode("utf-8", errors="ignore")
 
-            # Look for the dynamically generated localhost URL
-            if "http" in out_str and "redirect_uri=" in out_str and port is None:
-                # Find the URL in the output
-                for line in out_str.splitlines():
-                    if "http" in line and "redirect_uri=" in line:
+            ready, _, _ = select.select([fd], [], [], 0.1)
+            if ready:
+                chunk = os.read(fd, 1024)
+                if not chunk:
+                    break
+                output += chunk
+                out_str = output.decode("utf-8", errors="ignore")
+
+                if (
+                    not sent_selection
+                    and "Select a provider to login:" in out_str
+                    and "codex" in out_str
+                ):
+                    # Send down arrow then Enter to select the second option (codex).
+                    os.write(fd, b"\x1b[B\r")
+                    sent_selection = True
+
+                # Look for the dynamically generated localhost URL
+                if "http" in out_str and "redirect_uri=" in out_str and port is None:
+                    # Find the URL in the output
+                    for line in out_str.splitlines():
+                        if "http" in line and "redirect_uri=" in line:
+                            try:
+                                parsed = urllib.parse.urlparse(line.strip())
+                                query = urllib.parse.parse_qs(parsed.query)
+                                if "redirect_uri" in query:
+                                    redirect_uri = query["redirect_uri"][0]
+                                    redirect_parts = urllib.parse.urlparse(redirect_uri)
+                                    if redirect_parts.port:
+                                        port = redirect_parts.port
+                                        break
+                            except Exception:
+                                pass
+
+                    if port is not None:
+                        # Unblock the server
+                        # Try to use the discovered callback path if possible.
                         try:
-                            parsed = urllib.parse.urlparse(line.strip())
-                            query = urllib.parse.parse_qs(parsed.query)
-                            if "redirect_uri" in query:
-                                redirect_uri = query["redirect_uri"][0]
-                                redirect_parts = urllib.parse.urlparse(redirect_uri)
-                                if redirect_parts.port:
-                                    port = redirect_parts.port
-                                    break
+                            callback_path = urllib.parse.urlparse(redirect_uri).path
                         except Exception:
-                            pass
+                            callback_path = "/oauth2callback"
 
-                if port is not None:
-                    # Unblock the server
-                    # Try to use the discovered callback path if possible.
-                    try:
-                        callback_path = urllib.parse.urlparse(redirect_uri).path
-                    except Exception:
-                        callback_path = "/oauth2callback"
+                        requests.get(
+                            f"http://127.0.0.1:{port}{callback_path}?error=access_denied",
+                            timeout=5,
+                        )
 
-                    requests.get(f"http://127.0.0.1:{port}{callback_path}?error=access_denied")
+            waited_pid, _ = os.waitpid(pid, os.WNOHANG)
+            if waited_pid:
+                child_exited = True
+                break
     except OSError:
         pass
-
-    os.waitpid(pid, 0)
+    finally:
+        if not child_exited:
+            try:
+                waited_pid, _ = os.waitpid(pid, os.WNOHANG)
+                if waited_pid == 0:
+                    os.kill(pid, signal.SIGTERM)
+                    os.waitpid(pid, 0)
+            except ChildProcessError:
+                pass
 
     full_output = output.decode("utf-8", errors="ignore")
+    assert not timed_out, f"Timed out waiting for login wizard output: {full_output}"
     ansi_stripped_output = re.sub(r"\x1b\[[0-9;]*m", "", full_output)
     assert port is not None, f"Failed to find localhost port in output: {full_output}"
     assert port == 1455, f"Codex redirect_uri must use port 1455, got {port}"
