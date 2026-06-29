@@ -131,6 +131,7 @@ class PathsSettings(BaseModel):
     """
 
     credentials_dir: str = "~/.config/usage-limits/credentials"
+    antigravity_cockpit_dir: str = "~/.antigravity_cockpit"
     claude_credentials: str = "~/.claude/.credentials.json"
     codex_auth: str = "~/.codex/auth.json"
     cursor_state_db: str = "~/.config/Cursor/User/globalStorage/state.vscdb"

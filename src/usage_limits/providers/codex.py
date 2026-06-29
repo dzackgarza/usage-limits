@@ -9,6 +9,8 @@ File                      Role
                           Contains OAuth tokens.
 ``~/.codex/auth.json``    Codex CLI auth file. Identified by the email
                           claim in its ID token.
+``~/.antigravity_cockpit/
+codex_accounts/*.json``   Cockpit-tools managed Codex accounts.
 ========================= ===========================================
 """
 
@@ -18,6 +20,7 @@ import base64
 import json
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict, cast
 
 if TYPE_CHECKING:
@@ -34,10 +37,19 @@ class CodexTokens(TypedDict):
     access_token: str
     refresh_token: str
     id_token: str
+
+
+class CodexCliTokens(CodexTokens):
     account_id: str
 
 
 class CodexAuthFile(TypedDict):
+    tokens: CodexCliTokens
+
+
+class CockpitCodexAccount(TypedDict):
+    email: str
+    account_id: str
     tokens: CodexTokens
 
 
@@ -90,25 +102,33 @@ class CodexProvider(ProviderAccount):
     def get_credentials(self) -> CodexTokens:
         """Read the OAuth token dict for this account.
 
-        If the standard Codex CLI auth file identifies this account's
-        email, it is the freshest credential source for that account.
-        Otherwise reads from the CredentialStore.
+        If the standard Codex CLI auth file or cockpit-tools account
+        store identifies this account's email, that managed source owns
+        revalidation for the account. Otherwise reads from the
+        CredentialStore.
         """
         if self._codex_auth_matches_account():
             return self._read_codex_auth()["tokens"]
+
+        cockpit_account = self._cockpit_account_for_email(self.account_id)
+        if cockpit_account is not None:
+            return cockpit_account[1]["tokens"]
 
         from usage_limits.auth.store import CredentialStore
 
         store = CredentialStore()
         try:
             cred = store.get("codex", self.account_id)
+            refresh_token = cred["refresh_token"]
+            assert refresh_token is not None, (
+                f"No refresh token for codex account {self.account_id}"
+            )
             return cast(
                 CodexTokens,
                 {
                     "access_token": cred["access_token"],
-                    "refresh_token": cred["refresh_token"],
+                    "refresh_token": refresh_token,
                     "id_token": "",
-                    "account_id": self.account_id,
                 },
             )
         except FileNotFoundError as e:
@@ -157,6 +177,45 @@ class CodexProvider(ProviderAccount):
             return False
         return self._codex_auth_email() == self.account_id
 
+    @classmethod
+    def _cockpit_accounts_dir(cls) -> Path:
+        from usage_limits.config import settings as _cfg
+
+        return resolve_path(_cfg.paths.antigravity_cockpit_dir) / "codex_accounts"
+
+    @classmethod
+    def _cockpit_accounts(cls) -> list[tuple[Path, CockpitCodexAccount]]:
+        accounts: list[tuple[Path, CockpitCodexAccount]] = []
+        for path in sorted(cls._cockpit_accounts_dir().glob("*.json")):
+            account = cast(CockpitCodexAccount, json.loads(path.read_text()))
+            accounts.append((path, account))
+        return accounts
+
+    @classmethod
+    def _cockpit_account_for_email(
+        cls, email: str
+    ) -> tuple[Path, CockpitCodexAccount] | None:
+        for path, account in cls._cockpit_accounts():
+            if account["email"] == email:
+                return path, account
+        return None
+
+    def _save_store_credentials(
+        self, access_token: str, refresh_token: str, expires_at: str | None
+    ) -> None:
+        from usage_limits.auth.store import CredentialStore, StoredCredential
+
+        cred = cast(
+            StoredCredential,
+            {
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "expires_at": expires_at,
+                "email": self.account_id,
+            },
+        )
+        CredentialStore().save("codex", self.account_id, cred)
+
     def _refresh_codex_auth(self) -> str:
         """Refresh the Codex CLI auth file's tokens."""
         from usage_limits.config import settings as _cfg
@@ -171,6 +230,28 @@ class CodexProvider(ProviderAccount):
         if result["new_refresh_token"] is not None:
             tokens["refresh_token"] = result["new_refresh_token"]
         auth_path.write_text(json.dumps(data))
+        self._save_store_credentials(
+            result["access_token"], tokens["refresh_token"], result["expires_at"]
+        )
+
+        return result["access_token"]
+
+    def _refresh_cockpit_account(self) -> str:
+        """Refresh the cockpit-tools managed account and sync the local store."""
+        cockpit_account = self._cockpit_account_for_email(self.account_id)
+        assert cockpit_account is not None, f"Codex cockpit account {self.account_id!r} not found"
+        path, account = cockpit_account
+        tokens = account["tokens"]
+
+        result = self._make_flow().refresh(tokens["refresh_token"])
+
+        tokens["access_token"] = result["access_token"]
+        if result["new_refresh_token"] is not None:
+            tokens["refresh_token"] = result["new_refresh_token"]
+        path.write_text(json.dumps(account, indent=2))
+        self._save_store_credentials(
+            result["access_token"], tokens["refresh_token"], result["expires_at"]
+        )
 
         return result["access_token"]
 
@@ -207,6 +288,8 @@ class CodexProvider(ProviderAccount):
         if resp.status_code == 401:
             if self._codex_auth_matches_account():
                 new_token = self._refresh_codex_auth()
+            elif self._cockpit_account_for_email(self.account_id) is not None:
+                new_token = self._refresh_cockpit_account()
             else:
                 new_token = self._refresh_store()
 
@@ -305,6 +388,9 @@ class CodexProvider(ProviderAccount):
         for email in accounts:
             path = store._credential_path("codex", email)
             account_priority[email] = path.stat().st_mtime
+
+        for path, account in cls._cockpit_accounts():
+            account_priority[account["email"]] = path.stat().st_mtime
 
         from usage_limits.config import settings as _cfg
 

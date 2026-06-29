@@ -127,6 +127,12 @@ def test_codex_cli_auth_refresh_persists_rotated_token(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """CLI auth refreshes on 401 and saves the rotated refresh token."""
+    monkeypatch.setattr(
+        CredentialStore,
+        "__init__",
+        lambda self, root_dir=None: setattr(self, "root_dir", tmp_path / "credentials"),
+    )
+
     # Override the auth file path to a temp file
     auth_file = tmp_path / "auth.json"
     monkeypatch.setattr(settings.paths, "codex_auth", str(auth_file))
@@ -182,6 +188,10 @@ def test_codex_cli_auth_refresh_persists_rotated_token(
         saved = json.loads(auth_file.read_text())
         assert saved["tokens"]["access_token"] == "new_access"
         assert saved["tokens"]["refresh_token"] == "new_refresh"
+
+        saved_store = CredentialStore().get("codex", "cli@example.com")
+        assert saved_store["access_token"] == "new_access"
+        assert saved_store["refresh_token"] == "new_refresh"
 
 
 def test_codex_store_refresh_persists_rotated_token(
@@ -290,10 +300,115 @@ def test_codex_matching_cli_auth_supersedes_stale_store_account(
     assert credentials["refresh_token"] == "cli_refresh"
 
 
+def test_codex_cockpit_account_revalidates_stale_store_account(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Cockpit-managed Codex credentials revalidate stale migrated store credentials."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(
+        CredentialStore,
+        "__init__",
+        lambda self, root_dir=None: setattr(self, "root_dir", tmp_path / "credentials"),
+    )
+
+    store = CredentialStore()
+    store.save(
+        "codex",
+        "zack@ncts.ntu.edu.tw",
+        {
+            "access_token": "stale_store_access",
+            "refresh_token": "stale_store_refresh",
+            "expires_at": "2026-06-18T12:00:00Z",
+            "email": "zack@ncts.ntu.edu.tw",
+            "extra": {},
+        },
+    )
+
+    cockpit_dir = tmp_path / ".antigravity_cockpit" / "codex_accounts"
+    cockpit_dir.mkdir(parents=True)
+    cockpit_file = cockpit_dir / "codex_account.json"
+    cockpit_file.write_text(
+        json.dumps(
+            {
+                "email": "zack@ncts.ntu.edu.tw",
+                "account_id": "fcff327a-1ab3-426f-b024-bf7fd73bf03d",
+                "auth_mode": "oauth",
+                "token_source_mode": "managed",
+                "tokens": {
+                    "access_token": "cockpit_access",
+                    "refresh_token": "cockpit_refresh",
+                    "id_token": _id_token_for_email("zack@ncts.ntu.edu.tw"),
+                },
+            }
+        )
+    )
+
+    auth_file = tmp_path / ".codex" / "auth.json"
+    monkeypatch.setattr(settings.paths, "codex_auth", str(auth_file))
+
+    provider = CodexProvider(account_id="zack@ncts.ntu.edu.tw")
+
+    with responses.RequestsMock() as rsps:
+        rsps.add(
+            responses.GET,
+            settings.codex.api_url,
+            status=401,
+            match=[responses.matchers.header_matcher({"Authorization": "Bearer cockpit_access"})],
+        )
+        rsps.add(
+            responses.POST,
+            "https://auth.openai.com/oauth/token",
+            json={
+                "access_token": "cockpit_new_access",
+                "refresh_token": "cockpit_new_refresh",
+                "expires_in": 3600,
+            },
+            status=200,
+            match=[
+                responses.matchers.urlencoded_params_matcher(
+                    {
+                        "grant_type": "refresh_token",
+                        "refresh_token": "cockpit_refresh",
+                        "client_id": "app_EMoamEEZ73f0CkXaXp7hrann",
+                    }
+                )
+            ],
+        )
+        rsps.add(
+            responses.GET,
+            settings.codex.api_url,
+            json={
+                "rate_limit": {
+                    "primary_window": {"used_percent": 25.0, "reset_at": None},
+                    "secondary_window": None,
+                }
+            },
+            status=200,
+            match=[
+                responses.matchers.header_matcher(
+                    {"Authorization": "Bearer cockpit_new_access"}
+                )
+            ],
+        )
+
+        raw = provider.fetch_raw()
+
+    assert raw["rate_limit"]["primary_window"]["used_percent"] == 25.0
+
+    saved_cockpit = json.loads(cockpit_file.read_text())
+    assert saved_cockpit["tokens"]["access_token"] == "cockpit_new_access"
+    assert saved_cockpit["tokens"]["refresh_token"] == "cockpit_new_refresh"
+
+    saved_store = store.get("codex", "zack@ncts.ntu.edu.tw")
+    assert saved_store["access_token"] == "cockpit_new_access"
+    assert saved_store["refresh_token"] == "cockpit_new_refresh"
+
+
 def test_codex_resolve_accounts_prefers_recent_login(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Recent auth context should be selected before older store entries."""
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(
         CredentialStore,
         "__init__",
@@ -357,6 +472,7 @@ def test_codex_resolve_accounts_uses_cli_auth_email_without_store(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """With only Codex CLI auth on disk, usage-limits resolves the token email."""
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(
         CredentialStore,
         "__init__",
@@ -381,3 +497,41 @@ def test_codex_resolve_accounts_uses_cli_auth_email_without_store(
 
     accounts = CodexProvider.resolve_accounts()
     assert [acct.account_id for acct in accounts] == ["alpha@example.com"]
+
+
+def test_codex_resolve_accounts_includes_cockpit_accounts(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Cockpit-managed Codex accounts are first-class provider accounts."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(
+        CredentialStore,
+        "__init__",
+        lambda self, root_dir=None: setattr(self, "root_dir", tmp_path / "credentials"),
+    )
+    _ = CredentialStore()
+
+    auth_file = tmp_path / ".codex" / "auth.json"
+    monkeypatch.setattr(settings.paths, "codex_auth", str(auth_file))
+
+    cockpit_dir = tmp_path / ".antigravity_cockpit" / "codex_accounts"
+    cockpit_dir.mkdir(parents=True)
+    cockpit_file = cockpit_dir / "codex_account.json"
+    cockpit_file.write_text(
+        json.dumps(
+            {
+                "email": "cockpit@example.com",
+                "account_id": "fcff327a-1ab3-426f-b024-bf7fd73bf03d",
+                "auth_mode": "oauth",
+                "token_source_mode": "managed",
+                "tokens": {
+                    "access_token": "cockpit_access",
+                    "refresh_token": "cockpit_refresh",
+                    "id_token": _id_token_for_email("cockpit@example.com"),
+                },
+            }
+        )
+    )
+
+    accounts = CodexProvider.resolve_accounts()
+    assert [acct.account_id for acct in accounts] == ["cockpit@example.com"]
