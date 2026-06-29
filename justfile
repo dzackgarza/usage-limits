@@ -12,6 +12,9 @@ setup:
 # Run the full check suite
 check: lint typecheck test
 
+# Run the full CI check suite
+test-ci: check
+
 # Format and auto-fix
 fmt:
     uv run ruff format .
