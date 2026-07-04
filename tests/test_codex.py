@@ -150,6 +150,142 @@ def test_codex_to_rows_includes_additional_spark_bucket() -> None:
     assert rows[3].pct_used == 5
 
 
+def test_codex_should_anchor_zero_codex_5h_with_weekly_capacity() -> None:
+    """Codex warmup fires only when the matching 5h bucket is empty and 7d is open."""
+    provider = CodexProvider(account_id="test@example.com")
+    raw = {
+        "rate_limit": {
+            "primary_window": {
+                "used_percent": 0.0,
+                "reset_at": None,
+            },
+            "secondary_window": {
+                "used_percent": 65.0,
+                "reset_at": 1718798765,
+            },
+        }
+    }
+    rows = provider.to_rows(raw)
+
+    assert provider.should_anchor(rows) is True
+
+
+def test_codex_should_not_anchor_nonzero_5h_bucket() -> None:
+    """Codex warmup does not fire once the 5h bucket has any visible usage."""
+    provider = CodexProvider(account_id="test@example.com")
+    raw = {
+        "rate_limit": {
+            "primary_window": {
+                "used_percent": 1.0,
+                "reset_at": None,
+            },
+            "secondary_window": {
+                "used_percent": 65.0,
+                "reset_at": 1718798765,
+            },
+        }
+    }
+    rows = provider.to_rows(raw)
+
+    assert provider.should_anchor(rows) is False
+
+
+def test_codex_should_not_anchor_when_matching_weekly_bucket_exhausted() -> None:
+    """Codex warmup does not fire when the matching 7d bucket is exhausted."""
+    provider = CodexProvider(account_id="test@example.com")
+    raw = {
+        "rate_limit": {
+            "primary_window": {
+                "used_percent": 0.0,
+                "reset_at": None,
+            },
+            "secondary_window": {
+                "used_percent": 100.0,
+                "reset_at": 1718798765,
+            },
+        }
+    }
+    rows = provider.to_rows(raw)
+
+    assert provider.should_anchor(rows) is False
+
+
+def test_codex_should_anchor_zero_spark_5h_with_weekly_capacity() -> None:
+    """Codex Spark 5h buckets use the same warmup rule as the main Codex bucket."""
+    provider = CodexProvider(account_id="test@example.com")
+    raw = {
+        "rate_limit": {
+            "primary_window": {
+                "used_percent": 25.0,
+                "reset_at": 1718712345,
+            },
+            "secondary_window": {
+                "used_percent": 100.0,
+                "reset_at": 1718798765,
+            },
+        },
+        "additional_rate_limits": [
+            {
+                "limit_name": "GPT-5.3-Codex-Spark",
+                "metered_feature": "codex_bengalfox",
+                "rate_limit": {
+                    "primary_window": {
+                        "used_percent": 0.0,
+                        "reset_at": None,
+                        "limit_window_seconds": 18000,
+                    },
+                    "secondary_window": {
+                        "used_percent": 5.0,
+                        "reset_at": 1718798765,
+                        "limit_window_seconds": 604800,
+                    },
+                },
+            }
+        ],
+    }
+    rows = provider.to_rows(raw)
+
+    assert provider.should_anchor(rows) is True
+
+
+def test_codex_should_not_anchor_zero_spark_non_5h_bucket() -> None:
+    """Only 5h rows trigger warmup; other Spark windows do not."""
+    provider = CodexProvider(account_id="test@example.com")
+    raw = {
+        "rate_limit": {
+            "primary_window": {
+                "used_percent": 25.0,
+                "reset_at": 1718712345,
+            },
+            "secondary_window": {
+                "used_percent": 65.0,
+                "reset_at": 1718798765,
+            },
+        },
+        "additional_rate_limits": [
+            {
+                "limit_name": "GPT-5.3-Codex-Spark",
+                "metered_feature": "codex_bengalfox",
+                "rate_limit": {
+                    "primary_window": {
+                        "used_percent": 0.0,
+                        "reset_at": None,
+                        "limit_window_seconds": 432000,
+                    },
+                    "secondary_window": {
+                        "used_percent": 5.0,
+                        "reset_at": 1718798765,
+                        "limit_window_seconds": 604800,
+                    },
+                },
+            }
+        ],
+    }
+    rows = provider.to_rows(raw)
+
+    assert provider.should_anchor(rows) is False
+
+
 def test_codex_cli_auth_refresh_persists_rotated_token(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

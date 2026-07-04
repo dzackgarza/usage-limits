@@ -16,6 +16,9 @@ from __future__ import annotations
 
 import base64
 import json
+import os
+import subprocess
+import tempfile
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, NotRequired, TypedDict, cast
@@ -352,9 +355,18 @@ class CodexProvider(ProviderAccount):
         return rows
 
     def should_anchor(self, rows: list[UsageRow]) -> bool:
-        if any(r.is_exhausted for r in rows):
-            return False
-        return any(r.reset_at is None for r in rows)
+        weekly_rows = {
+            row.identifier.removesuffix(" (7d)"): row
+            for row in rows
+            if row.identifier.endswith(" (7d)")
+        }
+        for row in rows:
+            if row.pct_used != 0 or not row.identifier.endswith(" (5h)"):
+                continue
+            bucket = row.identifier.removesuffix(" (5h)")
+            if bucket in weekly_rows and not weekly_rows[bucket].is_exhausted:
+                return True
+        return False
 
     def notify_always(self, rows: list[UsageRow]) -> None:
         if self.should_anchor(rows):
@@ -365,7 +377,45 @@ class CodexProvider(ProviderAccount):
             )
 
     def anchor_command(self) -> list[str]:
-        return ["codex", "exec", "-c", "project_doc_max_bytes=0", "Say hello and do nothing else"]
+        return [
+            "codex",
+            "exec",
+            "--ephemeral",
+            "--skip-git-repo-check",
+            "--ignore-rules",
+            "--sandbox",
+            "read-only",
+            "-c",
+            "project_doc_max_bytes=0",
+            "Reply exactly: ok",
+        ]
+
+    def _anchor_window(self, command: list[str]) -> bool:
+        creds = self.get_credentials()
+        env = os.environ.copy()
+        with tempfile.TemporaryDirectory() as codex_home:
+            env["CODEX_HOME"] = codex_home
+            login = subprocess.run(
+                ["codex", "login", "--with-access-token"],
+                input=f"{creds['access_token']}\n",
+                cwd=codex_home,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if login.returncode != 0:
+                return False
+
+            result = subprocess.run(
+                command,
+                cwd=codex_home,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            return result.returncode == 0
 
     @classmethod
     def resolve_accounts(cls) -> Sequence[CodexProvider]:
