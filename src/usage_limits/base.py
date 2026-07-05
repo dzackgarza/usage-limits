@@ -349,7 +349,7 @@ class UsageProvider(ABC):
         2. Live fetch — persists GOOD data on success, error on failure
         3. Propagate exception — when live fetch fails
         """
-        if not force:
+        if not force and self.cache_ttl_seconds > 0:
             cached = self._read_cache()
             if cached is not None:
                 return cached

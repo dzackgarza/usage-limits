@@ -18,6 +18,7 @@ import responses
 from usage_limits.auth.store import CredentialStore
 from usage_limits.config import settings
 from usage_limits.providers.codex import CodexProvider
+from usage_limits.registry import collect_all
 
 
 def _id_token_for_email(email: str) -> str:
@@ -32,6 +33,18 @@ def _id_token_for_email(email: str) -> str:
             "signature",
         ]
     )
+
+
+def test_codex_live_collection_returns_usage_rows_for_configured_accounts() -> None:
+    """Live Codex accounts must return usage rows, not JSON decode error snapshots."""
+    collection = collect_all(providers=["codex"])
+    snapshots = {snapshot.account: snapshot for snapshot in collection.providers}
+
+    assert set(snapshots) == {"dzackgarza@gmail.com", "zack@ncts.ntu.edu.tw"}
+    for snapshot in snapshots.values():
+        assert snapshot.status == "ok"
+        assert snapshot.errors == []
+        assert {row.identifier for row in snapshot.rows} >= {"Codex (5h)", "Codex (7d)"}
 
 
 def test_codex_to_rows_parses_wham_windows() -> None:
