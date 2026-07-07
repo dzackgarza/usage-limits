@@ -41,16 +41,10 @@ def test_codex_live_collection_returns_usage_rows_for_configured_accounts() -> N
     snapshots = {snapshot.account: snapshot for snapshot in collection.providers}
 
     assert set(snapshots) == {"dzackgarza@gmail.com", "zack@ncts.ntu.edu.tw"}
-    for email, snapshot in snapshots.items():
-        store = CredentialStore()
-        cred = store.get("codex", email)
-        if cred.get("requires_reauth") is True:
-            assert snapshot.status == "error"
-            assert any(err.type == "oauthreauthrequirederror" for err in snapshot.errors)
-        else:
-            assert snapshot.status == "ok"
-            assert snapshot.errors == []
-            assert {row.identifier for row in snapshot.rows} >= {"Codex (5h)", "Codex (7d)"}
+    for snapshot in snapshots.values():
+        assert snapshot.status == "ok"
+        assert snapshot.errors == []
+        assert {row.identifier for row in snapshot.rows} >= {"Codex (5h)", "Codex (7d)"}
 
 
 def test_codex_to_rows_parses_wham_windows() -> None:
