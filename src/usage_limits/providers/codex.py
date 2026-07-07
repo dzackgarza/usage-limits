@@ -139,8 +139,7 @@ class CodexProvider(ProviderAccount):
                 status_code=cred["reauth_status_code"],
                 error_code=cred["reauth_error_code"],
                 error_message=(
-                    f"Codex account {self.account_id} requires "
-                    "`usage-limits login codex`."
+                    f"Codex account {self.account_id} requires `usage-limits login codex`."
                 ),
             )
 
@@ -344,10 +343,7 @@ class CodexProvider(ProviderAccount):
                     secondary_window = cast(WhamWindowWithWindowSeconds, additional_secondary)
                     rows.append(
                         UsageRow(
-                            identifier=(
-                                f"{limit_label} "
-                                f"({_window_label(secondary_window, '7d')})"
-                            ),
+                            identifier=(f"{limit_label} ({_window_label(secondary_window, '7d')})"),
                             pct_used=round(additional_secondary["used_percent"]),
                             reset_at=_ts_to_dt(additional_secondary["reset_at"]),
                         )

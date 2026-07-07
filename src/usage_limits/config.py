@@ -123,6 +123,11 @@ class TraeSettings(BaseModel):
     }
 
 
+class FreebuffSettings(BaseModel):
+    api_url: str = "https://www.codebuff.com/api/v1/freebuff/session"
+    usage_url: str = "https://www.codebuff.com/api/v1/usage"
+
+
 class PathsSettings(BaseModel):
     """Credential file and directory paths.
 
@@ -137,6 +142,7 @@ class PathsSettings(BaseModel):
     kiro_db: str = "~/.local/share/kiro-cli/data.sqlite3"
     trae_storage: str = "~/.config/Trae/User/globalStorage/storage.json"
     openrouter_state_file: str = "~/.local/state/openrouter_usage/traces.json"
+    freebuff_credentials: str = "~/.config/manicode/credentials.json"
 
 
 # ---------------------------------------------------------------------------
@@ -160,6 +166,7 @@ class Settings(BaseModel):
     opencode: OpenCodeSettings = OpenCodeSettings()
     openrouter: OpenRouterSettings = OpenRouterSettings()
     trae: TraeSettings = TraeSettings()
+    freebuff: FreebuffSettings = FreebuffSettings()
 
 
 # ---------------------------------------------------------------------------

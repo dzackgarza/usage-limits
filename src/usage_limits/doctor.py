@@ -259,4 +259,14 @@ def doctor() -> list[Result]:
     status = "ok" if all(c.status == "ok" for c in checks) else "error"
     results.append(Result(component="trae", status=status, checks=checks))
 
+    # ---- Freebuff ----
+    checks = [
+        _check_standalone_file(
+            resolve_path(settings.paths.freebuff_credentials),
+            "Freebuff credentials",
+        ),
+    ]
+    status = "ok" if all(c.status == "ok" for c in checks) else "error"
+    results.append(Result(component="freebuff", status=status, checks=checks))
+
     return results

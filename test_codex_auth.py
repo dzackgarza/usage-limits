@@ -29,6 +29,7 @@ flow = LocalhostBrowserFlow(
     },
 )
 
+
 class CaptureStderr:
     def write(self, s):
         if "http" in s:

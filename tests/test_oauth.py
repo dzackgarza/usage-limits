@@ -73,7 +73,6 @@ def test_refresh_success_rotating() -> None:
         assert result["new_refresh_token"] == "new_refresh_123"
 
 
-
 def test_refresh_missing_keys_raises_keyerror() -> None:
     flow = LocalhostBrowserFlow(
         client_id="test_client",
@@ -353,4 +352,3 @@ def test_codex_authorize_url_resolves_correctly_on_live_openai() -> None:
     assert "error" not in resp.url
     assert "authorize_hydra_invalid_request" not in resp.text
     assert resp.status_code == 200
-

@@ -1,0 +1,14 @@
+{
+  "status": "none",
+  "accessTier": "limited",
+  "message": "Call POST to start a free session.",
+  "referral": {
+    "code": "ref-72e6755e-514c-47a3-8234-b0c2d9799a86",
+    "referrerName": "D. Zack Garza",
+    "githubLinked": false,
+    "qualifiedCount": 0
+  },
+  "countryCode": "TW",
+  "countryBlockReason": "country_not_allowed",
+  "ipPrivacySignals": null
+}

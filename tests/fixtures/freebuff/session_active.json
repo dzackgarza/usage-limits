@@ -1,0 +1,41 @@
+{
+  "status": "active",
+  "accessTier": "limited",
+  "instanceId": "97f3edf7-06eb-4e91-86a1-b92df5f78fc9",
+  "model": "mimo/mimo-v2.5",
+  "admittedAt": "2026-07-07T09:11:23.977Z",
+  "expiresAt": "2026-07-07T10:11:23.977Z",
+  "remainingMs": 3312343,
+  "countryCode": "TW",
+  "countryBlockReason": "country_not_allowed",
+  "ipPrivacySignals": null,
+  "rateLimit": {
+    "model": "mimo/mimo-v2.5",
+    "limit": 5,
+    "period": "pacific_day",
+    "resetTimeZone": "America/Los_Angeles",
+    "resetAt": "2026-07-08T07:00:00.000Z",
+    "windowHours": 24,
+    "recentCount": 1
+  },
+  "rateLimitsByModel": {
+    "deepseek/deepseek-v4-flash": {
+      "model": "deepseek/deepseek-v4-flash",
+      "limit": 5,
+      "period": "pacific_day",
+      "resetTimeZone": "America/Los_Angeles",
+      "resetAt": "2026-07-08T07:00:00.000Z",
+      "windowHours": 24,
+      "recentCount": 1
+    },
+    "mimo/mimo-v2.5": {
+      "model": "mimo/mimo-v2.5",
+      "limit": 5,
+      "period": "pacific_day",
+      "resetTimeZone": "America/Los_Angeles",
+      "resetAt": "2026-07-08T07:00:00.000Z",
+      "windowHours": 24,
+      "recentCount": 1
+    }
+  }
+}

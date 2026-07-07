@@ -22,6 +22,7 @@ from usage_limits.providers import (
     CopilotProvider,
     CursorProvider,
     DeepseekProvider,
+    FreebuffProvider,
     KiroProvider,
     OllamaProvider,
     OpenCodeGoProvider,
@@ -52,6 +53,7 @@ FIRST_PARTY_PROVIDER_CLASSES: tuple[type[UsageProvider], ...] = (
     OpenCodeZenProvider,
     OpenRouterProvider,
     TraeProvider,
+    FreebuffProvider,
 )
 
 FIRST_PARTY_PROVIDERS: dict[str, type[UsageProvider]] = {

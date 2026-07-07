@@ -1,0 +1,17 @@
+{
+  "type": "usage-response",
+  "usage": 0,
+  "remainingBalance": 0,
+  "balanceBreakdown": {
+    "free": 0,
+    "referral": 0,
+    "referral_legacy": 0,
+    "subscription": 0,
+    "purchase": 0,
+    "admin": 0,
+    "organization": 0,
+    "ad": 0
+  },
+  "next_quota_reset": "2026-08-06T17:01:14.555Z",
+  "autoTopupEnabled": false
+}
