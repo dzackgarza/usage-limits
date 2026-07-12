@@ -85,7 +85,9 @@ def test_codex_to_rows_handles_missing_secondary_window() -> None:
 
 
 def test_codex_to_rows_parses_wham_windows_prolite() -> None:
-    """to_rows produces a single 7d row for prolite standard model when secondary window is missing."""
+    """to_rows produces a single 7d row for prolite standard model
+    when secondary window is missing.
+    """
     provider = CodexProvider(account_id="test@example.com")
     raw = {
         "rate_limit": {
