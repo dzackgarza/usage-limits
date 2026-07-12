@@ -137,7 +137,6 @@ class PathsSettings(BaseModel):
 
     credentials_dir: str = "~/.config/usage-limits/credentials"
     claude_credentials: str = "~/.claude/.credentials.json"
-    codex_auth: str = "~/.codex/auth.json"
     cursor_state_db: str = "~/.config/Cursor/User/globalStorage/state.vscdb"
     kiro_db: str = "~/.local/share/kiro-cli/data.sqlite3"
     trae_storage: str = "~/.config/Trae/User/globalStorage/storage.json"

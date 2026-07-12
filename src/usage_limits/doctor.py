@@ -144,13 +144,7 @@ def doctor() -> list[Result]:
 
     # ---- Codex ----
     checks = _check_store_provider(store, "codex")
-    checks.append(
-        _check_standalone_file(
-            resolve_path(settings.paths.codex_auth),
-            "Codex CLI auth (fallback)",
-        )
-    )
-    status = "ok" if any(c.status == "ok" for c in checks) else "error"
+    status = "ok" if all(c.status == "ok" for c in checks) else "error"
     results.append(Result(component="codex", status=status, checks=checks))
 
     # ---- Kiro ----

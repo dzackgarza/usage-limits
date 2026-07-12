@@ -1,21 +1,12 @@
 """Provider for Codex usage metrics.
 
-Reads OAuth tokens from the credential store and the Codex CLI auth file.
-
-========================= ===========================================
-File                      Role
-========================= ===========================================
-``credentials/codex/``    CredentialStore backend directory.
-                          Contains OAuth tokens.
-``~/.codex/auth.json``    Codex CLI auth file. Identified by the email
-                          claim in its ID token.
-========================= ===========================================
+Reads OAuth tokens exclusively from the app-owned CredentialStore.
+This provider is fully independent of the Codex CLI and its auth file
+(``~/.codex/auth.json``). It works even if Codex CLI is not installed.
 """
 
 from __future__ import annotations
 
-import base64
-import json
 import os
 import subprocess
 import tempfile
@@ -30,7 +21,6 @@ if TYPE_CHECKING:
 import requests
 
 from usage_limits.base import ProviderAccount
-from usage_limits.config import resolve_path
 from usage_limits.table import UsageRow
 
 
@@ -38,18 +28,6 @@ class CodexTokens(TypedDict):
     access_token: str
     refresh_token: str
     id_token: str
-
-
-class CodexCliTokens(CodexTokens):
-    account_id: str
-
-
-class CodexAuthFile(TypedDict):
-    tokens: CodexCliTokens
-
-
-class CodexIdTokenPayload(TypedDict):
-    email: str
 
 
 class WhamWindow(TypedDict):
@@ -95,38 +73,23 @@ class CodexProvider(ProviderAccount):
         return "Codex"
 
     def get_credentials(self) -> CodexTokens:
-        """Read the OAuth token dict for this account.
-
-        If the standard Codex CLI auth file identifies this account's
-        email, it is the freshest credential source for that account.
-        Otherwise reads from the CredentialStore.
-        """
+        """Read the OAuth token dict for this account from CredentialStore."""
         from usage_limits.auth.store import CredentialStore
 
         store = CredentialStore()
-        try:
-            cred = store.get("codex", self.account_id)
-            self._raise_if_reauth_required(cred)
-        except FileNotFoundError:
-            cred = None
+        cred = store.get("codex", self.account_id)
+        self._raise_if_reauth_required(cred)
 
-        if self._codex_auth_matches_account():
-            return self._read_codex_auth()["tokens"]
-
-        if cred is not None:
-            refresh_token = cred["refresh_token"]
-            assert refresh_token is not None, (
-                f"No refresh token for codex account {self.account_id}"
-            )
-            return cast(
-                CodexTokens,
-                {
-                    "access_token": cred["access_token"],
-                    "refresh_token": refresh_token,
-                    "id_token": "",
-                },
-            )
-        raise KeyError(f"Codex account {self.account_id!r} not found in CredentialStore")
+        refresh_token = cred["refresh_token"]
+        assert refresh_token is not None, f"No refresh token for codex account {self.account_id}"
+        return cast(
+            CodexTokens,
+            {
+                "access_token": cred["access_token"],
+                "refresh_token": refresh_token,
+                "id_token": cred.get("extra", {}).get("id_token", ""),
+            },
+        )
 
     def _raise_if_reauth_required(self, cred: StoredCredential) -> None:
         if "requires_reauth" in cred:
@@ -153,38 +116,6 @@ class CodexProvider(ProviderAccount):
             auth_url="https://auth.openai.com/oauth/authorize",
             token_url="https://auth.openai.com/oauth/token",
         )
-
-    @staticmethod
-    def _email_from_id_token(id_token: str) -> str:
-        parts = id_token.split(".")
-        assert len(parts) == 3, f"Codex ID token must be a JWT; found {len(parts)} parts"
-        payload_segment = parts[1] + "=" * ((4 - len(parts[1]) % 4) % 4)
-        payload = cast(
-            CodexIdTokenPayload,
-            json.loads(base64.urlsafe_b64decode(payload_segment)),
-        )
-        email = payload["email"]
-        assert email, "Codex ID token email claim must be non-empty"
-        return email
-
-    @classmethod
-    def _read_codex_auth(cls) -> CodexAuthFile:
-        from usage_limits.config import settings as _cfg
-
-        auth_path = resolve_path(_cfg.paths.codex_auth)
-        return cast(CodexAuthFile, json.loads(auth_path.read_text()))
-
-    @classmethod
-    def _codex_auth_email(cls) -> str:
-        return cls._email_from_id_token(cls._read_codex_auth()["tokens"]["id_token"])
-
-    def _codex_auth_matches_account(self) -> bool:
-        from usage_limits.config import settings as _cfg
-
-        auth_path = resolve_path(_cfg.paths.codex_auth)
-        if not auth_path.exists():
-            return False
-        return self._codex_auth_email() == self.account_id
 
     def _save_store_credentials(
         self, access_token: str, refresh_token: str, expires_at: str | None
@@ -213,41 +144,6 @@ class CodexProvider(ProviderAccount):
         cred["reauth_status_code"] = error.status_code
         cred["reauth_at"] = datetime.now(UTC).isoformat()
         store.save("codex", self.account_id, cred)
-
-    def _refresh_codex_auth(self) -> str:
-        """Refresh the Codex CLI auth file's tokens."""
-        from usage_limits.auth.oauth import OAuthReauthRequiredError
-        from usage_limits.auth.store import CredentialStore, StoredCredential
-        from usage_limits.config import settings as _cfg
-
-        auth_path = resolve_path(_cfg.paths.codex_auth)
-        data = self._read_codex_auth()
-        tokens = data["tokens"]
-
-        try:
-            result = self._make_flow().refresh(tokens["refresh_token"])
-        except OAuthReauthRequiredError as error:
-            cred = cast(
-                StoredCredential,
-                {
-                    "access_token": tokens["access_token"],
-                    "refresh_token": tokens["refresh_token"],
-                    "expires_at": None,
-                    "email": self.account_id,
-                },
-            )
-            self._mark_reauth_required(CredentialStore(), cred, error)
-            raise
-
-        tokens["access_token"] = result["access_token"]
-        if result["new_refresh_token"] is not None:
-            tokens["refresh_token"] = result["new_refresh_token"]
-        auth_path.write_text(json.dumps(data))
-        self._save_store_credentials(
-            result["access_token"], tokens["refresh_token"], result["expires_at"]
-        )
-
-        return result["access_token"]
 
     def _refresh_store(self) -> str:
         """Refresh a CredentialStore account's tokens."""
@@ -286,10 +182,7 @@ class CodexProvider(ProviderAccount):
         )
 
         if resp.status_code == 401:
-            if self._codex_auth_matches_account():
-                new_token = self._refresh_codex_auth()
-            else:
-                new_token = self._refresh_store()
+            new_token = self._refresh_store()
 
             resp = requests.get(
                 _cfg.codex.api_url,
@@ -415,16 +308,14 @@ class CodexProvider(ProviderAccount):
 
     @classmethod
     def resolve_accounts(cls) -> Sequence[CodexProvider]:
-        """Return one ``CodexProvider`` per resolved Codex credential.
-
-        Resolution prefers the most recently used credential source:
-        - Active CLI-auth email first (if present and freshest).
-        - Other stored accounts by credential file mtime descending.
-        """
+        """Return one ``CodexProvider`` per stored Codex credential, sorted by mtime."""
         from usage_limits.auth.store import CredentialStore
 
         store = CredentialStore()
         accounts = store.list_accounts("codex")
+
+        if not accounts:
+            return []
 
         account_priority: dict[str, tuple[int, float]] = {}
         for email in accounts:
@@ -432,17 +323,6 @@ class CodexProvider(ProviderAccount):
             cred = store.get("codex", email)
             reauth_rank = 1 if "requires_reauth" in cred else 0
             account_priority[email] = (reauth_rank, path.stat().st_mtime)
-
-        from usage_limits.config import settings as _cfg
-
-        auth_path = resolve_path(_cfg.paths.codex_auth)
-        if auth_path.exists():
-            auth_email = cls._codex_auth_email()
-            if auth_email not in account_priority or account_priority[auth_email][0] == 0:
-                account_priority[auth_email] = (0, auth_path.stat().st_mtime)
-
-        if not account_priority:
-            return []
 
         sorted_accounts = sorted(
             account_priority,
