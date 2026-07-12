@@ -28,7 +28,8 @@ def test_codex_live_collection_returns_usage_rows_for_configured_accounts() -> N
     for _account, snapshot in snapshots.items():
         if snapshot.status == "ok":
             assert snapshot.errors == []
-            assert {row.identifier for row in snapshot.rows} >= {"Codex (5h)", "Codex (7d)"}
+            identifiers = {row.identifier for row in snapshot.rows}
+            assert any(i in identifiers for i in ["Codex (5h)", "Codex (7d)"])
         else:
             # An invalidated refresh token must surface as an honest error,
             # not fabricated zero-usage rows.
@@ -81,6 +82,26 @@ def test_codex_to_rows_handles_missing_secondary_window() -> None:
     assert rows[0].identifier == "Codex (5h)"
     assert rows[0].pct_used == 30
     assert rows[0].reset_at is None
+
+
+def test_codex_to_rows_parses_wham_windows_prolite() -> None:
+    """to_rows produces a single 7d row for prolite standard model when secondary window is missing."""
+    provider = CodexProvider(account_id="test@example.com")
+    raw = {
+        "rate_limit": {
+            "primary_window": {
+                "used_percent": 2.0,
+                "reset_at": 1784488523,
+                "limit_window_seconds": 604800,
+            },
+            "secondary_window": None,
+        }
+    }
+    rows = provider.to_rows(raw)
+
+    assert len(rows) == 1
+    assert rows[0].identifier == "Codex (7d)"
+    assert rows[0].pct_used == 2
 
 
 def test_codex_to_rows_handles_null_additional_rate_limits() -> None:

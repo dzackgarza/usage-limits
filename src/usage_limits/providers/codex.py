@@ -198,17 +198,19 @@ class CodexProvider(ProviderAccount):
         primary = rate_limit["primary_window"]
         secondary = rate_limit["secondary_window"]
 
+        primary_window = cast(WhamWindowWithWindowSeconds, primary)
         rows: list[UsageRow] = [
             UsageRow(
-                identifier="Codex (5h)",
+                identifier=f"Codex ({_window_label(primary_window, '5h')})",
                 pct_used=round(primary["used_percent"]),
                 reset_at=_ts_to_dt(primary["reset_at"]),
             ),
         ]
         if secondary:
+            secondary_window = cast(WhamWindowWithWindowSeconds, secondary)
             rows.append(
                 UsageRow(
-                    identifier="Codex (7d)",
+                    identifier=f"Codex ({_window_label(secondary_window, '7d')})",
                     pct_used=round(secondary["used_percent"]),
                     reset_at=_ts_to_dt(secondary["reset_at"]),
                 )
