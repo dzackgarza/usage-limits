@@ -64,3 +64,44 @@ def test_get_malformed_raises_keyerror(tmp_path: Path) -> None:
     assert cred["access_token"] == "acc"
     with pytest.raises(KeyError):
         _ = cred["expires_at"]
+
+
+def test_credential_store_lock(tmp_path: Path) -> None:
+    import threading
+    import time
+
+    store = CredentialStore(root_dir=tmp_path)
+
+    # Save a dummy credential first
+    cred: StoredCredential = {
+        "access_token": "acc123",
+        "refresh_token": "ref123",
+        "expires_at": "2026-06-18T12:00:00Z",
+        "email": "test@example.com",
+    }
+    store.save("codex", "test@example.com", cred)
+
+    events = []
+
+    def worker1():
+        with store.lock("codex", "test@example.com"):
+            events.append("worker1_start")
+            time.sleep(0.1)
+            events.append("worker1_end")
+
+    def worker2():
+        # Give worker1 a tiny head start to acquire the lock
+        time.sleep(0.02)
+        with store.lock("codex", "test@example.com"):
+            events.append("worker2_lock")
+
+    t1 = threading.Thread(target=worker1)
+    t2 = threading.Thread(target=worker2)
+
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+
+    # Worker 2 should only acquire the lock AFTER worker 1 has finished and released it
+    assert events == ["worker1_start", "worker1_end", "worker2_lock"]

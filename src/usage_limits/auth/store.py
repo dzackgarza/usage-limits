@@ -1,4 +1,6 @@
 import json
+from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict, cast
 
@@ -23,6 +25,23 @@ class CredentialStore:
             self.root_dir = Path.home() / ".config" / "usage-limits" / "credentials"
         else:
             self.root_dir = root_dir
+
+    @contextmanager
+    def lock(self, provider: str, identifier: str) -> Generator[None, None, None]:
+        """Acquire an exclusive lock on the credential file to serialize refresh calls."""
+        import fcntl
+
+        path = self._credential_path(provider, identifier)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # Ensure the file exists so we can open it
+        path.touch(mode=0o600, exist_ok=True)
+
+        with open(path) as f:
+            try:
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                yield
+            finally:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
     def _provider_dir(self, provider: str) -> Path:
         return self.root_dir / provider

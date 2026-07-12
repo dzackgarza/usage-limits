@@ -145,44 +145,51 @@ class CodexProvider(ProviderAccount):
         cred["reauth_at"] = datetime.now(UTC).isoformat()
         store.save("codex", self.account_id, cred)
 
-    def _refresh_store(self) -> str:
+    def _refresh_store(self, old_access_token: str | None = None) -> str:
         """Refresh a CredentialStore account's tokens."""
         from usage_limits.auth.oauth import OAuthReauthRequiredError
         from usage_limits.auth.store import CredentialStore
 
         store = CredentialStore()
-        cred = store.get("codex", self.account_id)
-        self._raise_if_reauth_required(cred)
+        with store.lock("codex", self.account_id):
+            cred = store.get("codex", self.account_id)
+            self._raise_if_reauth_required(cred)
 
-        refresh_token = cred["refresh_token"]
-        assert refresh_token is not None, f"No refresh token for codex account {self.account_id}"
+            if old_access_token is not None and cred["access_token"] != old_access_token:
+                return cred["access_token"]
 
-        try:
-            result = self._make_flow().refresh(refresh_token)
-        except OAuthReauthRequiredError as error:
-            self._mark_reauth_required(store, cred, error)
-            raise
+            refresh_token = cred["refresh_token"]
+            assert refresh_token is not None, (
+                f"No refresh token for codex account {self.account_id}"
+            )
 
-        cred["access_token"] = result["access_token"]
-        cred["expires_at"] = result["expires_at"]
-        if result["new_refresh_token"] is not None:
-            cred["refresh_token"] = result["new_refresh_token"]
-        store.save("codex", self.account_id, cred)
+            try:
+                result = self._make_flow().refresh(refresh_token)
+            except OAuthReauthRequiredError as error:
+                self._mark_reauth_required(store, cred, error)
+                raise
 
-        return result["access_token"]
+            cred["access_token"] = result["access_token"]
+            cred["expires_at"] = result["expires_at"]
+            if result["new_refresh_token"] is not None:
+                cred["refresh_token"] = result["new_refresh_token"]
+            store.save("codex", self.account_id, cred)
+
+            return cred["access_token"]
 
     def fetch_raw(self) -> WhamUsageResponse:
         from usage_limits.config import settings as _cfg
 
         creds = self.get_credentials()
+        old_token = creds["access_token"]
         resp = requests.get(
             _cfg.codex.api_url,
-            headers={"Authorization": f"Bearer {creds['access_token']}"},
+            headers={"Authorization": f"Bearer {old_token}"},
             timeout=30,
         )
 
         if resp.status_code == 401:
-            new_token = self._refresh_store()
+            new_token = self._refresh_store(old_access_token=old_token)
 
             resp = requests.get(
                 _cfg.codex.api_url,
