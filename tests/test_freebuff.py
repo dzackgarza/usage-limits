@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from usage_limits.providers.freebuff import FreebuffProvider
+from usage_limits.providers.freebuff import FreebuffProvider, FreebuffRawPayload
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "freebuff"
 
@@ -21,7 +21,7 @@ def test_freebuff_to_rows_active() -> None:
     session_raw = json.loads((FIXTURE_DIR / "session_active.json").read_text())
     usage_raw = json.loads((FIXTURE_DIR / "usage.json").read_text())
 
-    raw = {"session": session_raw, "usage": usage_raw}
+    raw: FreebuffRawPayload = {"session": session_raw, "usage": usage_raw}
     rows = provider.to_rows(raw)
 
     assert len(rows) == 2
@@ -49,7 +49,7 @@ def test_freebuff_to_rows_none() -> None:
     session_raw = json.loads((FIXTURE_DIR / "session_none.json").read_text())
     usage_raw = json.loads((FIXTURE_DIR / "usage.json").read_text())
 
-    raw = {"session": session_raw, "usage": usage_raw}
+    raw: FreebuffRawPayload = {"session": session_raw, "usage": usage_raw}
     rows = provider.to_rows(raw)
 
     assert len(rows) == 2

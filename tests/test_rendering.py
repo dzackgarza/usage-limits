@@ -19,7 +19,7 @@ def test_render_provider_snapshot_includes_account_in_title() -> None:
         rows=[
             UsageRow(
                 identifier="Gemini 3.5 Flash (High)",
-                pct_used=40.0,
+                pct_used=40,
                 reset_at=None,
             )
         ],
@@ -41,7 +41,7 @@ def test_render_provider_snapshot_omits_default_account() -> None:
         rows=[
             UsageRow(
                 identifier="Claude (5h)",
-                pct_used=50.0,
+                pct_used=50,
                 reset_at=None,
             )
         ],
@@ -63,7 +63,7 @@ def test_render_provider_snapshot_without_account_shows_no_account() -> None:
         rows=[
             UsageRow(
                 identifier="Test (24h)",
-                pct_used=0.0,
+                pct_used=0,
                 reset_at=None,
             )
         ],

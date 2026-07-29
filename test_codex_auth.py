@@ -31,7 +31,7 @@ flow = LocalhostBrowserFlow(
 
 
 class CaptureStderr:
-    def write(self, s):
+    def write(self, s: str) -> None:
         if "http" in s:
             for line in s.splitlines():
                 if line.startswith("http"):
@@ -43,7 +43,7 @@ class CaptureStderr:
                         print("NO ERROR! Response:", resp.text[:200])
                     os._exit(0)
 
-    def flush(self):
+    def flush(self) -> None:
         pass
 
 

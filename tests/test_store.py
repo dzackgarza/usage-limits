@@ -83,13 +83,13 @@ def test_credential_store_lock(tmp_path: Path) -> None:
 
     events = []
 
-    def worker1():
+    def worker1() -> None:
         with store.lock("codex", "test@example.com"):
             events.append("worker1_start")
             time.sleep(0.1)
             events.append("worker1_end")
 
-    def worker2():
+    def worker2() -> None:
         # Give worker1 a tiny head start to acquire the lock
         time.sleep(0.02)
         with store.lock("codex", "test@example.com"):

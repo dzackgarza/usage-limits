@@ -6,7 +6,7 @@ import os
 
 import pytest
 
-from usage_limits.providers.deepseek import DeepseekProvider
+from usage_limits.providers.deepseek import DeepseekBalance, DeepseekProvider
 
 
 @pytest.fixture
@@ -27,7 +27,7 @@ def test_no_api_key_raises_keyerror(provider: DeepseekProvider) -> None:
 
 def test_to_rows_computes_pct_from_balance_and_max_amount(provider: DeepseekProvider) -> None:
     """With default max_amount=10.0, $8.66 balance → ((10.0 - 8.66)/10) * 100 = 13.4%."""
-    raw = {
+    raw: DeepseekBalance = {
         "is_available": True,
         "balance_infos": [
             {
@@ -49,7 +49,7 @@ def test_to_rows_computes_pct_from_balance_and_max_amount(provider: DeepseekProv
 
 def test_to_rows_zero_balance_is_one_hundred_percent(provider: DeepseekProvider) -> None:
     """Zero balance → ((10 - 0)/10) * 100 = 100% used."""
-    raw = {
+    raw: DeepseekBalance = {
         "is_available": True,
         "balance_infos": [
             {
@@ -67,7 +67,7 @@ def test_to_rows_zero_balance_is_one_hundred_percent(provider: DeepseekProvider)
 
 def test_to_rows_full_balance_is_zero_percent(provider: DeepseekProvider) -> None:
     """Full balance of $10.00 → ((10 - 10)/10) * 100 = 0% used."""
-    raw = {
+    raw: DeepseekBalance = {
         "is_available": True,
         "balance_infos": [
             {
@@ -89,7 +89,7 @@ def test_to_rows_insufficient_balance_still_returns_row(provider: DeepseekProvid
     API returns is_available=false when balance is insufficient for calls,
     but to_rows must still produce a row from the balance data.
     """
-    raw = {
+    raw: DeepseekBalance = {
         "is_available": False,
         "balance_infos": [
             {

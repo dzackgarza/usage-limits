@@ -2,6 +2,7 @@ import contextlib
 import threading
 import time
 import urllib.parse
+from typing import Any
 
 import pytest
 import requests
@@ -37,7 +38,7 @@ def test_refresh_success() -> None:
         # Verify the POST request was correct
         assert len(rsps.calls) == 1
         req = rsps.calls[0].request
-        body = urllib.parse.parse_qs(req.body)
+        body = urllib.parse.parse_qs(str(req.body))
         assert body["grant_type"][0] == "refresh_token"
         assert body["refresh_token"][0] == "old_refresh_123"
         assert body["client_id"][0] == "test_client"
@@ -95,9 +96,9 @@ def test_refresh_missing_keys_raises_keyerror() -> None:
 
 
 class StderrCapture:
-    def __init__(self):
+    def __init__(self) -> None:
         self.output = ""
-        self.auth_url = None
+        self.auth_url: str | None = None
 
     def write(self, s: str) -> None:
         self.output += s
@@ -130,10 +131,10 @@ def test_login_flow_success(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     # We will run the login flow in a thread because it runs a blocking HTTPServer
-    result = {}
+    result: dict[str, Any] = {}
     exc = []
 
-    def run_flow():
+    def run_flow() -> None:
         try:
             result.update(flow.login())
         except Exception as e:
@@ -200,7 +201,7 @@ def test_login_flow_success(monkeypatch: pytest.MonkeyPatch) -> None:
         # Verify the POST request was correct
         assert len(rsps.calls) == 1
         req = rsps.calls[0].request
-        body = urllib.parse.parse_qs(req.body)
+        body = urllib.parse.parse_qs(str(req.body))
         assert body["grant_type"][0] == "authorization_code"
         assert body["code"][0] == "auth_code_123"
         assert body["client_id"][0] == "test_client"
@@ -223,7 +224,7 @@ def test_login_flow_invalid_state(monkeypatch: pytest.MonkeyPatch) -> None:
 
     exc = []
 
-    def run_flow():
+    def run_flow() -> None:
         try:
             flow.login()
         except Exception as e:
@@ -270,7 +271,7 @@ def test_login_flow_can_omit_google_params(monkeypatch: pytest.MonkeyPatch) -> N
         prompt=None,
     )
 
-    def run_flow():
+    def run_flow() -> None:
         with contextlib.suppress(Exception):
             flow.login()
 

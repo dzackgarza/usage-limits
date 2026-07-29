@@ -56,9 +56,7 @@ FIRST_PARTY_PROVIDER_CLASSES: tuple[type[UsageProvider], ...] = (
     FreebuffProvider,
 )
 
-FIRST_PARTY_PROVIDERS: dict[str, type[UsageProvider]] = {
-    provider_class.slug: provider_class for provider_class in FIRST_PARTY_PROVIDER_CLASSES
-}
+FIRST_PARTY_PROVIDERS: dict[str, type[UsageProvider]] = {provider_class.slug: provider_class for provider_class in FIRST_PARTY_PROVIDER_CLASSES}
 
 
 def _load_entry_point_providers() -> dict[str, type[UsageProvider]]:
@@ -146,11 +144,7 @@ def _error_type(error: BaseException) -> str:
 
 
 def _is_rate_limited(error: BaseException) -> bool:
-    return (
-        isinstance(error, requests.HTTPError)
-        and error.response is not None
-        and error.response.status_code == 429
-    )
+    return isinstance(error, requests.HTTPError) and error.response is not None and error.response.status_code == 429
 
 
 def _error_snapshot(
@@ -193,9 +187,7 @@ def _collect_single(
         if issubclass(provider_class, ProviderAccount):
             instances = provider_class.resolve_accounts()
             if not instances:
-                raise RuntimeError(
-                    f"{provider_class.__name__}.resolve_accounts() returned empty list"
-                )
+                raise RuntimeError(f"{provider_class.__name__}.resolve_accounts() returned empty list")
             return instances[0].collect_snapshot(notify=notify, anchor=anchor)
         return provider_class().collect_snapshot(notify=notify, anchor=anchor)
     except BaseException as error:
@@ -256,10 +248,7 @@ def collect_all(
 
     snapshots: list[ProviderSnapshot] = []
     with ThreadPoolExecutor(max_workers=len(instances)) as pool:
-        futures = {
-            pool.submit(_collect_instance, instance, notify=notify, anchor=anchor): instance
-            for instance in instances
-        }
+        futures = {pool.submit(_collect_instance, instance, notify=notify, anchor=anchor): instance for instance in instances}
         for future in as_completed(futures):
             snapshots.append(future.result())
     snapshots.sort(key=lambda s: s.display_name)

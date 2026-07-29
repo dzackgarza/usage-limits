@@ -103,18 +103,15 @@ class OpenCodeGoProvider(ProviderAccount):
     def to_rows(self, raw: OpenCodeRaw) -> list[UsageRow]:
         soup = BeautifulSoup(raw["html"], "html.parser")
 
-        if soup.find(attrs={"data-slot": "subscribe-button"}):
-            raise RuntimeError(
-                "OpenCode Go subscription required. "
-                "Your account does not have an active subscription."
-            )
+        if soup.find(None, attrs={"data-slot": "subscribe-button"}):
+            raise RuntimeError("OpenCode Go subscription required. Your account does not have an active subscription.")
 
         rows: list[UsageRow] = []
 
-        for item in soup.find_all(attrs={"data-slot": "usage-item"}):
-            label_elem = item.find(attrs={"data-slot": "usage-label"})
-            value_elem = item.find(attrs={"data-slot": "usage-value"})
-            reset_elem = item.find(attrs={"data-slot": "reset-time"})
+        for item in soup.find_all(None, attrs={"data-slot": "usage-item"}):
+            label_elem = item.find(None, attrs={"data-slot": "usage-label"})
+            value_elem = item.find(None, attrs={"data-slot": "usage-value"})
+            reset_elem = item.find(None, attrs={"data-slot": "reset-time"})
 
             if not label_elem or not value_elem:
                 continue

@@ -11,6 +11,7 @@ proc = subprocess.Popen(
     stderr=subprocess.PIPE,
     text=True,
 )
+assert proc.stdout is not None
 while True:
     line = proc.stdout.readline()
     if not line:

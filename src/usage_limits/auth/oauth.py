@@ -47,10 +47,7 @@ class OAuthReauthRequiredError(RuntimeError):
         self.status_code = status_code
         self.error_code = error_code
         self.error_message = error_message
-        super().__init__(
-            "OAuth reauthorization required after refresh failed: "
-            f"{status_code} {error_code}: {error_message}"
-        )
+        super().__init__(f"OAuth reauthorization required after refresh failed: {status_code} {error_code}: {error_message}")
 
 
 class OAuthCallbackHandler(BaseHTTPRequestHandler):
@@ -58,6 +55,13 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
     auth_code: str | None = None
     auth_error: str | None = None
     expected_state: str | None = None
+
+    @classmethod
+    def reset(cls, state: str) -> None:
+        """Clear per-login state before serving a new callback."""
+        cls.auth_code = None
+        cls.auth_error = None
+        cls.expected_state = state
 
     def log_message(self, format: str, *args: Any) -> None:
         # Suppress standard HTTP logging to avoid polluting stdout/stderr
@@ -73,33 +77,21 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
 
         if "error" in query:
             OAuthCallbackHandler.auth_error = query["error"][0]
-            self.wfile.write(
-                b"<html><body><h1>Authentication Failed</h1>"
-                b"<p>You can close this window.</p></body></html>"
-            )
+            self.wfile.write(b"<html><body><h1>Authentication Failed</h1><p>You can close this window.</p></body></html>")
             return
 
         if "state" not in query or query["state"][0] != OAuthCallbackHandler.expected_state:
             OAuthCallbackHandler.auth_error = "Invalid state parameter (CSRF mitigation failed)."
-            self.wfile.write(
-                b"<html><body><h1>Authentication Failed</h1>"
-                b"<p>Invalid state. You can close this window.</p></body></html>"
-            )
+            self.wfile.write(b"<html><body><h1>Authentication Failed</h1><p>Invalid state. You can close this window.</p></body></html>")
             return
 
         if "code" in query:
             OAuthCallbackHandler.auth_code = query["code"][0]
-            self.wfile.write(
-                b"<html><body><h1>Authentication Successful</h1>"
-                b"<p>You can close this window and return to the terminal.</p></body></html>"
-            )
+            self.wfile.write(b"<html><body><h1>Authentication Successful</h1><p>You can close this window and return to the terminal.</p></body></html>")
             return
 
         OAuthCallbackHandler.auth_error = "No code or error received."
-        self.wfile.write(
-            b"<html><body><h1>Authentication Failed</h1>"
-            b"<p>No code received. You can close this window.</p></body></html>"
-        )
+        self.wfile.write(b"<html><body><h1>Authentication Failed</h1><p>No code received. You can close this window.</p></body></html>")
 
 
 class LocalhostBrowserFlow:
@@ -140,11 +132,7 @@ class LocalhostBrowserFlow:
 
     def _generate_pkce(self) -> tuple[str, str]:
         code_verifier = secrets.token_urlsafe(96)
-        code_challenge = (
-            base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode("ascii")).digest())
-            .decode("ascii")
-            .rstrip("=")
-        )
+        code_challenge = base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode("ascii")).digest()).decode("ascii").rstrip("=")
         return code_verifier, code_challenge
 
     def _get_email_from_id_token(self, id_token: str) -> str:
@@ -170,9 +158,7 @@ class LocalhostBrowserFlow:
         state = secrets.token_urlsafe(32)
 
         # Reset class state
-        OAuthCallbackHandler.auth_code = None
-        OAuthCallbackHandler.auth_error = None
-        OAuthCallbackHandler.expected_state = state
+        OAuthCallbackHandler.reset(state)
 
         server = HTTPServer(("127.0.0.1", port), OAuthCallbackHandler)
 
@@ -296,9 +282,7 @@ class LocalhostBrowserFlow:
         expires_at = None
         if "expires_in" in resp_data:
             now = time.time()
-            expires_at = datetime.fromtimestamp(
-                now + float(resp_data["expires_in"]), tz=UTC
-            ).isoformat()
+            expires_at = datetime.fromtimestamp(now + float(resp_data["expires_in"]), tz=UTC).isoformat()
 
         # OpenAI (and other providers) rotate refresh tokens: the old
         # token is invalidated and a new one is returned.  If we don't

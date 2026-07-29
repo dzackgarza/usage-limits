@@ -55,9 +55,7 @@ def _emit_json(payload: object) -> None:
 
 @providers_app.command("list")
 def providers_list(
-    json_output: Annotated[
-        bool, typer.Option("--json", help="Emit provider metadata as JSON.")
-    ] = False,
+    json_output: Annotated[bool, typer.Option("--json", help="Emit provider metadata as JSON.")] = False,
 ) -> None:
     """List registered providers."""
     providers = list_providers()
@@ -77,8 +75,7 @@ def doctor() -> None:
     console = Console()
     console.print(
         Panel(
-            "Checks credential files, tokens, and CLI tools for every provider. "
-            "Each check includes a remediation hint if something is missing.",
+            "Checks credential files, tokens, and CLI tools for every provider. Each check includes a remediation hint if something is missing.",
             title="usage-limits doctor",
         )
     )
@@ -136,12 +133,8 @@ def doctor() -> None:
 
 @app.command("serve")
 def serve(
-    port: Annotated[
-        int, typer.Option("--port", help="The port to listen on.")
-    ] = settings.server.port,
-    host: Annotated[
-        str, typer.Option("--host", help="The host to bind to.")
-    ] = settings.server.host,
+    port: Annotated[int, typer.Option("--port", help="The port to listen on.")] = settings.server.port,
+    host: Annotated[str, typer.Option("--host", help="The host to bind to.")] = settings.server.host,
 ) -> None:
     """Start the OTLP sink server to collect OpenRouter traces.
     Requires OPENROUTER_SINK_TOKEN to be set in the environment.

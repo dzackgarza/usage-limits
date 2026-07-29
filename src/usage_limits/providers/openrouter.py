@@ -46,14 +46,10 @@ class OpenRouterProvider(ProviderAccount):
 
     def to_rows(self, raw: OpenRouterRaw) -> list[UsageRow]:
         request_count = raw["count"]
-        pct_used = (
-            (request_count / self.FREE_DAILY_LIMIT * 100) if self.FREE_DAILY_LIMIT > 0 else 0.0
-        )
+        pct_used = (request_count / self.FREE_DAILY_LIMIT * 100) if self.FREE_DAILY_LIMIT > 0 else 0.0
         now = datetime.now(UTC)
         tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-        return [
-            UsageRow(identifier="OpenRouter (daily)", pct_used=round(pct_used), reset_at=tomorrow)
-        ]
+        return [UsageRow(identifier="OpenRouter (daily)", pct_used=round(pct_used), reset_at=tomorrow)]
 
     def should_anchor(self, rows: list[UsageRow]) -> bool:
         return False

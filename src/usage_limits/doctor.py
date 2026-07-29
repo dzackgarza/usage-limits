@@ -162,7 +162,7 @@ def doctor() -> list[Result]:
                 status="ok",
             )
         )
-    except (sqlite3.Error, FileNotFoundError):
+    except sqlite3.Error, FileNotFoundError:
         checks.append(
             Check(
                 description=f"Kiro CLI SQLite DB: {kiro_db} not found or corrupt",
@@ -207,16 +207,12 @@ def doctor() -> list[Result]:
                     status="ok",
                 )
             )
-        except (subprocess.CalledProcessError, OSError):
+        except subprocess.CalledProcessError, OSError:
             checks.append(
                 Check(
                     description="gh auth: not logged in or token expired",
                     status="error",
-                    remediation=(
-                        "Run: gh auth login\n"
-                        "  This will prompt you to authenticate with GitHub.\n"
-                        "  Copilot usage data requires an active GitHub session."
-                    ),
+                    remediation=("Run: gh auth login\n  This will prompt you to authenticate with GitHub.\n  Copilot usage data requires an active GitHub session."),
                 )
             )
     else:
@@ -224,10 +220,7 @@ def doctor() -> list[Result]:
             Check(
                 description="gh CLI not found in PATH",
                 status="error",
-                remediation=(
-                    "Install GitHub CLI: https://cli.github.com/\n"
-                    "  Then authenticate: gh auth login"
-                ),
+                remediation=("Install GitHub CLI: https://cli.github.com/\n  Then authenticate: gh auth login"),
             ),
         ]
     status = "ok" if all(c.status == "ok" for c in checks) else "error"

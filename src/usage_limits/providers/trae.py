@@ -177,9 +177,7 @@ def byte_crypto_decrypt(encrypted_b64: str) -> str:
         raise ValueError("ByteCrypto data too short")
 
     # Extract key material and ciphertext
-    key_material = encrypted_data[
-        BYTE_CRYPTO_HEADER_LEN : BYTE_CRYPTO_HEADER_LEN + BYTE_CRYPTO_RANDOM_KEY_LEN
-    ]
+    key_material = encrypted_data[BYTE_CRYPTO_HEADER_LEN : BYTE_CRYPTO_HEADER_LEN + BYTE_CRYPTO_RANDOM_KEY_LEN]
     ciphertext = encrypted_data[BYTE_CRYPTO_HEADER_LEN + BYTE_CRYPTO_RANDOM_KEY_LEN :]
 
     if len(ciphertext) == 0 or len(ciphertext) % 16 != 0:
@@ -322,7 +320,7 @@ class TraeProvider(ProviderAccount):
                 return REGION_ORIGINS["SG"]
             if "growva" in login_host:
                 return REGION_ORIGINS["US"]
-        except (KeyError, json.JSONDecodeError, ValueError):
+        except KeyError, json.JSONDecodeError, ValueError:
             pass
         return REGION_ORIGINS["CN"]
 

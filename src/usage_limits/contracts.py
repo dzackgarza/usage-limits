@@ -93,10 +93,7 @@ class AvailabilityCollection(BaseModel):
         return cls(
             version=collection.version,
             captured_at=collection.captured_at,
-            providers=[
-                AvailabilitySnapshot.from_provider_snapshot(snapshot)
-                for snapshot in collection.providers
-            ],
+            providers=[AvailabilitySnapshot.from_provider_snapshot(snapshot) for snapshot in collection.providers],
         )
 
 

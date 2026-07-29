@@ -27,7 +27,7 @@ class CredentialStore:
             self.root_dir = root_dir
 
     @contextmanager
-    def lock(self, provider: str, identifier: str) -> Generator[None, None, None]:
+    def lock(self, provider: str, identifier: str) -> Generator[None]:
         """Acquire an exclusive lock on the credential file to serialize refresh calls."""
         import fcntl
 

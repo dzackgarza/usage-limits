@@ -51,15 +51,15 @@ class UsageRow(BaseModel):
     def _clamp_pct_used(cls, v: float) -> int:
         return max(0, min(round(v), 100))
 
-    @computed_field
-    @property
-    def is_exhausted(self) -> bool:
+    def _is_exhausted(self) -> bool:
         """True when usage is at or above 100%."""
         return self.pct_used >= 100.0
 
-    @computed_field
-    @property
-    def time_until_reset(self) -> str:
+    # computed_field(property(...)) rather than stacked decorators: mypy rejects
+    # any decorator on top of @property, and QC bans type-ignore comments.
+    is_exhausted = computed_field(property(_is_exhausted))
+
+    def _time_until_reset(self) -> str:
         """Human-readable countdown to reset_at, or empty string if unset."""
         if self.reset_at is None:
             return ""
@@ -73,6 +73,8 @@ class UsageRow(BaseModel):
             hrs = total_hrs % 24
             return f"in {days}d {hrs}h"
         return f"in {total_hrs}h {mins}m"
+
+    time_until_reset = computed_field(property(_time_until_reset))
 
 
 class UsageTable:
@@ -108,9 +110,7 @@ class UsageTable:
         )
 
         table = Table(show_header=False, box=None, padding=(0, 1))
-        table.add_column(
-            "Identifier", style="bold", width=max_id_len, overflow="ellipsis", no_wrap=True
-        )
+        table.add_column("Identifier", style="bold", width=max_id_len, overflow="ellipsis", no_wrap=True)
         table.add_column("Pct", width=self.PCT_WIDTH, justify="right", no_wrap=True)
         if bar_width:
             table.add_column("Bar", width=bar_width, no_wrap=True)

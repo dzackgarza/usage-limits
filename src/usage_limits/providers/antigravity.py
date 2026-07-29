@@ -231,9 +231,7 @@ class AntigravityAccount(ProviderAccount):
                 else:
                     identifier = bucket["displayName"]
 
-                rows.append(
-                    UsageRow(identifier=identifier, pct_used=round(pct_used), reset_at=reset_at)
-                )
+                rows.append(UsageRow(identifier=identifier, pct_used=round(pct_used), reset_at=reset_at))
 
         rows.sort(key=lambda r: self._model_sort_key(r.identifier))
         return rows
@@ -248,11 +246,7 @@ class AntigravityAccount(ProviderAccount):
 
         availability_rows: list[ModelAvailability] = []
         for family_name, keywords in families:
-            matches = [
-                row
-                for row in rows
-                if any(keyword in row.identifier.lower() for keyword in keywords)
-            ]
+            matches = [row for row in rows if any(keyword in row.identifier.lower() for keyword in keywords)]
             if not matches:
                 continue
             exhausted = [row for row in matches if row.pct_used >= 99]

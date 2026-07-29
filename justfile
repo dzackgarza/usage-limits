@@ -4,6 +4,15 @@ default:
 
 qc-type := "python"
 
+# ai-review-ci contract variables consumed by doctor and workflow installers.
+ai_review_ci_schema_version := "1"
+ai_review_ci_profile := "python"
+ai_review_ci_ref := "main"
+ai_review_ci_release_channel := "main"
+ai_review_ci_workflow_template_version := "1"
+ai_review_ci_local_delegation := "global-justfile"
+ai_review_ci_default_branch := "main"
+
 # Set up the project (uv venv + install)
 setup:
     uv venv
@@ -12,8 +21,17 @@ setup:
 # Run the full check suite
 check: lint typecheck test
 
-# Run the full CI check suite
-test-ci: check
+# Run the full CI check suite (delegated to ai-review-ci)
+test-ci:
+    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci
+
+# Run the commit-tier QC gate (delegated to ai-review-ci)
+test-commit:
+    @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit
+
+# Run the push-tier QC gate (delegated to ai-review-ci)
+test-push:
+    @just -f ~/ai-review-ci/justfiles/python.just -d . test-push
 
 # Format and auto-fix
 fmt:
