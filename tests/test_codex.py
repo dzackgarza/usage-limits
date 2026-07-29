@@ -13,9 +13,9 @@ from pathlib import Path
 import pytest
 import responses
 
-from usage_limits.auth.store import CredentialStore
+from usage_limits.auth.store import CredentialStore, StoredCredential
 from usage_limits.config import settings
-from usage_limits.providers.codex import CodexProvider
+from usage_limits.providers.codex import CodexProvider, WhamUsageResponse
 from usage_limits.registry import collect_all
 
 
@@ -40,7 +40,7 @@ def test_codex_live_collection_returns_usage_rows_for_configured_accounts() -> N
 def test_codex_to_rows_parses_wham_windows() -> None:
     """to_rows produces separate rows for 5h and 7d windows with correct pct_used."""
     provider = CodexProvider(account_id="test@example.com")
-    raw = {
+    raw: WhamUsageResponse = {
         "rate_limit": {
             "primary_window": {
                 "used_percent": 15.4,
@@ -67,7 +67,7 @@ def test_codex_to_rows_parses_wham_windows() -> None:
 def test_codex_to_rows_handles_missing_secondary_window() -> None:
     """to_rows handles cases where secondary window is missing from upstream."""
     provider = CodexProvider(account_id="test@example.com")
-    raw = {
+    raw: WhamUsageResponse = {
         "rate_limit": {
             "primary_window": {
                 "used_percent": 30.0,
@@ -89,7 +89,7 @@ def test_codex_to_rows_parses_wham_windows_prolite() -> None:
     when secondary window is missing.
     """
     provider = CodexProvider(account_id="test@example.com")
-    raw = {
+    raw: WhamUsageResponse = {
         "rate_limit": {
             "primary_window": {
                 "used_percent": 2.0,
@@ -109,7 +109,7 @@ def test_codex_to_rows_parses_wham_windows_prolite() -> None:
 def test_codex_to_rows_handles_null_additional_rate_limits() -> None:
     """to_rows accepts the live WHAM shape where no extra model bucket is null."""
     provider = CodexProvider(account_id="test@example.com")
-    raw = {
+    raw: WhamUsageResponse = {
         "rate_limit": {
             "primary_window": {
                 "used_percent": 41.0,
@@ -136,7 +136,7 @@ def test_codex_to_rows_handles_null_additional_rate_limits() -> None:
 def test_codex_to_rows_includes_additional_spark_bucket() -> None:
     """to_rows parses the Codex Spark additional window as its own two rows."""
     provider = CodexProvider(account_id="test@example.com")
-    raw = {
+    raw: WhamUsageResponse = {
         "rate_limit": {
             "primary_window": {
                 "used_percent": 15.4,
@@ -178,7 +178,7 @@ def test_codex_to_rows_includes_additional_spark_bucket() -> None:
 def test_codex_should_anchor_zero_codex_5h_with_weekly_capacity() -> None:
     """Codex warmup fires only when the matching 5h bucket is empty and 7d is open."""
     provider = CodexProvider(account_id="test@example.com")
-    raw = {
+    raw: WhamUsageResponse = {
         "rate_limit": {
             "primary_window": {
                 "used_percent": 0.0,
@@ -198,7 +198,7 @@ def test_codex_should_anchor_zero_codex_5h_with_weekly_capacity() -> None:
 def test_codex_should_not_anchor_nonzero_5h_bucket() -> None:
     """Codex warmup does not fire once the 5h bucket has any visible usage."""
     provider = CodexProvider(account_id="test@example.com")
-    raw = {
+    raw: WhamUsageResponse = {
         "rate_limit": {
             "primary_window": {
                 "used_percent": 1.0,
@@ -218,7 +218,7 @@ def test_codex_should_not_anchor_nonzero_5h_bucket() -> None:
 def test_codex_should_not_anchor_when_matching_weekly_bucket_exhausted() -> None:
     """Codex warmup does not fire when the matching 7d bucket is exhausted."""
     provider = CodexProvider(account_id="test@example.com")
-    raw = {
+    raw: WhamUsageResponse = {
         "rate_limit": {
             "primary_window": {
                 "used_percent": 0.0,
@@ -238,7 +238,7 @@ def test_codex_should_not_anchor_when_matching_weekly_bucket_exhausted() -> None
 def test_codex_should_anchor_zero_spark_5h_with_weekly_capacity() -> None:
     """Codex Spark 5h buckets use the same warmup rule as the main Codex bucket."""
     provider = CodexProvider(account_id="test@example.com")
-    raw = {
+    raw: WhamUsageResponse = {
         "rate_limit": {
             "primary_window": {
                 "used_percent": 25.0,
@@ -276,7 +276,7 @@ def test_codex_should_anchor_zero_spark_5h_with_weekly_capacity() -> None:
 def test_codex_should_not_anchor_zero_spark_non_5h_bucket() -> None:
     """Only 5h rows trigger warmup; other Spark windows do not."""
     provider = CodexProvider(account_id="test@example.com")
-    raw = {
+    raw: WhamUsageResponse = {
         "rate_limit": {
             "primary_window": {
                 "used_percent": 25.0,
@@ -311,9 +311,7 @@ def test_codex_should_not_anchor_zero_spark_non_5h_bucket() -> None:
     assert provider.should_anchor(rows) is False
 
 
-def test_codex_store_refresh_persists_rotated_token(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_codex_store_refresh_persists_rotated_token(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """CredentialStore account refreshes on 401 and saves rotated refresh token."""
     # Direct CredentialStore to a temp directory
     monkeypatch.setattr(
@@ -323,7 +321,7 @@ def test_codex_store_refresh_persists_rotated_token(
     )
 
     store = CredentialStore()
-    initial_cred = {
+    initial_cred: StoredCredential = {
         "access_token": "old_access",
         "refresh_token": "old_refresh",
         "expires_at": None,
@@ -373,9 +371,7 @@ def test_codex_store_refresh_persists_rotated_token(
         assert saved["refresh_token"] == "new_refresh"
 
 
-def test_codex_store_refresh_marks_invalidated_token_reauth_required(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_codex_store_refresh_marks_invalidated_token_reauth_required(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Invalidated refresh tokens become owned reauth-required credential state."""
     monkeypatch.setattr(
         CredentialStore,
@@ -428,9 +424,7 @@ def test_codex_store_refresh_marks_invalidated_token_reauth_required(
     assert saved["reauth_status_code"] == 401
 
 
-def test_codex_reauth_required_store_account_fails_before_network(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_codex_reauth_required_store_account_fails_before_network(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """A known reauth-required account must not keep probing Codex with stale tokens."""
     monkeypatch.setattr(
         CredentialStore,
@@ -463,9 +457,7 @@ def test_codex_reauth_required_store_account_fails_before_network(
         assert len(rsps.calls) == 0
 
 
-def test_codex_resolve_accounts_prefers_recent_login(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_codex_resolve_accounts_prefers_recent_login(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Recent store credentials are selected before older store entries."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(
@@ -477,14 +469,14 @@ def test_codex_resolve_accounts_prefers_recent_login(
     store = CredentialStore()
     now = time.time()
 
-    old_cred = {
+    old_cred: StoredCredential = {
         "access_token": "old_access",
         "refresh_token": "old_refresh",
         "expires_at": "2026-06-18T12:00:00Z",
         "email": "alpha@example.com",
         "extra": {},
     }
-    new_cred = {
+    new_cred: StoredCredential = {
         "access_token": "new_access",
         "refresh_token": "new_refresh",
         "expires_at": "2026-06-18T12:00:00Z",
@@ -511,9 +503,7 @@ def test_codex_resolve_accounts_prefers_recent_login(
     ]
 
 
-def test_codex_resolve_accounts_keeps_reauth_required_accounts_after_usable_accounts(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_codex_resolve_accounts_keeps_reauth_required_accounts_after_usable_accounts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Reauth markers remain visible without becoming the default account."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(
@@ -524,14 +514,14 @@ def test_codex_resolve_accounts_keeps_reauth_required_accounts_after_usable_acco
 
     store = CredentialStore()
     now = time.time()
-    usable_cred = {
+    usable_cred: StoredCredential = {
         "access_token": "usable_access",
         "refresh_token": "usable_refresh",
         "expires_at": "2026-06-18T12:00:00Z",
         "email": "usable@example.com",
         "extra": {},
     }
-    reauth_cred = {
+    reauth_cred: StoredCredential = {
         "access_token": "reauth_access",
         "refresh_token": "reauth_refresh",
         "expires_at": "2026-06-18T12:00:00Z",
@@ -562,9 +552,7 @@ def test_codex_resolve_accounts_keeps_reauth_required_accounts_after_usable_acco
     ]
 
 
-def test_codex_resolve_accounts_returns_empty_without_store(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_codex_resolve_accounts_returns_empty_without_store(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """With no stored credentials, usage-limits resolves no accounts."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(

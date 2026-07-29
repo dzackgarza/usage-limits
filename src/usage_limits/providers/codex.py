@@ -37,11 +37,12 @@ class WhamWindow(TypedDict):
 
 class WhamWindowWithWindowSeconds(WhamWindow, total=False):
     limit_window_seconds: int | None
+    reset_after_seconds: int | None
 
 
 class WhamRateLimit(TypedDict):
-    primary_window: WhamWindow
-    secondary_window: WhamWindow | None
+    primary_window: WhamWindowWithWindowSeconds
+    secondary_window: WhamWindowWithWindowSeconds | None
 
 
 class AdditionalCodexRateLimit(TypedDict):
@@ -93,17 +94,13 @@ class CodexProvider(ProviderAccount):
 
     def _raise_if_reauth_required(self, cred: StoredCredential) -> None:
         if "requires_reauth" in cred:
-            assert cred["requires_reauth"] is True, (
-                f"Unexpected false reauth marker for codex account {self.account_id}"
-            )
+            assert cred["requires_reauth"] is True, f"Unexpected false reauth marker for codex account {self.account_id}"
             from usage_limits.auth.oauth import OAuthReauthRequiredError
 
             raise OAuthReauthRequiredError(
                 status_code=cred["reauth_status_code"],
                 error_code=cred["reauth_error_code"],
-                error_message=(
-                    f"Codex account {self.account_id} requires `usage-limits login codex`."
-                ),
+                error_message=(f"Codex account {self.account_id} requires `usage-limits login codex`."),
             )
 
     def _make_flow(self) -> LocalhostBrowserFlow:
@@ -117,9 +114,7 @@ class CodexProvider(ProviderAccount):
             token_url="https://auth.openai.com/oauth/token",
         )
 
-    def _save_store_credentials(
-        self, access_token: str, refresh_token: str, expires_at: str | None
-    ) -> None:
+    def _save_store_credentials(self, access_token: str, refresh_token: str, expires_at: str | None) -> None:
         from usage_limits.auth.store import CredentialStore, StoredCredential
 
         cred = cast(
@@ -159,9 +154,7 @@ class CodexProvider(ProviderAccount):
                 return cred["access_token"]
 
             refresh_token = cred["refresh_token"]
-            assert refresh_token is not None, (
-                f"No refresh token for codex account {self.account_id}"
-            )
+            assert refresh_token is not None, f"No refresh token for codex account {self.account_id}"
 
             try:
                 result = self._make_flow().refresh(refresh_token)
@@ -205,19 +198,17 @@ class CodexProvider(ProviderAccount):
         primary = rate_limit["primary_window"]
         secondary = rate_limit["secondary_window"]
 
-        primary_window = cast(WhamWindowWithWindowSeconds, primary)
         rows: list[UsageRow] = [
             UsageRow(
-                identifier=f"Codex ({_window_label(primary_window, '5h')})",
+                identifier=f"Codex ({_window_label(primary, '5h')})",
                 pct_used=round(primary["used_percent"]),
                 reset_at=_ts_to_dt(primary["reset_at"]),
             ),
         ]
         if secondary:
-            secondary_window = cast(WhamWindowWithWindowSeconds, secondary)
             rows.append(
                 UsageRow(
-                    identifier=f"Codex ({_window_label(secondary_window, '7d')})",
+                    identifier=f"Codex ({_window_label(secondary, '7d')})",
                     pct_used=round(secondary["used_percent"]),
                     reset_at=_ts_to_dt(secondary["reset_at"]),
                 )
@@ -232,20 +223,18 @@ class CodexProvider(ProviderAccount):
                 additional_rate_limit = additional["rate_limit"]
                 additional_primary = additional_rate_limit["primary_window"]
                 additional_secondary = additional_rate_limit["secondary_window"]
-                primary_window = cast(WhamWindowWithWindowSeconds, additional_primary)
 
                 rows.append(
                     UsageRow(
-                        identifier=f"{limit_label} ({_window_label(primary_window, '5d')})",
+                        identifier=f"{limit_label} ({_window_label(additional_primary, '5d')})",
                         pct_used=round(additional_primary["used_percent"]),
                         reset_at=_ts_to_dt(additional_primary["reset_at"]),
                     )
                 )
                 if additional_secondary:
-                    secondary_window = cast(WhamWindowWithWindowSeconds, additional_secondary)
                     rows.append(
                         UsageRow(
-                            identifier=(f"{limit_label} ({_window_label(secondary_window, '7d')})"),
+                            identifier=(f"{limit_label} ({_window_label(additional_secondary, '7d')})"),
                             pct_used=round(additional_secondary["used_percent"]),
                             reset_at=_ts_to_dt(additional_secondary["reset_at"]),
                         )
@@ -253,11 +242,7 @@ class CodexProvider(ProviderAccount):
         return rows
 
     def should_anchor(self, rows: list[UsageRow]) -> bool:
-        weekly_rows = {
-            row.identifier.removesuffix(" (7d)"): row
-            for row in rows
-            if row.identifier.endswith(" (7d)")
-        }
+        weekly_rows = {row.identifier.removesuffix(" (7d)"): row for row in rows if row.identifier.endswith(" (7d)")}
         for row in rows:
             if row.pct_used != 0 or not row.identifier.endswith(" (5h)"):
                 continue
