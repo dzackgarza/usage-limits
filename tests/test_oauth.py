@@ -350,6 +350,8 @@ def test_codex_authorize_url_resolves_correctly_on_live_openai() -> None:
     auth_url = urllib.parse.urlunparse(url_parts)
 
     resp = requests.get(auth_url, timeout=10)
+    if resp.headers.get("cf-mitigated") == "challenge":
+        pytest.skip("auth.openai.com served a Cloudflare bot challenge; the URL itself was not judged")
     assert "error" not in resp.url
     assert "authorize_hydra_invalid_request" not in resp.text
     assert resp.status_code == 200

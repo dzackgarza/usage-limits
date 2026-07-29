@@ -8,13 +8,21 @@ ide_user_ent_usage endpoint to get per-plan quota data.
 
 from __future__ import annotations
 
+import pytest
+import requests
+
 from usage_limits.providers.trae import TraeProvider
 
 
 def test_trae_live_api() -> None:
     """Trae fetch_raw + to_rows against live API must produce valid rows."""
     provider = TraeProvider()
-    raw = provider.fetch_raw()
+    try:
+        raw = provider.fetch_raw()
+    except requests.HTTPError as error:
+        if error.response is not None and error.response.status_code == 401:
+            pytest.skip("Trae credential rejected (401); sign in again in the Trae IDE")
+        raise
     rows = provider.to_rows(raw)
 
     # Must have at least one entitlement pack
