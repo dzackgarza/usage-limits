@@ -17,9 +17,7 @@ def login_main(ctx: typer.Context) -> None:
     if ctx.invoked_subcommand:
         return
 
-    subprocess.run(
-        ["gum", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
-    )
+    subprocess.run(["gum", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
 
     choices = ["antigravity", "codex"]
     result = subprocess.run(
@@ -36,6 +34,19 @@ def login_main(ctx: typer.Context) -> None:
         login_antigravity()
     elif choice == "codex":
         login_codex()
+
+
+@login_app.command("remove")
+def remove_credential(provider: str, account: str | None = None) -> None:
+    """Forget a stored credential (e.g. an account you logged out of elsewhere)."""
+    store = CredentialStore()
+    accounts = [account] if account else store.list_accounts(provider)
+    if not accounts:
+        typer.secho(f"No stored {provider} credentials", fg=typer.colors.YELLOW)
+        raise typer.Exit(code=1)
+    for email in accounts:
+        store.remove(provider, email)
+        typer.secho(f"Removed {provider} credential for {email}", fg=typer.colors.GREEN)
 
 
 @login_app.command("antigravity")
