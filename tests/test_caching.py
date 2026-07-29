@@ -132,6 +132,17 @@ def test_read_cache_returns_fresh_data() -> None:
     assert raw["five_hour"]["utilization"] == 5.0
 
 
+def test_read_cache_returns_none_on_truncated_file() -> None:
+    """A zero-byte/corrupt cache file is a miss, not a JSONDecodeError."""
+    provider = ClaudeProvider()
+    cache_path = provider._get_cache_path()
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text("")
+
+    assert provider._read_cache() is None
+    assert provider._read_cache(ignore_ttl=True) is None
+
+
 def test_read_cache_returns_none_on_stale() -> None:
     """``_read_cache`` returns None when data exists but is outside TTL."""
     provider = ClaudeProvider()

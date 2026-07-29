@@ -21,6 +21,13 @@ from usage_limits.table import ModelAvailability, UsageRow, UsageTable
 __all__ = ["ProviderAccount", "UsageProvider"]
 
 
+def _write_json_atomic(path: Path, payload: Any) -> None:
+    """Write JSON via a temp file + rename so a crash can't leave a truncated file."""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload))
+    tmp.replace(path)
+
+
 class UsageProvider(ABC):
     """Abstract base for all usage-limit providers."""
 
@@ -77,9 +84,7 @@ class UsageProvider(ABC):
 
     def _available_when(self, rows: list[UsageRow]) -> datetime | None:
         """Earliest time all exhausted windows will have reset."""
-        reset_times = [
-            row.reset_at for row in rows if row.is_exhausted and row.reset_at is not None
-        ]
+        reset_times = [row.reset_at for row in rows if row.is_exhausted and row.reset_at is not None]
         return max(reset_times) if reset_times else None
 
     def availability(self, rows: list[UsageRow]) -> list[ModelAvailability]:
@@ -172,9 +177,7 @@ class UsageProvider(ABC):
 
     def should_notify(self, rows: list[UsageRow]) -> tuple[bool, datetime | None]:
         """Determine if a reset notification should be scheduled."""
-        exhausted_resets = [
-            row.reset_at for row in rows if row.is_exhausted and row.reset_at is not None
-        ]
+        exhausted_resets = [row.reset_at for row in rows if row.is_exhausted and row.reset_at is not None]
         if not exhausted_resets:
             return False, None
         return True, max(exhausted_resets)
@@ -230,11 +233,7 @@ class UsageProvider(ABC):
 
     def _notification_id(self, rows: list[UsageRow]) -> str:
         """Deterministic notification ID from exhausted rows."""
-        exhausted = sorted(
-            (int(row.reset_at.timestamp()), row.identifier)
-            for row in rows
-            if row.is_exhausted and row.reset_at is not None
-        )
+        exhausted = sorted((int(row.reset_at.timestamp()), row.identifier) for row in rows if row.is_exhausted and row.reset_at is not None)
         if not exhausted:
             return ""
         timestamp, _ = exhausted[-1]
@@ -255,9 +254,7 @@ class UsageProvider(ABC):
                     message = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                if message.get("event") == "message" and f"notif_id:{notif_id}" in message.get(
-                    "tags", []
-                ):
+                if message.get("event") == "message" and f"notif_id:{notif_id}" in message.get("tags", []):
                     return True
         except requests.RequestException:
             pass
@@ -290,15 +287,15 @@ class UsageProvider(ABC):
         path = self._get_cache_path()
         if not path.exists():
             return None
-        data = json.loads(path.read_text())
+        try:
+            data = json.loads(path.read_text())
+        except json.JSONDecodeError:
+            return None  # truncated/corrupt cache — treat as a miss, refetch
         # Error entries are always a cache miss — force a live fetch
         if "error_type" in data:
             return None
         last_updated = datetime.fromisoformat(data["last_updated"])
-        if (
-            not ignore_ttl
-            and (datetime.now(UTC) - last_updated).total_seconds() >= self.cache_ttl_seconds
-        ):
+        if not ignore_ttl and (datetime.now(UTC) - last_updated).total_seconds() >= self.cache_ttl_seconds:
             return None  # stale
         raw = data.get("raw")
         if raw is None:
@@ -311,7 +308,7 @@ class UsageProvider(ABC):
         Returns ``now``.
         """
         now = datetime.now(UTC)
-        self._get_cache_path().write_text(json.dumps({"raw": raw, "last_updated": now.isoformat()}))
+        _write_json_atomic(self._get_cache_path(), {"raw": raw, "last_updated": now.isoformat()})
         return now
 
     def _write_cache_error(self, exc: BaseException) -> datetime:
@@ -333,7 +330,7 @@ class UsageProvider(ABC):
         }
         if isinstance(exc, requests.HTTPError) and exc.response is not None:
             entry["error_status_code"] = exc.response.status_code
-        path.write_text(json.dumps(entry))
+        _write_json_atomic(path, entry)
         return now
 
     def _fetch_with_cache(self, *, force: bool = False) -> tuple[Any, datetime]:
