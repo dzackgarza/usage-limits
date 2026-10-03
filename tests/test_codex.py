@@ -24,7 +24,7 @@ def test_codex_live_collection_returns_usage_rows_for_configured_accounts() -> N
     collection = collect_all(providers=["codex"])
     snapshots = {snapshot.account: snapshot for snapshot in collection.providers}
 
-    assert set(snapshots) == {"dzackgarza@gmail.com", "zack@ncts.ntu.edu.tw"}
+    assert set(snapshots) == {"dzackgarza@gmail.com"}
     for _account, snapshot in snapshots.items():
         if snapshot.status == "ok":
             assert snapshot.errors == []

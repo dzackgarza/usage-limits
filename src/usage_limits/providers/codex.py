@@ -66,6 +66,7 @@ class CodexProvider(ProviderAccount):
     slug = "codex"
     name = "Codex"
     state_dir = "codex_usage"
+    inactive_accounts = frozenset({"zack@ncts.ntu.edu.tw"})
 
     def __init__(self, account_id: str) -> None:
         super().__init__(account_id=account_id)
@@ -306,7 +307,11 @@ class CodexProvider(ProviderAccount):
         from usage_limits.auth.store import CredentialStore
 
         store = CredentialStore()
-        accounts = store.list_accounts("codex")
+        accounts = [
+            account
+            for account in store.list_accounts("codex")
+            if account not in cls.inactive_accounts
+        ]
 
         if not accounts:
             return []
