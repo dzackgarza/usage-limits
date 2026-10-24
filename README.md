@@ -27,7 +27,7 @@ Failed providers show the original error type and message with no usage rows; su
 | Agy Secret Pool | Local OAuth (shares Antigravity) | Run `usage-limits login antigravity` |
 | Claude Code | OAuth credential | Run `claude login` |
 | Codex | Local OAuth | Run `usage-limits login codex` (or `codex login`) |
-| ChatGPT Pro (opt-in) | Estimated message counts from ChatGPT history | Run `codex login`, then `usage-limits --provider chatgpt-pro` |
+| ChatGPT Pro | Estimated message counts from ChatGPT history | Run `codex login`, then `usage-limits` |
 | Copilot | GitHub CLI token | Run `gh auth login` |
 | Cursor | SQLite database | Have Cursor installed and logged in |
 | DeepSeek | API key + balance query | Set `DEEPSEEK_API_KEY` environment variable |
@@ -66,8 +66,8 @@ Reads a ChatGPT WHAM API auth file, using either `usage-limits login codex` or t
 
 ### ChatGPT Pro
 
-Run `usage-limits --provider chatgpt-pro` to enable history access for that collection.
-This provider is excluded from the default provider set.
+Run `usage-limits` to collect ChatGPT Pro alongside the other active providers.
+Use `usage-limits --provider chatgpt-pro` to collect it alone.
 It follows the accounting observations in [CodexBar issue 3436](https://github.com/steipete/CodexBar/issues/3436).
 
 The meter counts completed Pro assistant messages across active, archived, and Project conversations.

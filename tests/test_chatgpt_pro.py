@@ -160,10 +160,10 @@ def test_server_reset_anchors_window_and_blocked_access() -> None:
     assert raw["window_basis"] == "provisional-rolling-seven-days"
 
 
-def test_history_access_requires_explicit_provider_selection() -> None:
+def test_chatgpt_pro_is_in_default_collection() -> None:
     assert get_provider_class("chatgpt-pro") is ChatGPTProProvider
     (registered,) = [provider for provider in list_providers() if provider.provider == "chatgpt-pro"]
-    assert not registered.active
+    assert registered.active
 
 
 def test_missing_login_is_unavailable(tmp_path: Path) -> None:

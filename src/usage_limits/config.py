@@ -79,7 +79,7 @@ class CodexSettings(BaseModel):
 
 
 class ChatGPTProSettings(BaseModel):
-    """Explicit assumptions for the opt-in ChatGPT history meter."""
+    """Explicit assumptions for the ChatGPT history meter."""
 
     auth_file: str | None = None
     weekly_limit: int = Field(default=50, gt=0)

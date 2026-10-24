@@ -1,4 +1,4 @@
-"""Opt-in, content-free reconstruction of ChatGPT Pro message usage.
+"""Content-free reconstruction of ChatGPT Pro message usage.
 
 Accounting reference: https://github.com/steipete/CodexBar/issues/3436
 Browser transport reference: skillsynchq/txcript, src/harness/chatgpt.rs.
