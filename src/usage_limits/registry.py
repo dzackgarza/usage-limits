@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from importlib.metadata import entry_points
+from typing import Literal
 
+import requests
+
+from usage_limits.auth.session import configure_session_bus
 from usage_limits.base import ProviderAccount, UsageProvider
 from usage_limits.contracts import (
+    ProviderError,
     ProviderSnapshot,
     RegisteredProvider,
     UsageCollection,
@@ -145,6 +150,7 @@ def collect_provider(
     snapshot for the first resolved account. Use ``collect_all`` to get
     all accounts.
     """
+    configure_session_bus()
     provider_class = get_provider_class(provider)
     return _collect_single(provider_class, notify=notify, anchor=anchor)
 
@@ -167,6 +173,23 @@ def _collect_instance(
     return instance.collect_snapshot(notify=notify, anchor=anchor)
 
 
+def _completed_snapshot(instance: UsageProvider, future: Future[ProviderSnapshot]) -> ProviderSnapshot:
+    """Publish each worker's outcome without discarding other providers."""
+    error = future.exception()
+    if error is None:
+        return future.result()
+    status: Literal["error", "rate_limited"] = "error"
+    if isinstance(error, requests.HTTPError) and error.response is not None and error.response.status_code == 429:
+        status = "rate_limited"
+    return ProviderSnapshot(
+        provider=instance.slug,
+        display_name=instance.name,
+        status=status,
+        account=instance.account_id if isinstance(instance, ProviderAccount) else None,
+        errors=[ProviderError(type=type(error).__name__.lower(), message=str(error))],
+    )
+
+
 def collect_all(
     providers: list[str] | None = None,
     *,
@@ -174,6 +197,7 @@ def collect_all(
     anchor: bool = False,
 ) -> UsageCollection:
     """Collect a normalized snapshot for one or more providers."""
+    configure_session_bus()
     selected = providers or [provider.provider for provider in list_providers() if provider.active]
 
     # Expand slugs into provider instances (one per account for multi-account)
@@ -185,6 +209,6 @@ def collect_all(
     with ThreadPoolExecutor(max_workers=len(instances)) as pool:
         futures = {pool.submit(_collect_instance, instance, notify=notify, anchor=anchor): instance for instance in instances}
         for future in as_completed(futures):
-            snapshots.append(future.result())
+            snapshots.append(_completed_snapshot(futures[future], future))
     snapshots.sort(key=lambda s: s.display_name)
     return UsageCollection(providers=snapshots)

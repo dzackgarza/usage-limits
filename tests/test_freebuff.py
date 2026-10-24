@@ -82,10 +82,19 @@ def test_freebuff_keychain_profile_reads_native_store(tmp_path: Path) -> None:
     """The current CLI profile selects the OS store, whose absent item fails."""
     provider = FreebuffProvider()
     provider.cred_file = tmp_path / "credentials.json"
-    provider.cred_file.write_text(json.dumps({"default": {
-        "id": "account", "name": "User", "email": "account@example.test",
-        "fingerprintId": "fingerprint", "fingerprintHash": "hash",
-        "tokenStore": "keychain",
-    }}))
+    provider.cred_file.write_text(
+        json.dumps(
+            {
+                "default": {
+                    "id": "account",
+                    "name": "User",
+                    "email": "account@example.test",
+                    "fingerprintId": "fingerprint",
+                    "fingerprintHash": "hash",
+                    "tokenStore": "keychain",
+                }
+            }
+        )
+    )
     with pytest.raises(subprocess.CalledProcessError):
         provider.fetch_raw()

@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from datetime import UTC, datetime
-from typing import Any, TypedDict, cast
+from pathlib import Path
+from typing import Literal, NotRequired, TypedDict, cast
 
 import requests
 
+from usage_limits.auth.session import configure_session_bus
 from usage_limits.base import ProviderAccount
 from usage_limits.config import resolve_path, settings
 from usage_limits.table import UsageRow
@@ -20,6 +23,20 @@ class FreebuffCredentials(TypedDict):
     authToken: str
     fingerprintId: str
     fingerprintHash: str
+
+
+class FreebuffProfile(TypedDict):
+    id: str
+    name: str
+    email: str
+    fingerprintId: str
+    fingerprintHash: str
+    authToken: NotRequired[str]
+    tokenStore: NotRequired[Literal["keychain"]]
+
+
+class FreebuffCredentialFile(TypedDict):
+    default: FreebuffProfile
 
 
 class RateLimitDetail(TypedDict, total=False):
@@ -83,8 +100,24 @@ class FreebuffProvider(ProviderAccount):
         return "Freebuff"
 
     def get_credentials(self) -> FreebuffCredentials:
-        data: dict[str, Any] = json.loads(self.cred_file.read_text())
-        return cast(FreebuffCredentials, data["default"])
+        data = cast(FreebuffCredentialFile, json.loads(self.cred_file.read_text()))
+        profile = data["default"]
+        if "tokenStore" in profile:
+            assert profile["tokenStore"] == "keychain"
+            # Bun initializes its native Secret Service connection at startup.
+            configure_session_bus()
+            token = subprocess.run(
+                ["bun", str(Path(__file__).with_name("freebuff_token.js")), str(self.cred_file)],
+                stdout=subprocess.PIPE, text=True, check=True, timeout=10,
+            ).stdout
+            assert token
+        else:
+            token = profile["authToken"]
+        return FreebuffCredentials(
+            id=profile["id"], name=profile["name"], email=profile["email"],
+            fingerprintId=profile["fingerprintId"], fingerprintHash=profile["fingerprintHash"],
+            authToken=token,
+        )
 
     def fetch_raw(self) -> FreebuffRawPayload:
         creds = self.get_credentials()
