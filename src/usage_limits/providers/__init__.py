@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from usage_limits.providers.agy_secret import AgySecretPoolAccount
 from usage_limits.providers.antigravity import AntigravityAccount
+from usage_limits.providers.chatgpt_pro import ChatGPTProProvider
 from usage_limits.providers.claude import ClaudeProvider
 from usage_limits.providers.codex import CodexProvider
 from usage_limits.providers.copilot import CopilotProvider
@@ -24,6 +25,7 @@ __all__ = [
     "AgySecretPoolAccount",
     "AntigravityAccount",
     "ClaudeProvider",
+    "ChatGPTProProvider",
     "CodexProvider",
     "CopilotProvider",
     "CursorProvider",

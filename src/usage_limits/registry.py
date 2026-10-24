@@ -5,11 +5,8 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from importlib.metadata import entry_points
 
-import requests
-
 from usage_limits.base import ProviderAccount, UsageProvider
 from usage_limits.contracts import (
-    ProviderError,
     ProviderSnapshot,
     RegisteredProvider,
     UsageCollection,
@@ -17,6 +14,7 @@ from usage_limits.contracts import (
 from usage_limits.providers import (
     AgySecretPoolAccount,
     AntigravityAccount,
+    ChatGPTProProvider,
     ClaudeProvider,
     CodexProvider,
     CopilotProvider,
@@ -43,6 +41,7 @@ FIRST_PARTY_PROVIDER_CLASSES: tuple[type[UsageProvider], ...] = (
     AgySecretPoolAccount,
     AntigravityAccount,
     ClaudeProvider,
+    ChatGPTProProvider,
     CodexProvider,
     CopilotProvider,
     CursorProvider,
@@ -82,7 +81,7 @@ def _provider_classes() -> dict[str, type[UsageProvider]]:
 
 
 INACTIVE_PROVIDERS: frozenset[str] = frozenset(
-    {"deepseek", "opencode-zen", "openrouter"}
+    {"chatgpt-pro", "deepseek", "opencode-zen", "openrouter"}
 )
 
 
@@ -121,63 +120,6 @@ def get_provider_class(provider: str) -> type[UsageProvider]:
     return providers[provider]
 
 
-def _error_message(error: BaseException) -> str:
-    """Normalize exception messages for the JSON contract."""
-    if isinstance(error, SystemExit):
-        code = error.code
-        if isinstance(code, str) and code:
-            return code
-        if isinstance(code, int):
-            return f"Provider exited with status {code}."
-        return "Provider exited."
-    message = str(error).strip()
-    if message:
-        return message
-    return error.__class__.__name__
-
-
-def _error_type(error: BaseException) -> str:
-    """Map exceptions to stable error identifiers."""
-    if isinstance(error, NotImplementedError):
-        return "not_implemented"
-    if isinstance(error, SystemExit):
-        return "system_exit"
-    return error.__class__.__name__.lower()
-
-
-def _is_rate_limited(error: BaseException) -> bool:
-    return isinstance(error, requests.HTTPError) and error.response is not None and error.response.status_code == 429
-
-
-def _error_snapshot(
-    provider_class: type[UsageProvider],
-    error: BaseException,
-    *,
-    account: str | None = None,
-) -> ProviderSnapshot:
-    """Build a normalized error snapshot for a failed provider."""
-    if _is_rate_limited(error):
-        return ProviderSnapshot(
-            provider=provider_class.slug,
-            display_name=provider_class.name,
-            status="rate_limited",
-            account=account,
-            errors=[
-                ProviderError(
-                    type="rate_limited",
-                    message="Rate limited (HTTP 429) — status unknown",
-                )
-            ],
-        )
-    return ProviderSnapshot(
-        provider=provider_class.slug,
-        display_name=provider_class.name,
-        status="error",
-        account=account,
-        errors=[ProviderError(type=_error_type(error), message=_error_message(error))],
-    )
-
-
 def _collect_single(
     provider_class: type[UsageProvider],
     *,
@@ -185,15 +127,12 @@ def _collect_single(
     anchor: bool = False,
 ) -> ProviderSnapshot:
     """Collect a snapshot from a single provider instance."""
-    try:
-        if issubclass(provider_class, ProviderAccount):
-            instances = provider_class.resolve_accounts()
-            if not instances:
-                raise RuntimeError(f"{provider_class.__name__}.resolve_accounts() returned empty list")
-            return instances[0].collect_snapshot(notify=notify, anchor=anchor)
-        return provider_class().collect_snapshot(notify=notify, anchor=anchor)
-    except BaseException as error:
-        return _error_snapshot(provider_class, error)
+    if issubclass(provider_class, ProviderAccount):
+        instances = provider_class.resolve_accounts()
+        if not instances:
+            raise RuntimeError(f"{provider_class.__name__}.resolve_accounts() returned empty list")
+        return instances[0].collect_snapshot(notify=notify, anchor=anchor)
+    return provider_class().collect_snapshot(notify=notify, anchor=anchor)
 
 
 def collect_provider(
@@ -227,11 +166,7 @@ def _collect_instance(
     anchor: bool = False,
 ) -> ProviderSnapshot:
     """Collect a snapshot from a single provider instance."""
-    try:
-        return instance.collect_snapshot(notify=notify, anchor=anchor)
-    except BaseException as error:
-        account = instance.account_id if isinstance(instance, ProviderAccount) else None
-        return _error_snapshot(type(instance), error, account=account)
+    return instance.collect_snapshot(notify=notify, anchor=anchor)
 
 
 def collect_all(

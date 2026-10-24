@@ -40,6 +40,10 @@
 # [codex]
 # api_url = "https://chatgpt.com/backend-api/wham/usage"
 
+# [chatgpt_pro]
+# weekly_limit = 50          # Assumed cap; set this for your plan.
+# auth_file = "~/.codex/auth.json"  # Otherwise uses CODEX_HOME/auth.json.
+
 # [copilot]
 # api_url = "https://api.github.com/copilot_internal/user"
 # editor_version = "vscode/1.100.0"

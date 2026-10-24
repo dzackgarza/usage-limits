@@ -15,7 +15,7 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
 # Path resolution helper  (defined first so it's safe to import early)
@@ -76,6 +76,13 @@ class ClaudeSettings(BaseModel):
 
 class CodexSettings(BaseModel):
     api_url: str = "https://chatgpt.com/backend-api/wham/usage"
+
+
+class ChatGPTProSettings(BaseModel):
+    """Explicit assumptions for the opt-in ChatGPT history meter."""
+
+    auth_file: str | None = None
+    weekly_limit: int = Field(default=50, gt=0)
 
 
 class CopilotSettings(BaseModel):
@@ -157,6 +164,7 @@ class Settings(BaseModel):
     antigravity: AntigravitySettings = AntigravitySettings()
     claude: ClaudeSettings = ClaudeSettings()
     codex: CodexSettings = CodexSettings()
+    chatgpt_pro: ChatGPTProSettings = ChatGPTProSettings()
     copilot: CopilotSettings = CopilotSettings()
     cursor: CursorSettings = CursorSettings()
     kiro: KiroSettings = KiroSettings()
