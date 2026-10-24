@@ -85,7 +85,7 @@ def _provider_classes() -> dict[str, type[UsageProvider]]:
     return providers
 
 
-INACTIVE_PROVIDERS: frozenset[str] = frozenset({"deepseek", "opencode-zen", "openrouter"})
+INACTIVE_PROVIDERS: frozenset[str] = frozenset({"deepseek", "opencode-go", "opencode-zen", "openrouter", "trae"})
 
 
 def list_providers() -> list[RegisteredProvider]:
