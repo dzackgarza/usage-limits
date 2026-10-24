@@ -18,9 +18,8 @@ Uniform quota collection and rendering for CLI- and API-backed LLM providers.
 
 ## Provider coverage
 
-Collection displays each provider's result separately. Failed providers show the
-original error type and message with no usage rows; successful providers remain
-visible.
+Collection displays each provider's result separately.
+Failed providers show the original error type and message with no usage rows; successful providers remain visible.
 
 | Provider | Strategy | How to set up |
 | :--- | :--- | :--- |
@@ -109,12 +108,10 @@ Collection errors leave the ledger intact and report unavailable usage.
 
 ### Freebuff
 
-Reads the CLI profile at `~/.config/manicode/credentials.json`. Profiles with
-`tokenStore = "keychain"` use Bun's native credential-store API with the same
-service and profile path as the Freebuff CLI. Install Bun for those profiles.
+Reads the CLI profile at `~/.config/manicode/credentials.json`. Profiles with `tokenStore = "keychain"` use Bun's native credential-store API with the same service and profile path as the Freebuff CLI. Install Bun for those profiles.
 On headless Linux, the lookup connects to the login user's systemd session bus.
-File-backed profiles read their `authToken` directly. Tokens remain in their
-existing store.
+File-backed profiles read their `authToken` directly.
+Tokens remain in their existing store.
 
 ### Copilot
 

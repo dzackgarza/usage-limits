@@ -19,6 +19,6 @@ def test_missing_credentials_remain_a_provider_error(tmp_path: Path) -> None:
     assert snapshot.status == "error"
     assert snapshot.rows == []
     assert snapshot.availability == []
-    error, = snapshot.errors
+    (error,) = snapshot.errors
     assert error.type == "filenotfounderror"
     assert str(provider.cred_file) in error.message

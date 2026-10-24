@@ -108,14 +108,20 @@ class FreebuffProvider(ProviderAccount):
             configure_session_bus()
             token = subprocess.run(
                 ["bun", str(Path(__file__).with_name("freebuff_token.js")), str(self.cred_file)],
-                stdout=subprocess.PIPE, text=True, check=True, timeout=10,
+                stdout=subprocess.PIPE,
+                text=True,
+                check=True,
+                timeout=10,
             ).stdout
             assert token
         else:
             token = profile["authToken"]
         return FreebuffCredentials(
-            id=profile["id"], name=profile["name"], email=profile["email"],
-            fingerprintId=profile["fingerprintId"], fingerprintHash=profile["fingerprintHash"],
+            id=profile["id"],
+            name=profile["name"],
+            email=profile["email"],
+            fingerprintId=profile["fingerprintId"],
+            fingerprintHash=profile["fingerprintHash"],
             authToken=token,
         )
 
