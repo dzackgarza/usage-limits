@@ -25,11 +25,7 @@ def test_captured_history_counts_completed_pro_messages() -> None:
     nodes = {
         str(key): Node(
             parent=str(parent) if parent is not None else None,
-            children=[
-                str(child)
-                for child, child_parent, *_ in CAPTURED_NODES
-                if child_parent == key
-            ],
+            children=[str(child) for child, child_parent, *_ in CAPTURED_NODES if child_parent == key],
             message=Message(
                 id=str(key),
                 author=Author(role=role),
@@ -37,16 +33,12 @@ def test_captured_history_counts_completed_pro_messages() -> None:
                 status="finished_successfully",
                 end_turn=end_turn,
                 recipient=recipient,
-                metadata=MessageMetadata(
-                    model_slug="gpt-6-pro", turn_exchange_id=f"exchange-{key < 30}"
-                ),
+                metadata=MessageMetadata(model_slug="gpt-6-pro", turn_exchange_id=f"exchange-{key < 30}"),
             ),
         )
         for key, parent, role, timestamp, end_turn, recipient in CAPTURED_NODES
     }
-    finals = extract_finals(
-        Conversation(mapping=nodes, current_node="35"), "conversation", "salt"
-    )
+    finals = extract_finals(Conversation(mapping=nodes, current_node="35"), "conversation", "salt")
     assert len(finals) == 2
     assert len({final.group for final in finals.values()}) == 2
     assert sorted(final.timestamp for final in finals.values()) == [
@@ -65,9 +57,7 @@ def test_serial_tool_continuations_share_interaction() -> None:
             status="finished_successfully",
             end_turn=final,
             recipient="all",
-            metadata=MessageMetadata(
-                model_slug="gpt-6-pro", turn_exchange_id="exchange"
-            ),
+            metadata=MessageMetadata(model_slug="gpt-6-pro", turn_exchange_id="exchange"),
         )
 
     nodes = {
@@ -86,9 +76,7 @@ def test_serial_tool_continuations_share_interaction() -> None:
             children=["last"],
             message=message("tool", "tool", final=False),
         ),
-        "last": Node(
-            parent="tool", children=[], message=message("last", "assistant", final=True)
-        ),
+        "last": Node(parent="tool", children=[], message=message("last", "assistant", final=True)),
     }
     graph = Conversation(mapping=nodes, current_node="last")
     finals = extract_finals(graph, "conversation", "salt")
@@ -113,12 +101,7 @@ def test_history_range_does_not_assert_exhaustion() -> None:
         account="account",
         salt="salt",
         observed_at=now,
-        finals={
-            str(i): ProFinal(
-                timestamp=now.timestamp() - 1, model="gpt-6-pro", group="interaction"
-            )
-            for i in range(12)
-        },
+        finals={str(i): ProFinal(timestamp=now.timestamp() - 1, model="gpt-6-pro", group="interaction") for i in range(12)},
     )
     provider = ChatGPTProProvider.__new__(ChatGPTProProvider)
     raw = provider.summarize(ledger, now, limit=10)
@@ -133,10 +116,7 @@ def test_history_range_does_not_assert_exhaustion() -> None:
     assert row.reset_at is None
     assert provider.availability([row]) == []
 
-    ledger.finals = {
-        key: final.model_copy(update={"group": key})
-        for key, final in ledger.finals.items()
-    }
+    ledger.finals = {key: final.model_copy(update={"group": key}) for key, final in ledger.finals.items()}
     (row,) = provider.to_rows(provider.summarize(ledger, now, limit=10))
     assert row.pct_used == 100
     assert not row.is_exhausted
@@ -182,9 +162,7 @@ def test_server_reset_anchors_window_and_blocked_access() -> None:
 
 def test_history_access_requires_explicit_provider_selection() -> None:
     assert get_provider_class("chatgpt-pro") is ChatGPTProProvider
-    (registered,) = [
-        provider for provider in list_providers() if provider.provider == "chatgpt-pro"
-    ]
+    (registered,) = [provider for provider in list_providers() if provider.provider == "chatgpt-pro"]
     assert not registered.active
 
 
@@ -194,8 +172,6 @@ def test_missing_login_is_unavailable(tmp_path: Path) -> None:
 
 
 def test_missing_current_node_fails_instead_of_returning_zero() -> None:
-    conversation = Conversation.model_validate(
-        {"mapping": {}, "current_node": "missing"}
-    )
+    conversation = Conversation.model_validate({"mapping": {}, "current_node": "missing"})
     with pytest.raises(KeyError):
         extract_finals(conversation, "conversation", "salt")

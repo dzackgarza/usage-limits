@@ -48,13 +48,9 @@ class Tokens(BaseModel):
     def same_account(self) -> Tokens:
         # txcript's account_id_from_token reads this same OAuth JWT claim.
         encoded = self.access_token.split(".")[1]
-        claims = TokenClaims.model_validate(
-            json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
-        )
+        claims = TokenClaims.model_validate(json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4))))
         if claims.auth.chatgpt_account_id != self.account_id:
-            raise ValueError(
-                "ChatGPT token account differs from its credential account"
-            )
+            raise ValueError("ChatGPT token account differs from its credential account")
         return self
 
 
@@ -196,9 +192,7 @@ def _ancestry(conversation: Conversation, start: str) -> list[str]:
     return path
 
 
-def extract_finals(
-    conversation: Conversation, conversation_id: str, salt: str
-) -> dict[str, ProFinal]:
+def extract_finals(conversation: Conversation, conversation_id: str, salt: str) -> dict[str, ProFinal]:
     """Retain all strict finals; collapse only structurally supported serial groups.
 
     Issue 3436's multi-final examples require the same nearest user, exchange,
@@ -229,20 +223,13 @@ def extract_finals(
         finals[key] = ProFinal(timestamp=message.create_time, model=model, group=key)
         path = _ancestry(conversation, node_id)
         user = next(
-            (
-                ancestor
-                for ancestor in path
-                if (m := conversation.mapping[ancestor].message) is not None
-                and m.author.role == "user"
-            ),
+            (ancestor for ancestor in path if (m := conversation.mapping[ancestor].message) is not None and m.author.role == "user"),
             None,
         )
         if user is None or metadata.turn_exchange_id is None or node_id not in active:
             continue
         segment = path[: path.index(user) + 1]
-        if any(
-            len(conversation.mapping[ancestor].children) > 1 for ancestor in segment
-        ):
+        if any(len(conversation.mapping[ancestor].children) > 1 for ancestor in segment):
             continue
         if any(
             (other := conversation.mapping[ancestor].message) is not None
@@ -250,31 +237,22 @@ def extract_finals(
             and other.end_turn is True
             and other.recipient in (None, "all")
             and not other.metadata.is_visually_hidden_from_conversation
-            and (other.metadata.resolved_model_slug or other.metadata.model_slug)
-            != model
+            and (other.metadata.resolved_model_slug or other.metadata.model_slug) != model
             for ancestor in segment
         ):
             continue
-        candidates.setdefault((user, metadata.turn_exchange_id, model), []).append(
-            node_id
-        )
+        candidates.setdefault((user, metadata.turn_exchange_id, model), []).append(node_id)
 
     for (user, exchange, model), members in candidates.items():
         if len(members) < 2:
             continue
         # Require internal/tool continuation between every pair of serial finals.
-        ordered = sorted(
-            members, key=lambda member: len(_ancestry(conversation, member))
-        )
+        ordered = sorted(members, key=lambda member: len(_ancestry(conversation, member)))
         supported = True
         for before, after in zip(ordered, ordered[1:]):
             path = _ancestry(conversation, after)
             between = path[1 : path.index(before)]
-            if not any(
-                (m := conversation.mapping[ancestor].message) is not None
-                and (m.author.role == "tool" or m.recipient not in (None, "all"))
-                for ancestor in between
-            ):
+            if not any((m := conversation.mapping[ancestor].message) is not None and (m.author.role == "tool" or m.recipient not in (None, "all")) for ancestor in between):
                 supported = False
         if not supported:
             continue
@@ -305,13 +283,9 @@ class ChatGPTClient:
             if self.cooldown_path.exists():
                 retry_at = float(self.cooldown_path.read_text())
                 if time.time() < retry_at:
-                    raise RuntimeError(
-                        f"ChatGPT rate-limit cooldown until {datetime.fromtimestamp(retry_at, UTC).isoformat()}"
-                    )
+                    raise RuntimeError(f"ChatGPT rate-limit cooldown until {datetime.fromtimestamp(retry_at, UTC).isoformat()}")
             if self.requests >= 200:
-                raise RuntimeError(
-                    "ChatGPT history request budget exceeded; ledger remains unchanged"
-                )
+                raise RuntimeError("ChatGPT history request budget exceeded; ledger remains unchanged")
             time.sleep(max(0.0, self.last_request + 1.0 - time.monotonic()))
             self.last_request = time.monotonic()
             self.requests += 1
@@ -325,20 +299,14 @@ class ChatGPTClient:
                     "Accept": "application/json",
                     "Referer": ORIGIN + "/",
                 },
-                json={"model": "gpt-6-pro", "timezone_offset_min": 0, "timezone": "UTC"}
-                if initialize
-                else None,
+                json={"model": "gpt-6-pro", "timezone_offset_min": 0, "timezone": "UTC"} if initialize else None,
                 allow_redirects=False,
                 timeout=30,
             )
             if response.status_code == 401 and attempt == 0:
-                updated = AuthFile.model_validate_json(
-                    self.auth_path.read_text()
-                ).tokens
+                updated = AuthFile.model_validate_json(self.auth_path.read_text()).tokens
                 if updated.account_id != self.tokens.account_id:
-                    raise ValueError(
-                        "ChatGPT credential changed accounts during collection"
-                    )
+                    raise ValueError("ChatGPT credential changed accounts during collection")
                 if updated.access_token != self.tokens.access_token:
                     self.tokens = updated
                     continue
@@ -346,23 +314,13 @@ class ChatGPTClient:
                 retry = response.headers.get("Retry-After")
                 delay = 300.0
                 if retry is not None:
-                    retry_seconds = (
-                        float(retry)
-                        if retry.isdecimal()
-                        else parsedate_to_datetime(retry).timestamp() - time.time()
-                    )
+                    retry_seconds = float(retry) if retry.isdecimal() else parsedate_to_datetime(retry).timestamp() - time.time()
                     delay = max(delay, retry_seconds)
                 _write_json_atomic(self.cooldown_path, time.time() + delay)
             if response.status_code != 200:
                 error_response = requests.Response()
                 error_response.status_code = response.status_code
-                error_response.headers.update(
-                    {
-                        name: value
-                        for name, value in response.headers.items()
-                        if value is not None
-                    }
-                )
+                error_response.headers.update({name: value for name, value in response.headers.items() if value is not None})
                 raise requests.HTTPError(
                     f"ChatGPT HTTP {response.status_code}; history usage unavailable",
                     response=error_response,
@@ -383,21 +341,15 @@ class ChatGPTClient:
                         "is_archived": str(archived).lower(),
                     }
                 )
-                page = HistoryPage.model_validate(
-                    self.request("/backend-api/conversations?" + query)
-                )
+                page = HistoryPage.model_validate(self.request("/backend-api/conversations?" + query))
                 for item in page.items:
                     if item.update_time >= cutoff:
                         conversations[item.id] = item
                 offset += len(page.items)
-                if offset >= page.total or (
-                    page.items and page.items[-1].update_time < cutoff
-                ):
+                if offset >= page.total or (page.items and page.items[-1].update_time < cutoff):
                     break
                 if not page.items:
-                    raise ValueError(
-                        "ChatGPT history pagination stopped before its total"
-                    )
+                    raise ValueError("ChatGPT history pagination stopped before its total")
 
         projects: set[str] = set()
         cursor: str | None = None
@@ -406,11 +358,7 @@ class ChatGPTClient:
             sidebar_query = {"owned_only": "true", "conversations_per_gizmo": "0"}
             if cursor is not None:
                 sidebar_query["cursor"] = cursor
-            sidebar = SidebarPage.model_validate(
-                self.request(
-                    "/backend-api/gizmos/snorlax/sidebar?" + urlencode(sidebar_query)
-                )
-            )
+            sidebar = SidebarPage.model_validate(self.request("/backend-api/gizmos/snorlax/sidebar?" + urlencode(sidebar_query)))
             projects.update(item.gizmo.gizmo.id for item in sidebar.items)
             cursor = sidebar.cursor
             if cursor is None:
@@ -422,12 +370,7 @@ class ChatGPTClient:
             cursor = "0"
             seen = set()
             while True:
-                page_project = ProjectPage.model_validate(
-                    self.request(
-                        f"/backend-api/gizmos/{quote(project, safe='')}/conversations?"
-                        + urlencode({"cursor": cursor})
-                    )
-                )
+                page_project = ProjectPage.model_validate(self.request(f"/backend-api/gizmos/{quote(project, safe='')}/conversations?" + urlencode({"cursor": cursor})))
                 for item in page_project.items:
                     if item.update_time >= cutoff:
                         previous = conversations.get(item.id)
@@ -452,11 +395,7 @@ class ChatGPTProProvider(ProviderAccount):
 
     def __init__(self) -> None:
         auth_home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
-        self.auth_path = (
-            resolve_path(settings.chatgpt_pro.auth_file)
-            if settings.chatgpt_pro.auth_file is not None
-            else auth_home / "auth.json"
-        )
+        self.auth_path = resolve_path(settings.chatgpt_pro.auth_file) if settings.chatgpt_pro.auth_file is not None else auth_home / "auth.json"
         tokens = AuthFile.model_validate_json(self.auth_path.read_text()).tokens
         super().__init__(account_id=_digest("chatgpt-pro", tokens.account_id))
 
@@ -496,25 +435,14 @@ class ChatGPTProProvider(ProviderAccount):
                     )
                 )
                 if ledger.account != self.account_id:
-                    raise ValueError(
-                        "ChatGPT accounting ledger belongs to another account"
-                    )
-                init = InitResponse.model_validate(
-                    client.request("/backend-api/conversation/init", initialize=True)
-                )
-                limits = [
-                    limit
-                    for limit in init.model_limits
-                    if limit.model_slug in PRO_MODELS and limit.resets_after > now
-                ]
+                    raise ValueError("ChatGPT accounting ledger belongs to another account")
+                init = InitResponse.model_validate(client.request("/backend-api/conversation/init", initialize=True))
+                limits = [limit for limit in init.model_limits if limit.model_slug in PRO_MODELS and limit.resets_after > now]
                 if limits:
                     ledger.server_reset = max(limit.resets_after for limit in limits)
                     ledger.last_blocked_at = now
                     ledger.first_unblocked_at = None
-                elif (
-                    ledger.last_blocked_at is not None
-                    and ledger.first_unblocked_at is None
-                ):
+                elif ledger.last_blocked_at is not None and ledger.first_unblocked_at is None:
                     ledger.first_unblocked_at = now
                 cutoff = now - WEEK
                 if ledger.server_reset is not None and ledger.server_reset > now:
@@ -523,21 +451,13 @@ class ChatGPTProProvider(ProviderAccount):
                     key = _digest(ledger.salt, item.id)
                     if ledger.conversations.get(key) == item.update_time:
                         continue
-                    conversation = Conversation.model_validate(
-                        client.request(
-                            "/backend-api/conversation/" + quote(item.id, safe="")
-                        )
-                    )
-                    ledger.finals.update(
-                        extract_finals(conversation, item.id, ledger.salt)
-                    )
+                    conversation = Conversation.model_validate(client.request("/backend-api/conversation/" + quote(item.id, safe="")))
+                    ledger.finals.update(extract_finals(conversation, item.id, ledger.salt))
                     ledger.conversations[key] = item.update_time
                 ledger.observed_at = now
                 _write_json_atomic(ledger_path, ledger.model_dump(mode="json"))
                 ledger_path.chmod(0o600)
-                return self.summarize(
-                    ledger, now, limit=settings.chatgpt_pro.weekly_limit
-                )
+                return self.summarize(ledger, now, limit=settings.chatgpt_pro.weekly_limit)
             finally:
                 client.close()
 
@@ -547,11 +467,7 @@ class ChatGPTProProvider(ProviderAccount):
         end = server_reset if anchored else now
         assert end is not None
         start = end - WEEK
-        finals = [
-            final
-            for final in ledger.finals.values()
-            if start.timestamp() <= final.timestamp < end.timestamp()
-        ]
+        finals = [final for final in ledger.finals.values() if start.timestamp() <= final.timestamp < end.timestamp()]
         interactions = len({final.group for final in finals})
         blocked = anchored and ledger.first_unblocked_at is None
         return {
@@ -562,28 +478,20 @@ class ChatGPTProProvider(ProviderAccount):
             "remaining_max": 0 if blocked else max(0, limit - interactions),
             "window_start": start.isoformat(),
             "window_end": end.isoformat(),
-            "window_basis": "server-reset-minus-seven-days"
-            if anchored
-            else "provisional-rolling-seven-days",
+            "window_basis": "server-reset-minus-seven-days" if anchored else "provisional-rolling-seven-days",
             "blocked": blocked,
             "server_reset": end.isoformat() if anchored else None,
             "observed_at": ledger.observed_at.isoformat(),
         }
 
     def to_rows(self, raw: ProUsage) -> list[UsageRow]:
-        count = (
-            str(raw["interactions"])
-            if raw["interactions"] == raw["raw_finals"]
-            else f"{raw['interactions']}–{raw['raw_finals']}"
-        )
+        count = str(raw["interactions"]) if raw["interactions"] == raw["raw_finals"] else f"{raw['interactions']}–{raw['raw_finals']}"
         label = f"ChatGPT Pro weekly — {count} / {raw['limit']} messages · Estimated"
         reset = raw["server_reset"]
         return [
             ChatGPTProRow(
                 identifier=label + (" · server blocked" if raw["blocked"] else ""),
-                pct_used=100
-                if raw["blocked"]
-                else round(100 * raw["interactions"] / raw["limit"]),
+                pct_used=100 if raw["blocked"] else round(100 * raw["interactions"] / raw["limit"]),
                 server_blocked=raw["blocked"],
                 reset_at=datetime.fromisoformat(reset) if reset is not None else None,
             )
