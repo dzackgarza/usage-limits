@@ -16,9 +16,22 @@ from usage_limits.providers.chatgpt_pro import (
     MessageMetadata,
     Node,
     ProFinal,
+    ProjectPage,
     extract_finals,
 )
 from usage_limits.registry import get_provider_class, list_providers
+
+
+def test_project_pagination_covers_only_updated_history() -> None:
+    page = ProjectPage.model_validate({"items": [
+        {"id": "recent", "update_time": "2026-10-24T12:00:00Z"},
+        {"id": "previous", "update_time": "2026-10-23T12:00:00Z"},
+    ], "cursor": "next"})
+    assert page.needs_next_page(datetime(2026, 10, 22, tzinfo=UTC))
+    assert not page.needs_next_page(datetime(2026, 10, 24, tzinfo=UTC))
+    page.items.reverse()
+    with pytest.raises(ValueError):
+        page.needs_next_page(datetime(2026, 10, 24, tzinfo=UTC))
 
 
 def test_captured_history_counts_completed_pro_messages() -> None:

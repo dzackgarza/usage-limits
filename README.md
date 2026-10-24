@@ -102,6 +102,7 @@ Run `codex login` if the credential needs renewal.
 Conversation contents enter the process during collection.
 Persistent state contains salted identifiers, timestamps, model and grouping data, and reset observations.
 The ledger is scoped to the authenticated account under `~/.local/state/chatgpt_pro_usage/`. Only changed conversations are fetched again.
+Later collections stop history pagination at the last successful observation.
 Successful collections are cached for five minutes.
 Requests are spaced and bounded; HTTP 429 starts a cooldown.
 Collection errors leave the ledger intact and report unavailable usage.

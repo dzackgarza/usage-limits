@@ -105,6 +105,17 @@ class ProjectPage(BaseModel):
     items: list[IndexItem]
     cursor: str | None
 
+    def needs_next_page(self, cutoff: datetime) -> bool:
+        """Stop an ordered history scan once it reaches already-covered activity."""
+        if self.cursor is None:
+            return False
+        if not self.items:
+            raise ValueError("ChatGPT project history returned an empty nonterminal page")
+        timestamps = [item.update_time for item in self.items]
+        if timestamps != sorted(timestamps, reverse=True):
+            raise ValueError("ChatGPT project history is not ordered by update time")
+        return timestamps[-1] >= cutoff
+
 
 class GizmoId(BaseModel):
     id: str
@@ -376,8 +387,9 @@ class ChatGPTClient:
                         previous = conversations.get(item.id)
                         if previous is None or previous.update_time < item.update_time:
                             conversations[item.id] = item
-                if page_project.cursor is None:
+                if not page_project.needs_next_page(cutoff):
                     break
+                assert page_project.cursor is not None
                 if page_project.cursor in seen:
                     raise ValueError("ChatGPT project history repeated a cursor")
                 seen.add(cursor)
@@ -447,7 +459,8 @@ class ChatGPTProProvider(ProviderAccount):
                 cutoff = now - WEEK
                 if ledger.server_reset is not None and ledger.server_reset > now:
                     cutoff = min(cutoff, ledger.server_reset - WEEK)
-                for item in client.history(cutoff).values():
+                history_cutoff = max(cutoff, ledger.observed_at) if ledger.conversations else cutoff
+                for item in client.history(history_cutoff).values():
                     key = _digest(ledger.salt, item.id)
                     if ledger.conversations.get(key) == item.update_time:
                         continue
