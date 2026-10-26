@@ -113,16 +113,23 @@ class CursorProvider(ProviderAccount):
         usage = raw["individualUsage"]
         rows: list[UsageRow] = []
 
-        # Plan usage — always report
         plan = usage["plan"]
+        
+        # Cursor API contract: limit=0 implies exhausted/no quota.
+        # Ensure we have required keys, or fail loudly.
+        if "used" not in plan or "limit" not in plan:
+            raise KeyError("Unexpected Cursor API response: 'used' or 'limit' missing in plan data.")
+
         plan_limit = plan["limit"]
         plan_used = plan["used"]
 
-        if isinstance(plan_limit, int) and plan_limit > 0:
-            pct_used = (plan_used / plan_limit) * 100
-        else:
-            # limit=0 means no quota (free/exhausted), not undefined
-            pct_used = 100.0
+        match plan_limit:
+            case 0:
+                pct_used = 100.0
+            case n if isinstance(n, int) and n > 0:
+                pct_used = (plan_used / n) * 100
+            case _:
+                raise ValueError(f"Unexpected Cursor quota limit: {plan_limit!r}")
 
         billing_end = raw["billingCycleEnd"]
         reset_at = None
