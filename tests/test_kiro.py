@@ -11,7 +11,11 @@ import json
 import sqlite3
 from typing import cast
 
-from usage_limits.providers.kiro import KiroProvider
+from usage_limits.providers.kiro import (
+    KiroProvider,
+    KiroRefreshResponse,
+    KiroStoredToken,
+)
 
 
 def test_kiro_live_api() -> None:
@@ -36,18 +40,18 @@ def test_kiro_live_api() -> None:
 def test_kiro_refresh_persists_rotated_refresh_token(tmp_path) -> None:
     """A refresh must replace both tokens in Kiro CLI's credential record."""
     db_path = tmp_path / "data.sqlite3"
-    original = {
-        "access_token": "expired-access-token",
-        "refresh_token": "consumed-refresh-token",
-        "provider": "Google",
-        "expires_at": "2026-10-26T00:00:00Z",
-    }
-    refreshed = {
-        "accessToken": "new-access-token",
-        "refreshToken": "rotated-refresh-token",
-        "expiresIn": 3600,
-        "profileArn": "arn:aws:codewhisperer:us-east-1:699475941385:profile/example",
-    }
+    original = KiroStoredToken(
+        access_token="expired-access-token",
+        refresh_token="consumed-refresh-token",
+        provider="Google",
+        expires_at="2026-10-26T00:00:00Z",
+    )
+    refreshed = KiroRefreshResponse(
+        accessToken="new-access-token",
+        refreshToken="rotated-refresh-token",
+        expiresIn=3600,
+        profileArn="arn:aws:codewhisperer:us-east-1:699475941385:profile/example",
+    )
 
     with sqlite3.connect(db_path) as conn:
         conn.execute("CREATE TABLE auth_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
@@ -65,7 +69,7 @@ def test_kiro_refresh_persists_rotated_refresh_token(tmp_path) -> None:
             "SELECT value FROM auth_kv WHERE key = 'kirocli:social:token'"
         ).fetchone()
     assert row is not None
-    stored = cast(dict[str, str], json.loads(row[0]))
+    stored = cast(KiroStoredToken, json.loads(row[0]))
     assert stored["access_token"] == "new-access-token"
     assert stored["refresh_token"] == "rotated-refresh-token"
     assert stored["provider"] == "Google"
