@@ -186,7 +186,7 @@ def test_chatgpt_pro_is_in_default_collection() -> None:
 
 def test_missing_login_is_unavailable(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
-        ChatGPTClient(tmp_path / "auth.json", tmp_path / "cooldown.json")
+        ChatGPTClient(tmp_path / "auth.json")
 
 
 def test_missing_current_node_fails_instead_of_returning_zero() -> None:
