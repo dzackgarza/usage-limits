@@ -124,7 +124,11 @@ def doctor() -> list[Result]:
 
     # ---- Credential Store (Global) ----
     if store.root_dir.is_dir():
-        checks = [Check(description=f"Credential store exists at {store.root_dir}", status="ok")]
+        checks = [
+            Check(
+                description=f"Credential store exists at {store.root_dir}", status="ok"
+            )
+        ]
         status = "ok"
     else:
         checks = [
@@ -153,7 +157,9 @@ def doctor() -> list[Result]:
     try:
         conn = sqlite3.connect(kiro_db)
         cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM auth_kv WHERE key = 'kirocli:social:token'")
+        cursor.execute(
+            "SELECT COUNT(*) FROM auth_kv WHERE key = 'kirocli:social:token'"
+        )
         count = cursor.fetchone()[0]
         conn.close()
         checks.append(
@@ -174,12 +180,7 @@ def doctor() -> list[Result]:
     results.append(Result(component="kiro", status=status, checks=checks))
 
     # ---- Claude ----
-    checks = [
-        _check_standalone_file(
-            resolve_path(settings.paths.claude_credentials),
-            "Claude credentials",
-        ),
-    ]
+    checks = _check_store_provider(store, "claude")
     status = "ok" if all(c.status == "ok" for c in checks) else "error"
     results.append(Result(component="claude", status=status, checks=checks))
 
@@ -212,7 +213,9 @@ def doctor() -> list[Result]:
                 Check(
                     description="gh auth: not logged in or token expired",
                     status="error",
-                    remediation=("Run: gh auth login\n  This will prompt you to authenticate with GitHub.\n  Copilot usage data requires an active GitHub session."),
+                    remediation=(
+                        "Run: gh auth login\n  This will prompt you to authenticate with GitHub.\n  Copilot usage data requires an active GitHub session."
+                    ),
                 )
             )
     else:
@@ -220,7 +223,9 @@ def doctor() -> list[Result]:
             Check(
                 description="gh CLI not found in PATH",
                 status="error",
-                remediation=("Install GitHub CLI: https://cli.github.com/\n  Then authenticate: gh auth login"),
+                remediation=(
+                    "Install GitHub CLI: https://cli.github.com/\n  Then authenticate: gh auth login"
+                ),
             ),
         ]
     status = "ok" if all(c.status == "ok" for c in checks) else "error"

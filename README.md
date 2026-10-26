@@ -25,7 +25,7 @@ Failed providers show the original error type and message with no usage rows; su
 | :--- | :--- | :--- |
 | Antigravity | Local OAuth | Run `usage-limits login antigravity` |
 | Agy Secret Pool | Local OAuth (shares Antigravity) | Run `usage-limits login antigravity` |
-| Claude Code | OAuth credential | Run `claude login` |
+| Claude Code | App-owned subscription OAuth | Run `usage-limits login claude` |
 | Codex | Local OAuth | Run `usage-limits login codex` (or `codex login`) |
 | ChatGPT Pro | Estimated message counts from ChatGPT history | Run `codex login`, then `usage-limits` |
 | Copilot | GitHub CLI token | Run `gh auth login` |
@@ -50,11 +50,11 @@ Reads OAuth refresh tokens from the internal credential store, then calls the Go
 
 ### Claude Code
 
-Reads the OAuth credential file produced by `claude login`.
+Uses its own OAuth login and refresh token to read Claude subscription usage.
 
-- **Setup**: Run `claude login` and complete the browser-based OAuth flow.
+- **Setup**: Run `usage-limits login claude` and complete the browser-based OAuth flow.
 
-- **File**: `~/.claude/.credentials.json`
+- **File**: `~/.config/usage-limits/credentials/claude/default.json`
 
 ### Codex
 

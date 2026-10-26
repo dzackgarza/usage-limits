@@ -3,6 +3,7 @@ import subprocess
 import typer
 
 from usage_limits.auth.oauth import LocalhostBrowserFlow
+from usage_limits.auth.claude import claude_oauth_flow
 from usage_limits.auth.store import CredentialStore
 
 login_app = typer.Typer(
@@ -17,9 +18,14 @@ def login_main(ctx: typer.Context) -> None:
     if ctx.invoked_subcommand:
         return
 
-    subprocess.run(["gum", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+    subprocess.run(
+        ["gum", "--version"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=True,
+    )
 
-    choices = ["antigravity", "codex"]
+    choices = ["antigravity", "codex", "claude"]
     result = subprocess.run(
         [*["gum", "choose", "--header", "Select a provider to login:"], *choices],
         stdout=subprocess.PIPE,
@@ -34,6 +40,18 @@ def login_main(ctx: typer.Context) -> None:
         login_antigravity()
     elif choice == "codex":
         login_codex()
+    elif choice == "claude":
+        login_claude()
+
+
+@login_app.command("claude")
+def login_claude() -> None:
+    """Authorize this app to read Claude subscription usage."""
+    credential = claude_oauth_flow().login()
+    assert credential["refresh_token"] is not None
+    store = CredentialStore()
+    store.save("claude", "default", credential)
+    typer.echo("Claude subscription credential saved.")
 
 
 @login_app.command("remove")
@@ -54,7 +72,9 @@ def login_antigravity() -> None:
     """Login to Google Cloud Code (Antigravity)."""
     typer.echo("Logging in to Antigravity (Google Cloud Code)...\n")
 
-    client_id = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+    client_id = (
+        "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+    )
     client_secret = "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"
     scopes = [
         "openid",

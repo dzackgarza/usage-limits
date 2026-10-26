@@ -18,7 +18,6 @@
 
 # [paths]
 # antigravity_cockpit_dir = "~/.antigravity_cockpit"
-# claude_credentials = "~/.claude/.credentials.json"
 # codex_auth = "~/.codex/auth.json"
 # cursor_state_db = "~/.config/Cursor/User/globalStorage/state.vscdb"
 # kiro_db = "~/.local/share/kiro-cli/data.sqlite3"

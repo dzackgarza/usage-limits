@@ -58,7 +58,9 @@ class ServerSettings(BaseModel):
 class AntigravitySettings(BaseModel):
     """OAuth and API values for the Antigravity/Google Cloud Code provider."""
 
-    client_id: str = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+    client_id: str = (
+        "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+    )
     client_secret: str = "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"
     # Antigravity CLI runs on the "daily" release channel, which enforces quota
     # against daily-cloudcode-pa — a *separate* backend from production
@@ -143,7 +145,6 @@ class PathsSettings(BaseModel):
     """
 
     credentials_dir: str = "~/.config/usage-limits/credentials"
-    claude_credentials: str = "~/.claude/.credentials.json"
     cursor_state_db: str = "~/.config/Cursor/User/globalStorage/state.vscdb"
     kiro_db: str = "~/.local/share/kiro-cli/data.sqlite3"
     trae_storage: str = "~/.config/Trae/User/globalStorage/storage.json"

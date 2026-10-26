@@ -2,24 +2,18 @@
 
 from __future__ import annotations
 
-import json
 import os
 import shutil
-import subprocess
-import tempfile
 from datetime import UTC, datetime
-from typing import Any, TypedDict, cast
+from typing import TypedDict, cast
 
 import requests
 
 from usage_limits.base import ProviderAccount
-from usage_limits.config import resolve_path, settings
+from usage_limits.auth.claude import claude_oauth_flow
+from usage_limits.auth.store import CredentialStore, StoredCredential
+from usage_limits.config import settings
 from usage_limits.table import UsageRow
-
-
-class ClaudeCredentials(TypedDict):
-    accessToken: str
-    scopes: list[str]
 
 
 class ClaudeUsageWindow(TypedDict):
@@ -42,63 +36,53 @@ class ClaudeProvider(ProviderAccount):
 
     def __init__(self) -> None:
         super().__init__()
-        self.cred_file = resolve_path(settings.paths.claude_credentials)
+        self.store = CredentialStore()
 
     def provider_name(self) -> str:
         return "Claude"
 
-    def get_credentials(self) -> ClaudeCredentials:
-        data: dict[str, Any] = json.loads(self.cred_file.read_text())
-        return cast(ClaudeCredentials, data["claudeAiOauth"])
+    def get_credentials(self) -> StoredCredential:
+        return self.store.get("claude", self.account_id)
 
     def _get_claude_bin(self) -> str:
         """Find the claude executable."""
         return shutil.which("claude") or os.path.expanduser("~/.local/bin/claude")
 
-    def _wake_cli(self) -> bool:
-        """Run a minimal Claude CLI turn to refresh tokens or reset rate limit.
-
-        Runs in a temp directory with empty setting sources to minimize
-        token overhead. Only attempts once.
-        """
-        claude_bin = self._get_claude_bin()
-        with tempfile.TemporaryDirectory() as tmpdir:
-            result = subprocess.run(
-                [
-                    claude_bin,
-                    "--safe-mode",
-                    "--tools",
-                    "",
-                    "--no-session-persistence",
-                    "--system-prompt",
-                    "You are a minimal token refresher. Reply only with 'ok'.",
-                    "-p",
-                    "ok",
-                ],
-                cwd=tmpdir,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            return result.returncode == 0
+    def _refresh(self, old_token: str) -> str:
+        with self.store.lock("claude", self.account_id):
+            credential = self.get_credentials()
+            if credential["access_token"] != old_token:
+                return credential["access_token"]
+            refresh_token = credential["refresh_token"]
+            assert refresh_token is not None
+            result = claude_oauth_flow().refresh(refresh_token)
+            credential["access_token"] = result["access_token"]
+            credential["expires_at"] = result["expires_at"]
+            if result["new_refresh_token"] is not None:
+                credential["refresh_token"] = result["new_refresh_token"]
+            self.store.save("claude", self.account_id, credential)
+            return credential["access_token"]
 
     def fetch_raw(self) -> ClaudeUsageResponse:
-        def _call(creds: ClaudeCredentials) -> requests.Response:
+        def _call(access_token: str) -> requests.Response:
             return requests.get(
                 settings.claude.api_url,
                 headers={
-                    "Authorization": f"Bearer {creds['accessToken']}",
+                    "Authorization": f"Bearer {access_token}",
                     "anthropic-beta": settings.claude.beta_header,
                 },
                 timeout=30,
             )
 
         creds = self.get_credentials()
-        resp = _call(creds)
-        if resp.status_code in (401, 429):
-            self._wake_cli()
-            creds = self.get_credentials()
-            resp = _call(creds)
+        access_token = creds["access_token"]
+        expires_at = creds["expires_at"]
+        assert expires_at is not None
+        if datetime.fromisoformat(expires_at) <= datetime.now(UTC):
+            access_token = self._refresh(access_token)
+        resp = _call(access_token)
+        if resp.status_code == 401:
+            resp = _call(self._refresh(access_token))
         resp.raise_for_status()
         return cast(ClaudeUsageResponse, resp.json())
 

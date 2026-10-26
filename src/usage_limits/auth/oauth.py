@@ -9,7 +9,7 @@ import urllib.parse
 import webbrowser
 from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Any, TypedDict, cast
+from typing import Any, Literal, TypedDict, cast
 
 import requests
 
@@ -43,11 +43,15 @@ class OAuthTokenErrorResponse(TypedDict):
 class OAuthReauthRequiredError(RuntimeError):
     """Raised when a refresh token is invalidated and login is required."""
 
-    def __init__(self, *, status_code: int, error_code: str, error_message: str) -> None:
+    def __init__(
+        self, *, status_code: int, error_code: str, error_message: str
+    ) -> None:
         self.status_code = status_code
         self.error_code = error_code
         self.error_message = error_message
-        super().__init__(f"OAuth reauthorization required after refresh failed: {status_code} {error_code}: {error_message}")
+        super().__init__(
+            f"OAuth reauthorization required after refresh failed: {status_code} {error_code}: {error_message}"
+        )
 
 
 class OAuthCallbackHandler(BaseHTTPRequestHandler):
@@ -77,21 +81,34 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
 
         if "error" in query:
             OAuthCallbackHandler.auth_error = query["error"][0]
-            self.wfile.write(b"<html><body><h1>Authentication Failed</h1><p>You can close this window.</p></body></html>")
+            self.wfile.write(
+                b"<html><body><h1>Authentication Failed</h1><p>You can close this window.</p></body></html>"
+            )
             return
 
-        if "state" not in query or query["state"][0] != OAuthCallbackHandler.expected_state:
-            OAuthCallbackHandler.auth_error = "Invalid state parameter (CSRF mitigation failed)."
-            self.wfile.write(b"<html><body><h1>Authentication Failed</h1><p>Invalid state. You can close this window.</p></body></html>")
+        if (
+            "state" not in query
+            or query["state"][0] != OAuthCallbackHandler.expected_state
+        ):
+            OAuthCallbackHandler.auth_error = (
+                "Invalid state parameter (CSRF mitigation failed)."
+            )
+            self.wfile.write(
+                b"<html><body><h1>Authentication Failed</h1><p>Invalid state. You can close this window.</p></body></html>"
+            )
             return
 
         if "code" in query:
             OAuthCallbackHandler.auth_code = query["code"][0]
-            self.wfile.write(b"<html><body><h1>Authentication Successful</h1><p>You can close this window and return to the terminal.</p></body></html>")
+            self.wfile.write(
+                b"<html><body><h1>Authentication Successful</h1><p>You can close this window and return to the terminal.</p></body></html>"
+            )
             return
 
         OAuthCallbackHandler.auth_error = "No code or error received."
-        self.wfile.write(b"<html><body><h1>Authentication Failed</h1><p>No code received. You can close this window.</p></body></html>")
+        self.wfile.write(
+            b"<html><body><h1>Authentication Failed</h1><p>No code received. You can close this window.</p></body></html>"
+        )
 
 
 class LocalhostBrowserFlow:
@@ -111,6 +128,9 @@ class LocalhostBrowserFlow:
         access_type: str | None = "offline",
         prompt: str | None = "consent",
         redirect_host: str = "127.0.0.1",
+        token_encoding: Literal["form", "json"] = "form",
+        token_state: bool = False,
+        open_browser: bool = True,
     ) -> None:
         self.client_id = client_id
         self.client_secret = client_secret
@@ -124,6 +144,14 @@ class LocalhostBrowserFlow:
         self.access_type = access_type
         self.prompt = prompt
         self.redirect_host = redirect_host
+        self.token_encoding = token_encoding
+        self.token_state = token_state
+        self.open_browser = open_browser
+
+    def _post_token(self, payload: dict[str, str]) -> requests.Response:
+        if self.token_encoding == "json":
+            return requests.post(self.token_url, json=payload, timeout=30)
+        return requests.post(self.token_url, data=payload, timeout=30)
 
     def _get_free_port(self) -> int:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -132,7 +160,13 @@ class LocalhostBrowserFlow:
 
     def _generate_pkce(self) -> tuple[str, str]:
         code_verifier = secrets.token_urlsafe(96)
-        code_challenge = base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode("ascii")).digest()).decode("ascii").rstrip("=")
+        code_challenge = (
+            base64.urlsafe_b64encode(
+                hashlib.sha256(code_verifier.encode("ascii")).digest()
+            )
+            .decode("ascii")
+            .rstrip("=")
+        )
         return code_verifier, code_challenge
 
     def _get_email_from_id_token(self, id_token: str) -> str:
@@ -187,17 +221,23 @@ class LocalhostBrowserFlow:
         url_parts[4] = urllib.parse.urlencode(query)
         auth_url = urllib.parse.urlunparse(url_parts)
 
-        sys.stderr.write(f"Please open this URL in your browser to authorize:\n{auth_url}\n\n")
+        sys.stderr.write(
+            f"Please open this URL in your browser to authorize:\n{auth_url}\n\n"
+        )
         sys.stderr.write("Waiting for authorization... ")
         sys.stderr.flush()
 
-        import contextlib
+        if self.open_browser:
+            import contextlib
 
-        with contextlib.suppress(Exception):
-            webbrowser.open(auth_url)
+            with contextlib.suppress(Exception):
+                webbrowser.open(auth_url)
 
         # Wait for callback
-        while OAuthCallbackHandler.auth_code is None and OAuthCallbackHandler.auth_error is None:
+        while (
+            OAuthCallbackHandler.auth_code is None
+            and OAuthCallbackHandler.auth_error is None
+        ):
             server.handle_request()
 
         sys.stderr.write("✓\n")
@@ -219,8 +259,12 @@ class LocalhostBrowserFlow:
             token_data["client_secret"] = self.client_secret
         if self.use_pkce and code_verifier:
             token_data["code_verifier"] = code_verifier
+        if self.token_state:
+            token_data["state"] = state
 
-        resp = requests.post(self.token_url, data=token_data, timeout=30)
+        resp = self._post_token(token_data)
+        if self.token_encoding == "json":
+            resp.raise_for_status()
         if not resp.ok:
             raise RuntimeError(f"Token exchange failed: {resp.status_code} {resp.text}")
 
@@ -232,7 +276,9 @@ class LocalhostBrowserFlow:
         expires_at = None
         if "expires_in" in data:
             now = time.time()
-            expires_at = datetime.fromtimestamp(now + float(data["expires_in"]), tz=UTC).isoformat()
+            expires_at = datetime.fromtimestamp(
+                now + float(data["expires_in"]), tz=UTC
+            ).isoformat()
 
         email = "unknown"
         if "id_token" in data:
@@ -263,7 +309,9 @@ class LocalhostBrowserFlow:
         if self.client_secret:
             data["client_secret"] = self.client_secret
 
-        resp = requests.post(self.token_url, data=data, timeout=30)
+        resp = self._post_token(data)
+        if self.token_encoding == "json":
+            resp.raise_for_status()
         if not resp.ok:
             if resp.status_code == 401:
                 error_response = cast(OAuthTokenErrorResponse, resp.json())
@@ -282,7 +330,9 @@ class LocalhostBrowserFlow:
         expires_at = None
         if "expires_in" in resp_data:
             now = time.time()
-            expires_at = datetime.fromtimestamp(now + float(resp_data["expires_in"]), tz=UTC).isoformat()
+            expires_at = datetime.fromtimestamp(
+                now + float(resp_data["expires_in"]), tz=UTC
+            ).isoformat()
 
         # OpenAI (and other providers) rotate refresh tokens: the old
         # token is invalidated and a new one is returned.  If we don't

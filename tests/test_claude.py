@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from usage_limits.providers.claude import ClaudeProvider
+from usage_limits.auth.store import CredentialStore
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 
@@ -37,9 +38,27 @@ def test_claude_to_rows_with_captured_fixture() -> None:
     assert seven_day.reset_at == datetime(2026, 5, 27, 5, 0, 0, 171943, tzinfo=UTC)
 
 
+def test_claude_uses_its_own_oauth_credential(tmp_path: Path) -> None:
+    store = CredentialStore(tmp_path)
+    store.save(
+        "claude",
+        "default",
+        {
+            "access_token": "stored-access-token",
+            "refresh_token": "stored-refresh-token",
+            "expires_at": "2026-11-01T00:00:00+00:00",
+            "email": "default",
+        },
+    )
+    provider = ClaudeProvider()
+    provider.store = store
+
+    assert provider.get_credentials()["access_token"] == "stored-access-token"
+
+
 def test_claude_missing_credentials(tmp_path: Path) -> None:
     provider = ClaudeProvider()
-    provider.cred_file = tmp_path / "missing.json"
+    provider.store = CredentialStore(tmp_path)
 
     with pytest.raises(FileNotFoundError):
         provider.fetch_raw()
