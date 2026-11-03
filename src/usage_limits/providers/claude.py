@@ -16,18 +16,27 @@ from usage_limits.config import settings
 from usage_limits.table import UsageRow
 
 
-class ClaudeUsageWindow(TypedDict):
-    utilization: float
+class ClaudeLimitScope(TypedDict):
+    model: dict[str, str | None]
+    surface: str | None
+
+
+class ClaudeLimitEntry(TypedDict):
+    kind: str
+    group: str
+    percent: int
+    severity: str
     resets_at: str | None
+    scope: ClaudeLimitScope | None
+    is_active: bool
 
 
 class ClaudeUsageResponse(TypedDict):
-    five_hour: ClaudeUsageWindow
-    seven_day: ClaudeUsageWindow
+    limits: list[ClaudeLimitEntry]
 
 
 class ClaudeProvider(ProviderAccount):
-    """Claude Code usage checker (5-hour and 7-day OAuth-gated windows)."""
+    """Claude Code usage checker via OAuth-gated limits API."""
 
     slug = "claude"
     name = "Claude Code"
@@ -87,20 +96,18 @@ class ClaudeProvider(ProviderAccount):
         return cast(ClaudeUsageResponse, resp.json())
 
     def to_rows(self, raw: ClaudeUsageResponse) -> list[UsageRow]:
-        five_hour = raw["five_hour"]
-        seven_day = raw["seven_day"]
-        return [
-            UsageRow(
-                identifier="Claude (5h)",
-                pct_used=round(five_hour["utilization"]),
-                reset_at=_parse_dt(five_hour["resets_at"]),
-            ),
-            UsageRow(
-                identifier="Claude (7d)",
-                pct_used=round(seven_day["utilization"]),
-                reset_at=_parse_dt(seven_day["resets_at"]),
-            ),
-        ]
+        limits = raw["limits"]
+        rows: list[UsageRow] = []
+        for entry in limits:
+            label = _limit_label(entry)
+            rows.append(
+                UsageRow(
+                    identifier=label,
+                    pct_used=entry["percent"],
+                    reset_at=_parse_dt(entry["resets_at"]),
+                )
+            )
+        return rows
 
     def should_anchor(self, rows: list[UsageRow]) -> bool:
         if any(r.is_exhausted for r in rows):
@@ -128,6 +135,17 @@ class ClaudeProvider(ProviderAccount):
             "-p",
             "ok",
         ]
+
+
+def _limit_label(entry: ClaudeLimitEntry) -> str:
+    """Build a human-readable label from a limits-array entry."""
+    kind = entry["kind"]
+    scope = entry["scope"]
+    if scope is not None and scope["model"] is not None:
+        model_name = scope["model"]["display_name"]
+        if model_name is not None:
+            return f"Claude ({kind} · {model_name})"
+    return f"Claude ({kind})"
 
 
 def _parse_dt(ts: str | None) -> datetime | None:

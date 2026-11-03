@@ -25,17 +25,25 @@ def test_claude_to_rows_with_captured_fixture() -> None:
 
     assert len(rows) == 2
 
-    five_hour = rows[0]
-    assert five_hour.identifier == "Claude (5h)"
-    assert five_hour.pct_used == 5.0
-    assert five_hour.is_exhausted is False
-    assert five_hour.reset_at == datetime(2026, 5, 23, 15, 0, 0, 171921, tzinfo=UTC)
+    weekly_all = rows[0]
+    assert weekly_all.identifier == "Claude (weekly_all)"
+    assert weekly_all.pct_used == 100
+    assert weekly_all.is_exhausted is True
+    assert weekly_all.reset_at == datetime(2026, 11, 4, 5, 0, 0, 206173, tzinfo=UTC)
 
-    seven_day = rows[1]
-    assert seven_day.identifier == "Claude (7d)"
-    assert seven_day.pct_used == 98.0
-    assert seven_day.is_exhausted is False
-    assert seven_day.reset_at == datetime(2026, 5, 27, 5, 0, 0, 171943, tzinfo=UTC)
+    weekly_scoped = rows[1]
+    assert weekly_scoped.identifier == "Claude (weekly_scoped · Fable)"
+    assert weekly_scoped.pct_used == 77
+    assert weekly_scoped.is_exhausted is False
+    assert weekly_scoped.reset_at == datetime(2026, 11, 4, 5, 0, 0, 206332, tzinfo=UTC)
+
+
+def test_claude_to_rows_empty_limits() -> None:
+    """An API response with an empty limits array produces no rows."""
+    provider = ClaudeProvider()
+    raw = {"limits": []}
+    rows = provider.to_rows(raw)
+    assert rows == []
 
 
 def test_claude_uses_its_own_oauth_credential(tmp_path: Path) -> None:
