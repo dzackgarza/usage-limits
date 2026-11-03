@@ -26,13 +26,13 @@ def test_claude_to_rows_with_captured_fixture() -> None:
     assert len(rows) == 2
 
     weekly_all = rows[0]
-    assert weekly_all.identifier == "Claude (weekly_all)"
+    assert weekly_all.identifier == "Claude (weekly)"
     assert weekly_all.pct_used == 100
     assert weekly_all.is_exhausted is True
     assert weekly_all.reset_at == datetime(2026, 11, 4, 5, 0, 0, 206173, tzinfo=UTC)
 
     weekly_scoped = rows[1]
-    assert weekly_scoped.identifier == "Claude (weekly_scoped · Fable)"
+    assert weekly_scoped.identifier == "Claude (Fable)"
     assert weekly_scoped.pct_used == 77
     assert weekly_scoped.is_exhausted is False
     assert weekly_scoped.reset_at == datetime(2026, 11, 4, 5, 0, 0, 206332, tzinfo=UTC)

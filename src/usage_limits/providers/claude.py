@@ -139,13 +139,13 @@ class ClaudeProvider(ProviderAccount):
 
 def _limit_label(entry: ClaudeLimitEntry) -> str:
     """Build a human-readable label from a limits-array entry."""
-    kind = entry["kind"]
     scope = entry["scope"]
     if scope is not None and scope["model"] is not None:
         model_name = scope["model"]["display_name"]
         if model_name is not None:
-            return f"Claude ({kind} · {model_name})"
-    return f"Claude ({kind})"
+            return f"Claude ({model_name})"
+    group = entry["group"]
+    return f"Claude ({group})"
 
 
 def _parse_dt(ts: str | None) -> datetime | None:
