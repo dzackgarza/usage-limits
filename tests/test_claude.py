@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from usage_limits.providers.claude import ClaudeProvider
+from usage_limits.providers.claude import ClaudeProvider, ClaudeUsageResponse
 from usage_limits.auth.store import CredentialStore
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
@@ -23,7 +23,7 @@ def test_claude_to_rows_with_captured_fixture() -> None:
     raw = json.loads((FIXTURE_DIR / "claude_response.json").read_text())
     rows = provider.to_rows(raw)
 
-    assert len(rows) == 2
+    assert len(rows) == 3
 
     weekly_all = rows[0]
     assert weekly_all.identifier == "Claude (weekly)"
@@ -37,11 +37,17 @@ def test_claude_to_rows_with_captured_fixture() -> None:
     assert weekly_scoped.is_exhausted is False
     assert weekly_scoped.reset_at == datetime(2026, 11, 4, 5, 0, 0, 206332, tzinfo=UTC)
 
+    spend = rows[2]
+    assert spend.identifier == "Claude (API Spend $250)"
+    assert spend.pct_used == 100
+    assert spend.is_exhausted is True
+    assert spend.reset_at == datetime(2026, 11, 5, 7, 59, 0, tzinfo=UTC)
+
 
 def test_claude_to_rows_empty_limits() -> None:
-    """An API response with an empty limits array produces no rows."""
+    """An API response with empty limits and no spend window produces no rows."""
     provider = ClaudeProvider()
-    raw = {"limits": []}
+    raw: ClaudeUsageResponse = {"limits": [], "iguana_necktie": None}
     rows = provider.to_rows(raw)
     assert rows == []
 

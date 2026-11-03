@@ -31,8 +31,18 @@ class ClaudeLimitEntry(TypedDict):
     is_active: bool
 
 
+class ClaudeSpendLimitWindow(TypedDict):
+    utilization: float
+    resets_at: str | None
+    limit_dollars: float | int | None
+    used_dollars: float | int | None
+    remaining_dollars: float | int | None
+    locked_reason: str | None
+
+
 class ClaudeUsageResponse(TypedDict):
     limits: list[ClaudeLimitEntry]
+    iguana_necktie: ClaudeSpendLimitWindow | None
 
 
 class ClaudeProvider(ProviderAccount):
@@ -107,6 +117,22 @@ class ClaudeProvider(ProviderAccount):
                     reset_at=_parse_dt(entry["resets_at"]),
                 )
             )
+
+        spend_limit = raw["iguana_necktie"]
+        if spend_limit is not None:
+            limit_dollars = spend_limit["limit_dollars"]
+            if limit_dollars is not None:
+                label = f"Claude (API Spend ${int(limit_dollars)})"
+            else:
+                label = "Claude (API Spend)"
+            rows.append(
+                UsageRow(
+                    identifier=label,
+                    pct_used=round(spend_limit["utilization"]),
+                    reset_at=_parse_dt(spend_limit["resets_at"]),
+                )
+            )
+
         return rows
 
     def should_anchor(self, rows: list[UsageRow]) -> bool:
