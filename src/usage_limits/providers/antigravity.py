@@ -61,8 +61,20 @@ class QuotaGroup(TypedDict, total=False):
     description: str
 
 
+class ModelQuotaBucket(TypedDict, total=False):
+    modelId: str
+    tokenType: str
+    remainingFraction: float
+    resetTime: str
+
+
+class RetrieveUserQuotaResponse(TypedDict, total=False):
+    buckets: list[ModelQuotaBucket]
+
+
 class AntigravityRaw(TypedDict):
     groups: list[QuotaGroup]
+    user_quota: RetrieveUserQuotaResponse
 
 
 class LoadCodeAssistResponse(TypedDict):
@@ -182,11 +194,29 @@ class AntigravityAccount(ProviderAccount):
         resp.raise_for_status()
         return cast(AntigravityRaw, resp.json())
 
+    def _retrieve_user_quota(
+        self,
+        headers: dict[str, str],
+        summary_request: RetrieveUserQuotaSummaryRequest,
+    ) -> RetrieveUserQuotaResponse:
+        resp = requests.post(
+            f"{self._base_url()}/v1internal:retrieveUserQuota",
+            headers=headers,
+            json=summary_request,
+        )
+        resp.raise_for_status()
+        return cast(RetrieveUserQuotaResponse, resp.json())
+
     def fetch_raw(self) -> AntigravityRaw:
         headers = self._request_headers()
         load_raw = self._load_code_assist(headers)
         summary_request = self._quota_summary_request(load_raw)
-        return self._retrieve_user_quota_summary(headers, summary_request)
+        summary_raw = self._retrieve_user_quota_summary(headers, summary_request)
+        user_quota = self._retrieve_user_quota(headers, summary_request)
+        return {
+            "groups": summary_raw["groups"],
+            "user_quota": user_quota,
+        }
 
     @staticmethod
     def _quota_summary_request(
@@ -212,9 +242,13 @@ class AntigravityAccount(ProviderAccount):
 
     def to_rows(self, raw: AntigravityRaw) -> list[UsageRow]:
         rows: list[UsageRow] = []
+        has_gemini_group = False
+
         for group in raw["groups"]:
             buckets = group["buckets"]
             group_name = group["displayName"]
+            if "gemini" in group_name.lower():
+                has_gemini_group = True
             # Within a group, a disabled window is superseded by the binding
             # (most-restrictive active) window — render it with that limit/reset.
             active = [b for b in buckets if not b.get("disabled")]
@@ -232,6 +266,24 @@ class AntigravityAccount(ProviderAccount):
                     identifier = bucket["displayName"]
 
                 rows.append(UsageRow(identifier=identifier, pct_used=round(pct_used), reset_at=reset_at))
+
+        # Fallback to user_quota for the Gemini bucket if summary dropped it
+        if not has_gemini_group:
+            user_quota_buckets = raw.get("user_quota", {}).get("buckets", [])
+            gemini_buckets = [b for b in user_quota_buckets if "gemini" in b.get("modelId", "").lower()]
+            if gemini_buckets:
+                # All gemini models share identical remainingFraction and resetTime
+                first = gemini_buckets[0]
+                remaining = first["remainingFraction"]
+                pct_used = (1.0 - remaining) * 100.0
+                reset_at = self._parse_reset(first.get("resetTime"))
+                rows.append(
+                    UsageRow(
+                        identifier="Gemini Models (Weekly)",
+                        pct_used=round(pct_used),
+                        reset_at=reset_at,
+                    )
+                )
 
         rows.sort(key=lambda r: self._model_sort_key(r.identifier))
         return rows
