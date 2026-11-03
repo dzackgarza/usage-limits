@@ -6,6 +6,7 @@ the CLI ``usage-limits doctor`` command renders as a Rich table.
 
 from __future__ import annotations
 
+import os
 import shutil
 import sqlite3
 from datetime import UTC, datetime
@@ -260,5 +261,30 @@ def doctor() -> list[Result]:
     ]
     status = "ok" if all(c.status == "ok" for c in checks) else "error"
     results.append(Result(component="freebuff", status=status, checks=checks))
+
+    # ---- OpenMath ----
+    if "OPENMATH_SESSION_TOKEN" in os.environ or "OPENMATH_TOKEN" in os.environ:
+        checks = [
+            Check(
+                description="OpenMath token set in environment",
+                status="ok",
+            )
+        ]
+        status = "ok"
+    else:
+        store_checks = _check_store_provider(store, "openmath")
+        if any(c.status == "ok" for c in store_checks):
+            checks = store_checks
+            status = "ok"
+        else:
+            checks = [
+                Check(
+                    description="OpenMath token not found in environment or store",
+                    status="warning",
+                    remediation="Export OPENMATH_SESSION_TOKEN in your environment or add credentials to store.",
+                )
+            ]
+            status = "warning"
+    results.append(Result(component="openmath", status=status, checks=checks))
 
     return results

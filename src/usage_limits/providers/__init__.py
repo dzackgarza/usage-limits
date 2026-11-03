@@ -18,6 +18,7 @@ from usage_limits.providers.opencode import (
     OpenCodeProvider,
     OpenCodeZenProvider,
 )
+from usage_limits.providers.openmath import OpenMathProvider
 from usage_limits.providers.openrouter import OpenRouterProvider
 from usage_limits.providers.trae import TraeProvider
 
@@ -36,6 +37,7 @@ __all__ = [
     "OpenCodeGoProvider",
     "OpenCodeProvider",
     "OpenCodeZenProvider",
+    "OpenMathProvider",
     "OpenRouterProvider",
     "TraeProvider",
 ]

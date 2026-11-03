@@ -186,6 +186,7 @@ Checkmarks indicate implemented + tested.
 | Trae | ✅ | SQLite `storage.json` → `Cloud-IDE-JWT` → ent_usage API |
 | OpenCode Go | ✅ | Chrome cookie → `/workspace/{id}/go` HTML scrape |
 | OpenCode Zen | ⬜️ | stub — implementation pending |
+| OpenMath | ✅ | Bearer token → `POST /v1/org_model_usage` |
 
 > Optimized tool-use workflow for agents: see [SDL.md](./SDL.md).
 

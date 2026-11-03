@@ -30,6 +30,7 @@ from usage_limits.providers import (
     OllamaProvider,
     OpenCodeGoProvider,
     OpenCodeZenProvider,
+    OpenMathProvider,
     OpenRouterProvider,
     TraeProvider,
 )
@@ -55,12 +56,16 @@ FIRST_PARTY_PROVIDER_CLASSES: tuple[type[UsageProvider], ...] = (
     OllamaProvider,
     OpenCodeGoProvider,
     OpenCodeZenProvider,
+    OpenMathProvider,
     OpenRouterProvider,
     TraeProvider,
     FreebuffProvider,
 )
 
-FIRST_PARTY_PROVIDERS: dict[str, type[UsageProvider]] = {provider_class.slug: provider_class for provider_class in FIRST_PARTY_PROVIDER_CLASSES}
+FIRST_PARTY_PROVIDERS: dict[str, type[UsageProvider]] = {
+    provider_class.slug: provider_class
+    for provider_class in FIRST_PARTY_PROVIDER_CLASSES
+}
 
 
 def _load_entry_point_providers() -> dict[str, type[UsageProvider]]:
@@ -85,7 +90,9 @@ def _provider_classes() -> dict[str, type[UsageProvider]]:
     return providers
 
 
-INACTIVE_PROVIDERS: frozenset[str] = frozenset({"deepseek", "opencode-go", "opencode-zen", "openrouter", "trae"})
+INACTIVE_PROVIDERS: frozenset[str] = frozenset(
+    {"deepseek", "opencode-go", "opencode-zen", "openrouter", "trae"}
+)
 
 
 def list_providers() -> list[RegisteredProvider]:
@@ -119,7 +126,9 @@ def get_provider_class(provider: str) -> type[UsageProvider]:
     providers = _provider_classes()
     if provider not in providers:
         available = ", ".join(sorted(providers))
-        raise ValueError(f"Unknown provider {provider!r}. Available providers: {available}")
+        raise ValueError(
+            f"Unknown provider {provider!r}. Available providers: {available}"
+        )
     return providers[provider]
 
 
@@ -133,7 +142,9 @@ def _collect_single(
     if issubclass(provider_class, ProviderAccount):
         instances = provider_class.resolve_accounts()
         if not instances:
-            raise RuntimeError(f"{provider_class.__name__}.resolve_accounts() returned empty list")
+            raise RuntimeError(
+                f"{provider_class.__name__}.resolve_accounts() returned empty list"
+            )
         return instances[0].collect_snapshot(notify=notify, anchor=anchor)
     return provider_class().collect_snapshot(notify=notify, anchor=anchor)
 
@@ -173,13 +184,19 @@ def _collect_instance(
     return instance.collect_snapshot(notify=notify, anchor=anchor)
 
 
-def _completed_snapshot(instance: UsageProvider, future: Future[ProviderSnapshot]) -> ProviderSnapshot:
+def _completed_snapshot(
+    instance: UsageProvider, future: Future[ProviderSnapshot]
+) -> ProviderSnapshot:
     """Publish each worker's outcome without discarding other providers."""
     error = future.exception()
     if error is None:
         return future.result()
     status: Literal["error", "rate_limited"] = "error"
-    if isinstance(error, requests.HTTPError) and error.response is not None and error.response.status_code == 429:
+    if (
+        isinstance(error, requests.HTTPError)
+        and error.response is not None
+        and error.response.status_code == 429
+    ):
         status = "rate_limited"
     return ProviderSnapshot(
         provider=instance.slug,
@@ -198,7 +215,9 @@ def collect_all(
 ) -> UsageCollection:
     """Collect a normalized snapshot for one or more providers."""
     configure_session_bus()
-    selected = providers or [provider.provider for provider in list_providers() if provider.active]
+    selected = providers or [
+        provider.provider for provider in list_providers() if provider.active
+    ]
 
     # Expand slugs into provider instances (one per account for multi-account)
     instances: list[UsageProvider] = []
@@ -207,7 +226,12 @@ def collect_all(
 
     snapshots: list[ProviderSnapshot] = []
     with ThreadPoolExecutor(max_workers=len(instances)) as pool:
-        futures = {pool.submit(_collect_instance, instance, notify=notify, anchor=anchor): instance for instance in instances}
+        futures = {
+            pool.submit(
+                _collect_instance, instance, notify=notify, anchor=anchor
+            ): instance
+            for instance in instances
+        }
         for future in as_completed(futures):
             snapshots.append(_completed_snapshot(futures[future], future))
     snapshots.sort(key=lambda s: s.display_name)

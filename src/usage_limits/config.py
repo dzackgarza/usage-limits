@@ -137,6 +137,11 @@ class FreebuffSettings(BaseModel):
     usage_url: str = "https://www.codebuff.com/api/v1/usage"
 
 
+class OpenMathSettings(BaseModel):
+    api_url: str = "https://os.openmathmodel.org/v1/org_model_usage"
+    orgs_url: str = "https://os.openmathmodel.org/v1/orgs"
+
+
 class PathsSettings(BaseModel):
     """Credential file and directory paths.
 
@@ -175,6 +180,7 @@ class Settings(BaseModel):
     openrouter: OpenRouterSettings = OpenRouterSettings()
     trae: TraeSettings = TraeSettings()
     freebuff: FreebuffSettings = FreebuffSettings()
+    openmath: OpenMathSettings = OpenMathSettings()
 
 
 # ---------------------------------------------------------------------------

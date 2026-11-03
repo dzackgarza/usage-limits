@@ -1,0 +1,16 @@
+{
+  "windows": [
+    {
+      "limit_usd": 250.0,
+      "resets_at": "2026-11-03T21:22:48Z",
+      "spent_usd": 60.593195104,
+      "window": "5h"
+    },
+    {
+      "limit_usd": 250.0,
+      "resets_at": "2026-11-10T06:22:45Z",
+      "spent_usd": 229.26821207600003,
+      "window": "week"
+    }
+  ]
+}
