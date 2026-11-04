@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 import requests
 
 from usage_limits.base import ProviderAccount
+from usage_limits.contracts import SavedResets
 from usage_limits.table import UsageRow
 
 
@@ -51,9 +52,15 @@ class AdditionalCodexRateLimit(TypedDict):
     rate_limit: WhamRateLimit
 
 
+class WhamResetCredits(TypedDict):
+    available_count: int
+    applicable_available_count: NotRequired[int]
+
+
 class WhamUsageResponse(TypedDict):
     rate_limit: WhamRateLimit
     additional_rate_limits: NotRequired[list[AdditionalCodexRateLimit] | None]
+    rate_limit_reset_credits: NotRequired[WhamResetCredits]
 
 
 class CodexProvider(ProviderAccount):
@@ -83,7 +90,9 @@ class CodexProvider(ProviderAccount):
         self._raise_if_reauth_required(cred)
 
         refresh_token = cred["refresh_token"]
-        assert refresh_token is not None, f"No refresh token for codex account {self.account_id}"
+        assert refresh_token is not None, (
+            f"No refresh token for codex account {self.account_id}"
+        )
         return cast(
             CodexTokens,
             {
@@ -95,13 +104,17 @@ class CodexProvider(ProviderAccount):
 
     def _raise_if_reauth_required(self, cred: StoredCredential) -> None:
         if "requires_reauth" in cred:
-            assert cred["requires_reauth"] is True, f"Unexpected false reauth marker for codex account {self.account_id}"
+            assert cred["requires_reauth"] is True, (
+                f"Unexpected false reauth marker for codex account {self.account_id}"
+            )
             from usage_limits.auth.oauth import OAuthReauthRequiredError
 
             raise OAuthReauthRequiredError(
                 status_code=cred["reauth_status_code"],
                 error_code=cred["reauth_error_code"],
-                error_message=(f"Codex account {self.account_id} requires `usage-limits login codex`."),
+                error_message=(
+                    f"Codex account {self.account_id} requires `usage-limits login codex`."
+                ),
             )
 
     def _make_flow(self) -> LocalhostBrowserFlow:
@@ -115,7 +128,9 @@ class CodexProvider(ProviderAccount):
             token_url="https://auth.openai.com/oauth/token",
         )
 
-    def _save_store_credentials(self, access_token: str, refresh_token: str, expires_at: str | None) -> None:
+    def _save_store_credentials(
+        self, access_token: str, refresh_token: str, expires_at: str | None
+    ) -> None:
         from usage_limits.auth.store import CredentialStore, StoredCredential
 
         cred = cast(
@@ -151,11 +166,16 @@ class CodexProvider(ProviderAccount):
             cred = store.get("codex", self.account_id)
             self._raise_if_reauth_required(cred)
 
-            if old_access_token is not None and cred["access_token"] != old_access_token:
+            if (
+                old_access_token is not None
+                and cred["access_token"] != old_access_token
+            ):
                 return cred["access_token"]
 
             refresh_token = cred["refresh_token"]
-            assert refresh_token is not None, f"No refresh token for codex account {self.account_id}"
+            assert refresh_token is not None, (
+                f"No refresh token for codex account {self.account_id}"
+            )
 
             try:
                 result = self._make_flow().refresh(refresh_token)
@@ -194,6 +214,23 @@ class CodexProvider(ProviderAccount):
         resp.raise_for_status()
         return cast(WhamUsageResponse, resp.json())
 
+    def saved_resets(
+        self, raw: WhamUsageResponse, *, at: datetime
+    ) -> SavedResets | None:
+        if "rate_limit_reset_credits" not in raw:
+            return None
+        credits = raw["rate_limit_reset_credits"]
+        available = credits["available_count"]
+        if "applicable_available_count" in credits:
+            applicable = credits["applicable_available_count"]
+        else:
+            assert available == 0, "WHAM omitted applicable reset count"
+            applicable = 0
+        return SavedResets(
+            available_count=available,
+            applicable_now_count=applicable,
+        )
+
     def to_rows(self, raw: WhamUsageResponse) -> list[UsageRow]:
         rate_limit = raw["rate_limit"]
         primary = rate_limit["primary_window"]
@@ -215,7 +252,10 @@ class CodexProvider(ProviderAccount):
                 )
             )
 
-        if "additional_rate_limits" in raw and raw["additional_rate_limits"] is not None:
+        if (
+            "additional_rate_limits" in raw
+            and raw["additional_rate_limits"] is not None
+        ):
             for additional in raw["additional_rate_limits"]:
                 limit_name = additional["limit_name"].replace("-", " ")
                 codex_idx = limit_name.find("Codex")
@@ -235,7 +275,9 @@ class CodexProvider(ProviderAccount):
                 if additional_secondary:
                     rows.append(
                         UsageRow(
-                            identifier=(f"{limit_label} ({_window_label(additional_secondary, '7d')})"),
+                            identifier=(
+                                f"{limit_label} ({_window_label(additional_secondary, '7d')})"
+                            ),
                             pct_used=round(additional_secondary["used_percent"]),
                             reset_at=_ts_to_dt(additional_secondary["reset_at"]),
                         )
@@ -243,7 +285,11 @@ class CodexProvider(ProviderAccount):
         return rows
 
     def should_anchor(self, rows: list[UsageRow]) -> bool:
-        weekly_rows = {row.identifier.removesuffix(" (7d)"): row for row in rows if row.identifier.endswith(" (7d)")}
+        weekly_rows = {
+            row.identifier.removesuffix(" (7d)"): row
+            for row in rows
+            if row.identifier.endswith(" (7d)")
+        }
         for row in rows:
             if row.pct_used != 0 or not row.identifier.endswith(" (5h)"):
                 continue

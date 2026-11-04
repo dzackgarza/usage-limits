@@ -16,6 +16,7 @@ from usage_limits.contracts import (
     ProviderError,
     ProviderSnapshot,
     RegisteredProvider,
+    SavedResets,
     UsageCollection,
 )
 from usage_limits.registry import collect_all, collect_provider, list_providers
@@ -28,6 +29,7 @@ __all__ = [
     "ProviderError",
     "ProviderSnapshot",
     "RegisteredProvider",
+    "SavedResets",
     "UsageCollection",
     "UsageProvider",
     "UsageRow",

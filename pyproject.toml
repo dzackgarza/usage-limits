@@ -71,3 +71,6 @@ packages = ["src/usage_limits"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--tb=short -q"
+
+[tool.mypy]
+mypy_path = "typings"

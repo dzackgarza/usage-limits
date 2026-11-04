@@ -13,7 +13,12 @@ from usage_limits.base import ProviderAccount
 from usage_limits.auth.claude import claude_oauth_flow
 from usage_limits.auth.store import CredentialStore, StoredCredential
 from usage_limits.config import settings
+from usage_limits.contracts import SavedResets
 from usage_limits.table import UsageRow
+
+# Claude Code's grant inventory requires its client surface on the OAuth usage call.
+# https://github.com/KarpelesLab/teamclaude/blob/master/docs/accounts.md#claude-banked-usage-limit-resets
+CLAUDE_USAGE_USER_AGENT = "claude-cli/2.1.318 (external, cli)"
 
 
 class ClaudeLimitScope(TypedDict):
@@ -40,9 +45,24 @@ class ClaudeSpendLimitWindow(TypedDict):
     locked_reason: str | None
 
 
+class ClaudeResetGrant(TypedDict):
+    resets_left: int
+    starts_at: str
+    ends_at: str
+    paused: bool
+    usable_now: bool
+
+
+class ClaudeResetInventory(TypedDict):
+    eligible: bool
+    ineligible_reason: str | None
+    grants: list[ClaudeResetGrant]
+
+
 class ClaudeUsageResponse(TypedDict):
     limits: list[ClaudeLimitEntry]
     iguana_necktie: ClaudeSpendLimitWindow | None
+    cedar_ember: ClaudeResetInventory | None
 
 
 class ClaudeProvider(ProviderAccount):
@@ -86,9 +106,11 @@ class ClaudeProvider(ProviderAccount):
         def _call(access_token: str) -> requests.Response:
             return requests.get(
                 settings.claude.api_url,
+                params={"cedar_ember": "1"},
                 headers={
                     "Authorization": f"Bearer {access_token}",
                     "anthropic-beta": settings.claude.beta_header,
+                    "User-Agent": CLAUDE_USAGE_USER_AGENT,
                 },
                 timeout=30,
             )
@@ -104,6 +126,31 @@ class ClaudeProvider(ProviderAccount):
             resp = _call(self._refresh(access_token))
         resp.raise_for_status()
         return cast(ClaudeUsageResponse, resp.json())
+
+    def saved_resets(self, raw: ClaudeUsageResponse, *, at: datetime) -> SavedResets:
+        block = raw["cedar_ember"]
+        assert block is not None, "Claude usage response omitted reset inventory"
+        if not block["eligible"]:
+            reason = block["ineligible_reason"]
+            if reason != "no_grant":
+                raise ValueError(f"Claude reset inventory unavailable: {reason}")
+            assert not block["grants"]
+            return SavedResets(available_count=0, applicable_now_count=0)
+
+        active = [
+            grant
+            for grant in block["grants"]
+            if not grant["paused"]
+            and datetime.fromisoformat(grant["starts_at"])
+            <= at
+            < datetime.fromisoformat(grant["ends_at"])
+        ]
+        return SavedResets(
+            available_count=sum(grant["resets_left"] for grant in active),
+            applicable_now_count=sum(
+                grant["resets_left"] for grant in active if grant["usable_now"]
+            ),
+        )
 
     def to_rows(self, raw: ClaudeUsageResponse) -> list[UsageRow]:
         limits = raw["limits"]

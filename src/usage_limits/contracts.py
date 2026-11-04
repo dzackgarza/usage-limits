@@ -15,6 +15,7 @@ __all__ = [
     "ProviderError",
     "ProviderSnapshot",
     "RegisteredProvider",
+    "SavedResets",
     "UsageCollection",
 ]
 
@@ -28,6 +29,15 @@ class ProviderError(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
+class SavedResets(BaseModel):
+    """Saved usage-limit resets held by an account and usable at collection time."""
+
+    available_count: int = Field(ge=0)
+    applicable_now_count: int = Field(ge=0)
+
+    model_config = ConfigDict(frozen=True)
+
+
 class ProviderSnapshot(BaseModel):
     """Normalized usage snapshot for a single provider."""
 
@@ -37,6 +47,7 @@ class ProviderSnapshot(BaseModel):
     rows: list[UsageRow] = Field(default_factory=list)
     availability: list[ModelAvailability] = Field(default_factory=list)
     account: str | None = None
+    saved_resets: SavedResets | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     errors: list[ProviderError] = Field(default_factory=list)
 
@@ -60,6 +71,7 @@ class AvailabilitySnapshot(BaseModel):
     display_name: str
     status: Literal["ok", "error", "rate_limited"]
     availability: list[ModelAvailability] = Field(default_factory=list)
+    saved_resets: SavedResets | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     errors: list[ProviderError] = Field(default_factory=list)
 
@@ -73,6 +85,7 @@ class AvailabilitySnapshot(BaseModel):
             display_name=snapshot.display_name,
             status=snapshot.status,
             availability=snapshot.availability,
+            saved_resets=snapshot.saved_resets,
             metadata=snapshot.metadata,
             errors=snapshot.errors,
         )
@@ -88,12 +101,17 @@ class AvailabilityCollection(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     @classmethod
-    def from_usage_collection(cls, collection: UsageCollection) -> AvailabilityCollection:
+    def from_usage_collection(
+        cls, collection: UsageCollection
+    ) -> AvailabilityCollection:
         """Project a usage collection into an availability collection."""
         return cls(
             version=collection.version,
             captured_at=collection.captured_at,
-            providers=[AvailabilitySnapshot.from_provider_snapshot(snapshot) for snapshot in collection.providers],
+            providers=[
+                AvailabilitySnapshot.from_provider_snapshot(snapshot)
+                for snapshot in collection.providers
+            ],
         )
 
 

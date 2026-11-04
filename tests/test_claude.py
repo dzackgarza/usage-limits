@@ -47,7 +47,11 @@ def test_claude_to_rows_with_captured_fixture() -> None:
 def test_claude_to_rows_empty_limits() -> None:
     """An API response with empty limits and no spend window produces no rows."""
     provider = ClaudeProvider()
-    raw: ClaudeUsageResponse = {"limits": [], "iguana_necktie": None}
+    raw: ClaudeUsageResponse = {
+        "limits": [],
+        "iguana_necktie": None,
+        "cedar_ember": None,
+    }
     rows = provider.to_rows(raw)
     assert rows == []
 

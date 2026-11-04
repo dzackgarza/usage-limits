@@ -28,7 +28,10 @@ def render_provider_snapshot(
     active_console = console or Console()
     title = _display_title(snapshot)
     if snapshot.status == "error":
-        message = "\n".join(error.message for error in snapshot.errors) or "Unknown provider error."
+        message = (
+            "\n".join(error.message for error in snapshot.errors)
+            or "Unknown provider error."
+        )
         active_console.print(
             Panel(
                 message,
@@ -40,7 +43,9 @@ def render_provider_snapshot(
         return
 
     if snapshot.status == "rate_limited":
-        message = "\n".join(error.message for error in snapshot.errors) or "Rate limited."
+        message = (
+            "\n".join(error.message for error in snapshot.errors) or "Rate limited."
+        )
         active_console.print(
             Panel(
                 message,
@@ -52,9 +57,16 @@ def render_provider_snapshot(
         return
 
     UsageTable(console=active_console).render(snapshot.rows, title=title)
+    if snapshot.saved_resets is not None:
+        resets = snapshot.saved_resets
+        active_console.print(
+            f"Saved resets: {resets.available_count} (usable now: {resets.applicable_now_count})"
+        )
 
 
-def render_collection(collection: UsageCollection, *, console: Console | None = None) -> None:
+def render_collection(
+    collection: UsageCollection, *, console: Console | None = None
+) -> None:
     """Render all provider snapshots in sequence."""
     active_console = console or Console()
     for snapshot in collection.providers:

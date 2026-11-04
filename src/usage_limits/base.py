@@ -15,10 +15,12 @@ from urllib.parse import quote
 import requests
 
 from usage_limits.config import settings
-from usage_limits.contracts import ProviderSnapshot
+from usage_limits.contracts import ProviderSnapshot, SavedResets
 from usage_limits.table import ModelAvailability, UsageRow, UsageTable
 
 __all__ = ["ProviderAccount", "UsageProvider"]
+
+type ProviderRaw = Any
 
 
 def _write_json_atomic(path: Path, payload: Any) -> None:
@@ -78,13 +80,21 @@ class UsageProvider(ABC):
         """Return provider-specific structured metadata."""
         return {}
 
+    def saved_resets(self, raw: ProviderRaw, *, at: datetime) -> SavedResets | None:
+        """Return saved reset counts when the provider reports them."""
+        return None
+
     def _available_now(self, rows: list[UsageRow]) -> bool:
         """Usable only when no window is exhausted."""
         return not any(row.is_exhausted for row in rows)
 
     def _available_when(self, rows: list[UsageRow]) -> datetime | None:
         """Earliest time all exhausted windows will have reset."""
-        reset_times = [row.reset_at for row in rows if row.is_exhausted and row.reset_at is not None]
+        reset_times = [
+            row.reset_at
+            for row in rows
+            if row.is_exhausted and row.reset_at is not None
+        ]
         return max(reset_times) if reset_times else None
 
     def availability(self, rows: list[UsageRow]) -> list[ModelAvailability]:
@@ -99,7 +109,9 @@ class UsageProvider(ABC):
             )
         ]
 
-    def collect_raw_and_rows(self, *, anchor: bool = False) -> tuple[Any, list[UsageRow]]:
+    def collect_raw_and_rows(
+        self, *, anchor: bool = False
+    ) -> tuple[Any, list[UsageRow]]:
         """Fetch provider data (with caching) and optionally anchor the active window."""
         raw, last_updated = self._fetch_with_cache()
 
@@ -134,6 +146,7 @@ class UsageProvider(ABC):
             status="ok",
             rows=rows,
             availability=self.availability(rows),
+            saved_resets=self.saved_resets(raw, at=datetime.now(UTC)),
             metadata=meta,
         )
 
@@ -177,7 +190,11 @@ class UsageProvider(ABC):
 
     def should_notify(self, rows: list[UsageRow]) -> tuple[bool, datetime | None]:
         """Determine if a reset notification should be scheduled."""
-        exhausted_resets = [row.reset_at for row in rows if row.is_exhausted and row.reset_at is not None]
+        exhausted_resets = [
+            row.reset_at
+            for row in rows
+            if row.is_exhausted and row.reset_at is not None
+        ]
         if not exhausted_resets:
             return False, None
         return True, max(exhausted_resets)
@@ -201,7 +218,9 @@ class UsageProvider(ABC):
         if at:
             headers["At"] = at
         try:
-            response = requests.post(url, data=message.encode("utf-8"), headers=headers, timeout=10)
+            response = requests.post(
+                url, data=message.encode("utf-8"), headers=headers, timeout=10
+            )
             response.raise_for_status()
             return True, None
         except requests.RequestException as error:
@@ -233,7 +252,11 @@ class UsageProvider(ABC):
 
     def _notification_id(self, rows: list[UsageRow]) -> str:
         """Deterministic notification ID from exhausted rows."""
-        exhausted = sorted((int(row.reset_at.timestamp()), row.identifier) for row in rows if row.is_exhausted and row.reset_at is not None)
+        exhausted = sorted(
+            (int(row.reset_at.timestamp()), row.identifier)
+            for row in rows
+            if row.is_exhausted and row.reset_at is not None
+        )
         if not exhausted:
             return ""
         timestamp, _ = exhausted[-1]
@@ -254,7 +277,9 @@ class UsageProvider(ABC):
                     message = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                if message.get("event") == "message" and f"notif_id:{notif_id}" in message.get("tags", []):
+                if message.get(
+                    "event"
+                ) == "message" and f"notif_id:{notif_id}" in message.get("tags", []):
                     return True
         except requests.RequestException:
             pass
@@ -295,7 +320,11 @@ class UsageProvider(ABC):
         if "error_type" in data:
             return None
         last_updated = datetime.fromisoformat(data["last_updated"])
-        if not ignore_ttl and (datetime.now(UTC) - last_updated).total_seconds() >= self.cache_ttl_seconds:
+        if (
+            not ignore_ttl
+            and (datetime.now(UTC) - last_updated).total_seconds()
+            >= self.cache_ttl_seconds
+        ):
             return None  # stale
         raw = data.get("raw")
         if raw is None:
@@ -308,7 +337,9 @@ class UsageProvider(ABC):
         Returns ``now``.
         """
         now = datetime.now(UTC)
-        _write_json_atomic(self._get_cache_path(), {"raw": raw, "last_updated": now.isoformat()})
+        _write_json_atomic(
+            self._get_cache_path(), {"raw": raw, "last_updated": now.isoformat()}
+        )
         return now
 
     def _write_cache_error(self, exc: BaseException) -> datetime:
