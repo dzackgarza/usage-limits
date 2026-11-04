@@ -15,7 +15,7 @@ from usage_limits.table import UsageRow
 
 class OpenMathWindow(TypedDict):
     limit_usd: float
-    resets_at: str
+    resets_at: str | None
     spent_usd: float
     window: str
 
@@ -108,9 +108,14 @@ class OpenMathProvider(ProviderAccount):
             else:
                 pct_used = round((spent / limit) * 100.0)
 
-            reset_at = datetime.fromisoformat(
-                win["resets_at"].replace("Z", "+00:00")
-            ).astimezone(UTC)
+            reset_text = win["resets_at"]
+            reset_at = (
+                datetime.fromisoformat(reset_text.replace("Z", "+00:00")).astimezone(
+                    UTC
+                )
+                if reset_text is not None
+                else None
+            )
             rows.append(
                 UsageRow(
                     identifier=f"OpenMath ({target_window})",
