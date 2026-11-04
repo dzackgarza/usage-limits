@@ -7,7 +7,9 @@ from typing import Annotated, Any, cast
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from google.protobuf.json_format import Parse
-from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import ExportTraceServiceRequest
+from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import (
+    ExportTraceServiceRequest,
+)
 
 from usage_limits.config import resolve_path, settings
 
@@ -28,7 +30,9 @@ def _verify_token(
     if not token:
         # If no token is set in the environment, we refuse all requests
         # to ensure the sink is never accidentally left open.
-        raise HTTPException(status_code=500, detail="OPENROUTER_SINK_TOKEN not set locally")
+        raise HTTPException(
+            status_code=500, detail="OPENROUTER_SINK_TOKEN not set locally"
+        )
 
     # Check both Authorization: Bearer <token> and X-OTLP-Token: <token>
     received = x_otlp_token

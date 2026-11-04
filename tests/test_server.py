@@ -31,13 +31,19 @@ def state_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return file
 
 
-def test_receive_traces(client: TestClient, state_file: Path, auth_header: dict[str, str]) -> None:
+def test_receive_traces(
+    client: TestClient, state_file: Path, auth_header: dict[str, str]
+) -> None:
     # Minimal OTLP/JSON payload with 2 spans
     # IDs in OTLP/JSON must be base64-encoded bytes
     payload = {
         "resourceSpans": [
             {
-                "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "openrouter"}}]},
+                "resource": {
+                    "attributes": [
+                        {"key": "service.name", "value": {"stringValue": "openrouter"}}
+                    ]
+                },
                 "scopeSpans": [
                     {
                         "spans": [
@@ -60,7 +66,9 @@ def test_receive_traces(client: TestClient, state_file: Path, auth_header: dict[
     assert state[today] == 2
 
 
-def test_status(client: TestClient, state_file: Path, auth_header: dict[str, str]) -> None:
+def test_status(
+    client: TestClient, state_file: Path, auth_header: dict[str, str]
+) -> None:
     # Set initial state
     today = datetime.now(UTC).date().isoformat()
     state_file.write_text(json.dumps({today: 5}))
@@ -82,7 +90,9 @@ def test_unauthorized(client: TestClient, auth_header: dict[str, str]) -> None:
     assert response.status_code == 401
 
 
-def test_no_token_set_locally(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_no_token_set_locally(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # Ensure OPENROUTER_SINK_TOKEN is NOT set
     monkeypatch.delenv("OPENROUTER_SINK_TOKEN", raising=False)
     response = client.get("/status")

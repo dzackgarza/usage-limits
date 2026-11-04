@@ -24,7 +24,9 @@ def test_login_wizard_invokes_real_gum_and_routes_correctly() -> None:
     pid, fd = pty.fork()
     if pid == 0:
         # Child process: run the real CLI
-        os.execvpe(sys.executable, [sys.executable, "-u", "-m", "usage_limits", "login"], env)
+        os.execvpe(
+            sys.executable, [sys.executable, "-u", "-m", "usage_limits", "login"], env
+        )
 
     # Parent process: read from the PTY and drive the interaction
     output = b""
@@ -49,7 +51,11 @@ def test_login_wizard_invokes_real_gum_and_routes_correctly() -> None:
                 output += chunk
                 out_str = output.decode("utf-8", errors="ignore")
 
-                if not sent_selection and "Select a provider to login:" in out_str and "codex" in out_str:
+                if (
+                    not sent_selection
+                    and "Select a provider to login:" in out_str
+                    and "codex" in out_str
+                ):
                     # Send down arrow then Enter to select the second option (codex).
                     os.write(fd, b"\x1b[B\r")
                     sent_selection = True
@@ -117,7 +123,9 @@ def test_login_wizard_invokes_real_gum_and_routes_correctly() -> None:
         break
 
     assert parsed_redirect is not None
-    assert parsed_redirect.hostname in ("localhost", "127.0.0.1"), f"Unexpected redirect host: {parsed_redirect.hostname}"
+    assert parsed_redirect.hostname in ("localhost", "127.0.0.1"), (
+        f"Unexpected redirect host: {parsed_redirect.hostname}"
+    )
     assert parsed_redirect.port == 1455
     assert parsed_redirect.path == "/auth/callback"
 

@@ -49,7 +49,9 @@ class DeepseekProvider(ProviderAccount):
         from usage_limits.config import settings as _cfg
 
         url = _cfg.deepseek.api_base.rstrip("/") + _cfg.deepseek.balance_endpoint
-        resp = requests.get(url, headers={"Authorization": f"Bearer {api_key}"}, timeout=30)
+        resp = requests.get(
+            url, headers={"Authorization": f"Bearer {api_key}"}, timeout=30
+        )
         resp.raise_for_status()
         return cast(DeepseekBalance, resp.json())
 

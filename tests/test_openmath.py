@@ -32,7 +32,9 @@ def test_openmath_live_fetch_normalizes_usage() -> None:
     assert {row.identifier for row in rows} == {"OpenMath (5h)", "OpenMath (7d)"}
     for window, row in zip(raw["windows"], rows, strict=True):
         assert row.pct_used == round(100 * window["spent_usd"] / window["limit_usd"])
-        assert row.reset_at == datetime.fromisoformat(window["resets_at"].replace("Z", "+00:00"))
+        assert row.reset_at == datetime.fromisoformat(
+            window["resets_at"].replace("Z", "+00:00")
+        )
 
 
 def test_openmath_missing_spend_fails_instead_of_reporting_zero() -> None:

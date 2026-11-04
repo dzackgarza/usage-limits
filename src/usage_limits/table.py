@@ -106,11 +106,21 @@ class UsageTable:
         # Let bar shrink to 0 rather than overflowing the terminal.
         bar_width = max(
             0,
-            self.console.width - max_id_len - self.PCT_WIDTH - self.TIME_WIDTH - self.PADDING,
+            self.console.width
+            - max_id_len
+            - self.PCT_WIDTH
+            - self.TIME_WIDTH
+            - self.PADDING,
         )
 
         table = Table(show_header=False, box=None, padding=(0, 1))
-        table.add_column("Identifier", style="bold", width=max_id_len, overflow="ellipsis", no_wrap=True)
+        table.add_column(
+            "Identifier",
+            style="bold",
+            width=max_id_len,
+            overflow="ellipsis",
+            no_wrap=True,
+        )
         table.add_column("Pct", width=self.PCT_WIDTH, justify="right", no_wrap=True)
         if bar_width:
             table.add_column("Bar", width=bar_width, no_wrap=True)

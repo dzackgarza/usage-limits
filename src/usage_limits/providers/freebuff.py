@@ -107,7 +107,11 @@ class FreebuffProvider(ProviderAccount):
             # Bun initializes its native Secret Service connection at startup.
             configure_session_bus()
             token = subprocess.run(
-                ["bun", str(Path(__file__).with_name("freebuff_token.js")), str(self.cred_file)],
+                [
+                    "bun",
+                    str(Path(__file__).with_name("freebuff_token.js")),
+                    str(self.cred_file),
+                ],
                 stdout=subprocess.PIPE,
                 text=True,
                 check=True,

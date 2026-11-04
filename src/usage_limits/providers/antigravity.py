@@ -252,9 +252,15 @@ class AntigravityAccount(ProviderAccount):
             # Within a group, a disabled window is superseded by the binding
             # (most-restrictive active) window — render it with that limit/reset.
             active = [b for b in buckets if not b.get("disabled")]
-            binding = min(active, key=lambda b: b["remainingFraction"]) if active else None
+            binding = (
+                min(active, key=lambda b: b["remainingFraction"]) if active else None
+            )
             for bucket in buckets:
-                source = binding if (bucket.get("disabled") and binding is not None) else bucket
+                source = (
+                    binding
+                    if (bucket.get("disabled") and binding is not None)
+                    else bucket
+                )
                 remaining = source["remainingFraction"]
                 pct_used = (1.0 - remaining) * 100.0
                 reset_at = self._parse_reset(source["resetTime"])
@@ -265,12 +271,22 @@ class AntigravityAccount(ProviderAccount):
                 else:
                     identifier = bucket["displayName"]
 
-                rows.append(UsageRow(identifier=identifier, pct_used=round(pct_used), reset_at=reset_at))
+                rows.append(
+                    UsageRow(
+                        identifier=identifier,
+                        pct_used=round(pct_used),
+                        reset_at=reset_at,
+                    )
+                )
 
         # Fallback to user_quota for the Gemini bucket if summary dropped it
         if not has_gemini_group:
             user_quota_buckets = raw.get("user_quota", {}).get("buckets", [])
-            gemini_buckets = [b for b in user_quota_buckets if "gemini" in b.get("modelId", "").lower()]
+            gemini_buckets = [
+                b
+                for b in user_quota_buckets
+                if "gemini" in b.get("modelId", "").lower()
+            ]
             if gemini_buckets:
                 # All gemini models share identical remainingFraction and resetTime
                 first = gemini_buckets[0]
@@ -298,7 +314,11 @@ class AntigravityAccount(ProviderAccount):
 
         availability_rows: list[ModelAvailability] = []
         for family_name, keywords in families:
-            matches = [row for row in rows if any(keyword in row.identifier.lower() for keyword in keywords)]
+            matches = [
+                row
+                for row in rows
+                if any(keyword in row.identifier.lower() for keyword in keywords)
+            ]
             if not matches:
                 continue
             exhausted = [row for row in matches if row.pct_used >= 99]

@@ -21,7 +21,10 @@ def migrate_antigravity() -> None:
     accounts_dir = cockpit_dir / "accounts"
 
     if not accounts_index_path.exists():
-        typer.secho("No cockpit-tools Antigravity credentials found to migrate.", fg=typer.colors.YELLOW)
+        typer.secho(
+            "No cockpit-tools Antigravity credentials found to migrate.",
+            fg=typer.colors.YELLOW,
+        )
         return
 
     try:
@@ -88,7 +91,10 @@ def migrate_codex() -> None:
     accounts_dir = cockpit_dir / "codex_accounts"
 
     if not accounts_index_path.exists():
-        typer.secho("No cockpit-tools Codex credentials found to migrate.", fg=typer.colors.YELLOW)
+        typer.secho(
+            "No cockpit-tools Codex credentials found to migrate.",
+            fg=typer.colors.YELLOW,
+        )
         return
 
     try:

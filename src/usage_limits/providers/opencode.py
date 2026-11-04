@@ -80,7 +80,9 @@ class OpenCodeGoProvider(ProviderAccount):
         )
         location = response.headers.get("location", "")
         match = re.search(r"/workspace/(wrk_[A-Za-z0-9]+)", location)
-        assert match is not None, f"Could not discover workspace ID from redirect: {location}"
+        assert match is not None, (
+            f"Could not discover workspace ID from redirect: {location}"
+        )
         return match.group(1)
 
     def fetch_raw(self) -> OpenCodeRaw:
@@ -104,7 +106,9 @@ class OpenCodeGoProvider(ProviderAccount):
         soup = BeautifulSoup(raw["html"], "html.parser")
 
         if soup.find(None, attrs={"data-slot": "subscribe-button"}):
-            raise RuntimeError("OpenCode Go subscription required. Your account does not have an active subscription.")
+            raise RuntimeError(
+                "OpenCode Go subscription required. Your account does not have an active subscription."
+            )
 
         rows: list[UsageRow] = []
 
@@ -126,7 +130,9 @@ class OpenCodeGoProvider(ProviderAccount):
             assert match is not None, f"Could not parse usage value: {value_text!r}"
             pct = float(match.group(1))
 
-            reset_at = _parse_reset_text(reset_elem.get_text(strip=True) if reset_elem else "")
+            reset_at = _parse_reset_text(
+                reset_elem.get_text(strip=True) if reset_elem else ""
+            )
 
             rows.append(
                 UsageRow(
@@ -137,7 +143,9 @@ class OpenCodeGoProvider(ProviderAccount):
             )
 
         if not rows:
-            raise ValueError("Could not find any usage items in the OpenCode HTML response.")
+            raise ValueError(
+                "Could not find any usage items in the OpenCode HTML response."
+            )
 
         return rows
 

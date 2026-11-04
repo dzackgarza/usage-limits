@@ -49,7 +49,9 @@ class CredentialStore:
     def _credential_path(self, provider: str, identifier: str) -> Path:
         return self._provider_dir(provider) / f"{identifier}.json"
 
-    def save(self, provider: str, identifier: str, credential: StoredCredential) -> None:
+    def save(
+        self, provider: str, identifier: str, credential: StoredCredential
+    ) -> None:
         """Save a credential for a provider and identifier."""
         path = self._credential_path(provider, identifier)
         path.parent.mkdir(parents=True, exist_ok=True)

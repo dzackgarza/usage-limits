@@ -38,7 +38,9 @@ def test_agy_secret_targets_production_host() -> None:
 def test_agy_secret_reuses_pooled_parsing_with_own_label() -> None:
     """Inherits Antigravity's project-scoped bucket parsing with its own label."""
     secret = AgySecretPoolAccount(account_id="test@example.com")
-    raw = json.loads((FIXTURE_DIR / "antigravity-quota-summary-pooled.json").read_text())
+    raw = json.loads(
+        (FIXTURE_DIR / "antigravity-quota-summary-pooled.json").read_text()
+    )
     rows = secret.to_rows(raw)
     by_id = {r.identifier: r for r in rows}
     assert "Gemini Models (Weekly)" in by_id

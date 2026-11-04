@@ -331,7 +331,9 @@ def test_codex_should_not_anchor_zero_spark_non_5h_bucket() -> None:
     assert provider.should_anchor(rows) is False
 
 
-def test_codex_store_refresh_persists_rotated_token(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_codex_store_refresh_persists_rotated_token(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """CredentialStore account refreshes on 401 and saves rotated refresh token."""
     # Direct CredentialStore to a temp directory
     monkeypatch.setattr(
@@ -391,7 +393,9 @@ def test_codex_store_refresh_persists_rotated_token(monkeypatch: pytest.MonkeyPa
         assert saved["refresh_token"] == "new_refresh"
 
 
-def test_codex_store_refresh_marks_invalidated_token_reauth_required(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_codex_store_refresh_marks_invalidated_token_reauth_required(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Invalidated refresh tokens become owned reauth-required credential state."""
     monkeypatch.setattr(
         CredentialStore,
@@ -444,7 +448,9 @@ def test_codex_store_refresh_marks_invalidated_token_reauth_required(monkeypatch
     assert saved["reauth_status_code"] == 401
 
 
-def test_codex_reauth_required_store_account_fails_before_network(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_codex_reauth_required_store_account_fails_before_network(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """A known reauth-required account must not keep probing Codex with stale tokens."""
     monkeypatch.setattr(
         CredentialStore,
@@ -477,7 +483,9 @@ def test_codex_reauth_required_store_account_fails_before_network(monkeypatch: p
         assert len(rsps.calls) == 0
 
 
-def test_codex_resolve_accounts_prefers_recent_login(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_codex_resolve_accounts_prefers_recent_login(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Recent store credentials are selected before older store entries."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(
@@ -523,7 +531,9 @@ def test_codex_resolve_accounts_prefers_recent_login(monkeypatch: pytest.MonkeyP
     ]
 
 
-def test_codex_resolve_accounts_keeps_reauth_required_accounts_after_usable_accounts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_codex_resolve_accounts_keeps_reauth_required_accounts_after_usable_accounts(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Reauth markers remain visible without becoming the default account."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(
@@ -572,7 +582,9 @@ def test_codex_resolve_accounts_keeps_reauth_required_accounts_after_usable_acco
     ]
 
 
-def test_codex_resolve_accounts_returns_empty_without_store(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_codex_resolve_accounts_returns_empty_without_store(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """With no stored credentials, usage-limits resolves no accounts."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(

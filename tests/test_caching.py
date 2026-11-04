@@ -123,7 +123,9 @@ def test_read_cache_returns_fresh_data() -> None:
 
     fixture = json.loads(FIXTURES.joinpath("claude_response.json").read_text())
     cached_dt = datetime.now(UTC) - timedelta(seconds=60)
-    cache_path.write_text(json.dumps({"raw": fixture, "last_updated": cached_dt.isoformat()}))
+    cache_path.write_text(
+        json.dumps({"raw": fixture, "last_updated": cached_dt.isoformat()})
+    )
 
     result = provider._read_cache()
     assert result is not None, "Expected fresh cache hit, got None"
@@ -151,7 +153,9 @@ def test_read_cache_returns_none_on_stale() -> None:
 
     fixture = json.loads(FIXTURES.joinpath("claude_response.json").read_text())
     cached_dt = datetime.now(UTC) - timedelta(minutes=10)
-    cache_path.write_text(json.dumps({"raw": fixture, "last_updated": cached_dt.isoformat()}))
+    cache_path.write_text(
+        json.dumps({"raw": fixture, "last_updated": cached_dt.isoformat()})
+    )
 
     result = provider._read_cache()
     assert result is None, "Expected stale cache to return None"
@@ -165,10 +169,14 @@ def test_read_cache_ignore_ttl_returns_stale() -> None:
 
     fixture = json.loads(FIXTURES.joinpath("claude_response.json").read_text())
     cached_dt = datetime.now(UTC) - timedelta(minutes=10)
-    cache_path.write_text(json.dumps({"raw": fixture, "last_updated": cached_dt.isoformat()}))
+    cache_path.write_text(
+        json.dumps({"raw": fixture, "last_updated": cached_dt.isoformat()})
+    )
 
     result = provider._read_cache(ignore_ttl=True)
-    assert result is not None, "Expected stale cache to be returned with ignore_ttl=True"
+    assert result is not None, (
+        "Expected stale cache to be returned with ignore_ttl=True"
+    )
     _, ts = result
     assert ts == cached_dt
 
@@ -187,7 +195,9 @@ def test_fresh_cache_hit_within_ttl() -> None:
 
     fixture = json.loads(FIXTURES.joinpath("claude_response.json").read_text())
     cached_dt = datetime.now(UTC) - timedelta(seconds=60)
-    cache_path.write_text(json.dumps({"raw": fixture, "last_updated": cached_dt.isoformat()}))
+    cache_path.write_text(
+        json.dumps({"raw": fixture, "last_updated": cached_dt.isoformat()})
+    )
 
     snap = collect_provider("claude")
     assert snap.status == "ok", f"Cache hit failed: {snap.errors}"
@@ -232,7 +242,9 @@ def test_write_cache_error_wipes_raw_data() -> None:
 
     fixture = json.loads(FIXTURES.joinpath("claude_response.json").read_text())
     cached_dt = datetime.now(UTC) - timedelta(minutes=10)
-    cache_path.write_text(json.dumps({"raw": fixture, "last_updated": cached_dt.isoformat()}))
+    cache_path.write_text(
+        json.dumps({"raw": fixture, "last_updated": cached_dt.isoformat()})
+    )
 
     error = requests.HTTPError("test fetch failure")
     provider._write_cache_error(error)

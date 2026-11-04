@@ -177,7 +177,9 @@ def byte_crypto_decrypt(encrypted_b64: str) -> str:
         raise ValueError("ByteCrypto data too short")
 
     # Extract key material and ciphertext
-    key_material = encrypted_data[BYTE_CRYPTO_HEADER_LEN : BYTE_CRYPTO_HEADER_LEN + BYTE_CRYPTO_RANDOM_KEY_LEN]
+    key_material = encrypted_data[
+        BYTE_CRYPTO_HEADER_LEN : BYTE_CRYPTO_HEADER_LEN + BYTE_CRYPTO_RANDOM_KEY_LEN
+    ]
     ciphertext = encrypted_data[BYTE_CRYPTO_HEADER_LEN + BYTE_CRYPTO_RANDOM_KEY_LEN :]
 
     if len(ciphertext) == 0 or len(ciphertext) % 16 != 0:
@@ -188,7 +190,9 @@ def byte_crypto_decrypt(encrypted_b64: str) -> str:
     key_hash = hashlib.sha512(key_material).digest()
 
     # Step 2: Compute salt = AES_A XOR AES_B
-    salt = bytes(a ^ b for a, b in zip(BYTE_CRYPTO_AES_A, BYTE_CRYPTO_AES_B, strict=True))
+    salt = bytes(
+        a ^ b for a, b in zip(BYTE_CRYPTO_AES_A, BYTE_CRYPTO_AES_B, strict=True)
+    )
 
     # Step 3: Merge key_hash + salt, then SHA-512 again
     merge = key_hash + salt

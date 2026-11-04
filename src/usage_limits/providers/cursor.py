@@ -67,7 +67,9 @@ class CursorProvider(ProviderAccount):
         super().__init__()
         from usage_limits.config import settings as _cfg
 
-        self.state_db = _cfg.paths.cursor_state_db  # stored as str, resolved by resolve_path
+        self.state_db = (
+            _cfg.paths.cursor_state_db
+        )  # stored as str, resolved by resolve_path
         self.state_db_abs = resolve_path(self.state_db)
         self.usage_url: str = _cfg.cursor.api_url
 
@@ -77,7 +79,9 @@ class CursorProvider(ProviderAccount):
     def get_access_token(self) -> str:
         conn = sqlite3.connect(self.state_db_abs)
         cursor = conn.cursor()
-        cursor.execute("SELECT value FROM ItemTable WHERE key = 'cursorAuth/accessToken'")
+        cursor.execute(
+            "SELECT value FROM ItemTable WHERE key = 'cursorAuth/accessToken'"
+        )
         row = cursor.fetchone()
         conn.close()
         token: str = row[0]
@@ -114,11 +118,13 @@ class CursorProvider(ProviderAccount):
         rows: list[UsageRow] = []
 
         plan = usage["plan"]
-        
+
         # Cursor API contract: limit=0 implies exhausted/no quota.
         # Ensure we have required keys, or fail loudly.
         if "used" not in plan or "limit" not in plan:
-            raise KeyError("Unexpected Cursor API response: 'used' or 'limit' missing in plan data.")
+            raise KeyError(
+                "Unexpected Cursor API response: 'used' or 'limit' missing in plan data."
+            )
 
         plan_limit = plan["limit"]
         plan_used = plan["used"]

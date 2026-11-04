@@ -1,12 +1,14 @@
-
 import sqlite3
 import json
 import base64
 import requests
 from pathlib import Path
 
+
 def fetch_cursor_raw():
-    db_path = Path.home() / ".config" / "Cursor" / "User" / "globalStorage" / "state.vscdb"
+    db_path = (
+        Path.home() / ".config" / "Cursor" / "User" / "globalStorage" / "state.vscdb"
+    )
     if not db_path.exists():
         print(f"DB not found at {db_path}")
         return
@@ -20,9 +22,9 @@ def fetch_cursor_raw():
     if not row:
         print("Token not found")
         return
-    
+
     access_token = row[0]
-    
+
     # JWT parsing
     jwt_payload = access_token.split(".")[1]
     jwt_payload += "=" * (4 - len(jwt_payload) % 4)
@@ -41,8 +43,9 @@ def fetch_cursor_raw():
         },
         timeout=30,
     )
-    
+
     print(json.dumps(resp.json(), indent=2))
+
 
 if __name__ == "__main__":
     fetch_cursor_raw()

@@ -25,7 +25,9 @@ def test_no_api_key_raises_keyerror(provider: DeepseekProvider) -> None:
             os.environ["DEEPSEEK_API_KEY"] = key
 
 
-def test_to_rows_computes_pct_from_balance_and_max_amount(provider: DeepseekProvider) -> None:
+def test_to_rows_computes_pct_from_balance_and_max_amount(
+    provider: DeepseekProvider,
+) -> None:
     """With default max_amount=10.0, $8.66 balance → ((10.0 - 8.66)/10) * 100 = 13.4%."""
     raw: DeepseekBalance = {
         "is_available": True,
@@ -47,7 +49,9 @@ def test_to_rows_computes_pct_from_balance_and_max_amount(provider: DeepseekProv
     assert not row.is_exhausted
 
 
-def test_to_rows_zero_balance_is_one_hundred_percent(provider: DeepseekProvider) -> None:
+def test_to_rows_zero_balance_is_one_hundred_percent(
+    provider: DeepseekProvider,
+) -> None:
     """Zero balance → ((10 - 0)/10) * 100 = 100% used."""
     raw: DeepseekBalance = {
         "is_available": True,
@@ -83,7 +87,9 @@ def test_to_rows_full_balance_is_zero_percent(provider: DeepseekProvider) -> Non
     assert rows[0].pct_used == 0.0
 
 
-def test_to_rows_insufficient_balance_still_returns_row(provider: DeepseekProvider) -> None:
+def test_to_rows_insufficient_balance_still_returns_row(
+    provider: DeepseekProvider,
+) -> None:
     """Captured response: is_available=false but balance_infos is non-empty.
 
     API returns is_available=false when balance is insufficient for calls,

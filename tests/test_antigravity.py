@@ -31,7 +31,9 @@ def test_antigravity_pooled_surfaces_exhausted_weekly_pool() -> None:
     Claude/GPT pool.
     """
     provider = AntigravityAccount(account_id="test@example.com")
-    raw = json.loads((FIXTURE_DIR / "antigravity-quota-summary-pooled.json").read_text())
+    raw = json.loads(
+        (FIXTURE_DIR / "antigravity-quota-summary-pooled.json").read_text()
+    )
     rows = provider.to_rows(raw)
     by_id = {r.identifier: r for r in rows}
 
@@ -63,7 +65,9 @@ def test_antigravity_pooled_surfaces_exhausted_weekly_pool() -> None:
 def test_antigravity_permodel_shape() -> None:
     """Older per-model plans render one row per model label, all available here."""
     provider = AntigravityAccount(account_id="test@example.com")
-    raw = json.loads((FIXTURE_DIR / "antigravity-quota-summary-permodel.json").read_text())
+    raw = json.loads(
+        (FIXTURE_DIR / "antigravity-quota-summary-permodel.json").read_text()
+    )
     rows = provider.to_rows(raw)
     ids = {r.identifier for r in rows}
 
@@ -76,12 +80,16 @@ def test_antigravity_permodel_shape() -> None:
 
 def test_antigravity_quota_summary_request_uses_load_code_assist_project() -> None:
     """The quota summary request is scoped by the project returned from loadCodeAssist."""
-    assert AntigravityAccount._quota_summary_request({"cloudaicompanionProject": "speedy-ally-1jts2"}) == {"project": "speedy-ally-1jts2"}
+    assert AntigravityAccount._quota_summary_request(
+        {"cloudaicompanionProject": "speedy-ally-1jts2"}
+    ) == {"project": "speedy-ally-1jts2"}
 
 
 def test_antigravity_ncts_load_code_assist_returns_project() -> None:
     """Live NCTS account response includes the project needed for quota scoping."""
-    accounts = {account.account_id: account for account in AntigravityAccount.resolve_accounts()}
+    accounts = {
+        account.account_id: account for account in AntigravityAccount.resolve_accounts()
+    }
     provider = accounts[NCTS_AGY_ACCOUNT]
 
     raw = provider._load_code_assist(provider._request_headers())
@@ -92,13 +100,17 @@ def test_antigravity_ncts_load_code_assist_returns_project() -> None:
 def test_antigravity_availability_reflects_exhausted_pool() -> None:
     """availability() marks the exhausted Claude/GPT family unavailable, Gemini available."""
     provider = AntigravityAccount(account_id="test@example.com")
-    raw = json.loads((FIXTURE_DIR / "antigravity-quota-summary-pooled.json").read_text())
+    raw = json.loads(
+        (FIXTURE_DIR / "antigravity-quota-summary-pooled.json").read_text()
+    )
     rows = provider.to_rows(raw)
     avail = {a.name: a for a in provider.availability(rows)}
 
     assert avail["Antigravity: Gemini"].available_now is True
     assert avail["Antigravity: Claude/GPT"].available_now is False
-    assert avail["Antigravity: Claude/GPT"].available_when == datetime(2026, 6, 28, 23, 55, 58, tzinfo=UTC)
+    assert avail["Antigravity: Claude/GPT"].available_when == datetime(
+        2026, 6, 28, 23, 55, 58, tzinfo=UTC
+    )
 
 
 def test_antigravity_fetch_raw_returns_data() -> None:
