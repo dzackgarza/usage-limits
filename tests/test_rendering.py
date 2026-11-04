@@ -73,3 +73,20 @@ def test_render_provider_snapshot_without_account_shows_no_account() -> None:
     render_provider_snapshot(snap, console=console)
     output = buf.getvalue()
     assert "Test" in output
+
+
+def test_render_provider_snapshot_displays_saved_reset_counts() -> None:
+    snap = ProviderSnapshot(
+        provider="codex",
+        display_name="Codex",
+        status="ok",
+        saved_resets={"available_count": 1, "applicable_now_count": 0},
+    )
+    buf = StringIO()
+    render_provider_snapshot(snap, console=Console(file=buf, force_terminal=False))
+
+    assert "Saved resets: 1 (usable now: 0)" in buf.getvalue()
+    assert snap.model_dump(mode="json")["saved_resets"] == {
+        "available_count": 1,
+        "applicable_now_count": 0,
+    }

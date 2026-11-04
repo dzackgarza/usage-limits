@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -62,6 +63,25 @@ def test_codex_to_rows_parses_wham_windows() -> None:
     assert rows[1].identifier == "Codex (7d)"
     assert rows[1].pct_used == 66
     assert rows[1].reset_at is not None
+
+
+def test_codex_saved_resets_from_wham_response() -> None:
+    provider = CodexProvider(account_id="test@example.com")
+    raw: WhamUsageResponse = {
+        "rate_limit": {
+            "primary_window": {"used_percent": 20.0, "reset_at": 1718712345},
+            "secondary_window": {"used_percent": 30.0, "reset_at": 1718798765},
+        },
+        "rate_limit_reset_credits": {
+            "available_count": 1,
+            "applicable_available_count": 0,
+        },
+    }
+
+    resets = provider.saved_resets(raw, at=datetime(2026, 11, 4, tzinfo=UTC))
+
+    assert resets.available_count == 1
+    assert resets.applicable_now_count == 0
 
 
 def test_codex_to_rows_handles_missing_secondary_window() -> None:
