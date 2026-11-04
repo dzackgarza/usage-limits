@@ -96,6 +96,12 @@ def test_claude_saved_resets_no_grant() -> None:
     assert resets.applicable_now_count == 0
 
 
+def test_claude_live_usage_includes_reset_inventory() -> None:
+    raw = ClaudeProvider().fetch_raw()
+
+    assert raw["cedar_ember"] is not None
+
+
 def test_claude_uses_its_own_oauth_credential(tmp_path: Path) -> None:
     store = CredentialStore(tmp_path)
     store.save(
