@@ -43,3 +43,22 @@ def test_openmath_missing_spend_fails_instead_of_reporting_zero() -> None:
 
     with pytest.raises(KeyError):
         OpenMathProvider().to_rows(cast(OpenMathUsageResponse, raw))
+
+
+def test_openmath_inactive_windows_have_no_reset_time() -> None:
+    raw = cast(
+        OpenMathUsageResponse,
+        {
+            "windows": [
+                {"window": "5h", "limit_usd": 250.0, "spent_usd": 0.0, "resets_at": None},
+                {"window": "week", "limit_usd": 250.0, "spent_usd": 0.0, "resets_at": None},
+            ]
+        },
+    )
+
+    rows = OpenMathProvider().to_rows(raw)
+
+    assert [(row.identifier, row.pct_used, row.reset_at) for row in rows] == [
+        ("OpenMath (5h)", 0, None),
+        ("OpenMath (7d)", 0, None),
+    ]
