@@ -60,7 +60,7 @@ def render_provider_snapshot(
     if snapshot.saved_resets is not None:
         resets = snapshot.saved_resets
         active_console.print(
-            f"Saved resets: {resets.available_count} (usable now: {resets.applicable_now_count})"
+            f"Saved resets: {resets.available_count} (worth using now: {resets.applicable_now_count})"
         )
 
 

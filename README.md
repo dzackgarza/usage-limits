@@ -53,8 +53,8 @@ Reads OAuth refresh tokens from the internal credential store, then calls the Go
 Uses its own OAuth login and refresh token to read Claude subscription usage.
 The saved reset count comes from the reset grant block in the OAuth usage response.
 `available_count` counts active, unpaused grants; `applicable_now_count` counts grants
-the service says can be used now. The grant block requires the Claude Code client
-surface and may change with that private API.
+the service marks `usable_now`, shown as "worth using now". The grant block requires
+the Claude Code client surface and may change with that private API.
 
 - **Setup**: Run `usage-limits login claude` and complete the browser-based OAuth flow.
 
@@ -65,7 +65,8 @@ surface and may change with that private API.
 Reads a ChatGPT WHAM API auth file, using either `usage-limits login codex` or the `codex login` command.
 The WHAM response reports saved reset credits for each active account.
 `available_count` is the held count; `applicable_now_count` is the count that
-would restore a usage window now.
+would restore a usage window now. A held reset is not worth using while no
+limit needs restoring, so the two counts can differ.
 
 - **Setup**: Run `usage-limits login codex` (for multi-account support) or `codex login`.
 

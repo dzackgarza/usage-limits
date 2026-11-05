@@ -85,7 +85,7 @@ def test_render_provider_snapshot_displays_saved_reset_counts() -> None:
     buf = StringIO()
     render_provider_snapshot(snap, console=Console(file=buf, force_terminal=False))
 
-    assert "Saved resets: 1 (usable now: 0)" in buf.getvalue()
+    assert "Saved resets: 1 (worth using now: 0)" in buf.getvalue()
     assert snap.model_dump(mode="json")["saved_resets"] == {
         "available_count": 1,
         "applicable_now_count": 0,
