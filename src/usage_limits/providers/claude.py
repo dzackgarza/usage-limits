@@ -19,6 +19,8 @@ from usage_limits.table import UsageRow
 # Claude Code's grant inventory requires its client surface on the OAuth usage call.
 # https://github.com/KarpelesLab/teamclaude/blob/master/docs/accounts.md#claude-banked-usage-limit-resets
 CLAUDE_USAGE_USER_AGENT = "claude-cli/2.1.318 (external, cli)"
+# Saved resets are redeemed from this page; URL taken from the Claude Code binary.
+CLAUDE_USAGE_URL = "https://claude.ai/settings/usage"
 
 
 class ClaudeLimitScope(TypedDict):
@@ -135,7 +137,9 @@ class ClaudeProvider(ProviderAccount):
             if reason != "no_grant":
                 raise ValueError(f"Claude reset inventory unavailable: {reason}")
             assert not block["grants"]
-            return SavedResets(available_count=0, applicable_now_count=0)
+            return SavedResets(
+                available_count=0, applicable_now_count=0, usage_url=CLAUDE_USAGE_URL
+            )
 
         active = [
             grant
@@ -150,6 +154,7 @@ class ClaudeProvider(ProviderAccount):
             applicable_now_count=sum(
                 grant["resets_left"] for grant in active if grant["usable_now"]
             ),
+            usage_url=CLAUDE_USAGE_URL,
         )
 
     def to_rows(self, raw: ClaudeUsageResponse) -> list[UsageRow]:

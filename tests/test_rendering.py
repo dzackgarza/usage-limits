@@ -75,18 +75,33 @@ def test_render_provider_snapshot_without_account_shows_no_account() -> None:
     assert "Test" in output
 
 
-def test_render_provider_snapshot_displays_saved_reset_counts() -> None:
+CODEX_USAGE_URL = "https://chatgpt.com/settings/usage"
+
+
+def _render_saved_resets(available: int, applicable: int) -> str:
     snap = ProviderSnapshot(
         provider="codex",
         display_name="Codex",
         status="ok",
-        saved_resets={"available_count": 1, "applicable_now_count": 0},
+        saved_resets={
+            "available_count": available,
+            "applicable_now_count": applicable,
+            "usage_url": CODEX_USAGE_URL,
+        },
     )
     buf = StringIO()
     render_provider_snapshot(snap, console=Console(file=buf, force_terminal=False))
+    return buf.getvalue()
 
-    assert "Saved resets: 1 (worth using now: 0)" in buf.getvalue()
-    assert snap.model_dump(mode="json")["saved_resets"] == {
-        "available_count": 1,
-        "applicable_now_count": 0,
-    }
+
+def test_render_saved_resets_shows_only_banked_count_when_none_applies() -> None:
+    output = _render_saved_resets(available=1, applicable=0)
+
+    assert "Saved resets: 1\n" in output
+    assert CODEX_USAGE_URL not in output
+
+
+def test_render_saved_resets_links_usage_page_when_one_applies() -> None:
+    output = _render_saved_resets(available=1, applicable=1)
+
+    assert f"Saved resets: 1  {CODEX_USAGE_URL}\n" in output

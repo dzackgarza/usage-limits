@@ -82,6 +82,7 @@ def test_codex_saved_resets_from_wham_response() -> None:
 
     assert resets.available_count == 1
     assert resets.applicable_now_count == 0
+    assert resets.usage_url == "https://chatgpt.com/settings/usage"
 
 
 def test_codex_to_rows_handles_missing_secondary_window() -> None:

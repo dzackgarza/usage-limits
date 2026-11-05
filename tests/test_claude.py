@@ -80,6 +80,7 @@ def test_claude_saved_resets_from_grant_response() -> None:
 
     assert resets.available_count == 1
     assert resets.applicable_now_count == 1
+    assert resets.usage_url == "https://claude.ai/settings/usage"
 
 
 def test_claude_saved_resets_no_grant() -> None:

@@ -59,9 +59,10 @@ def render_provider_snapshot(
     UsageTable(console=active_console).render(snapshot.rows, title=title)
     if snapshot.saved_resets is not None:
         resets = snapshot.saved_resets
-        active_console.print(
-            f"Saved resets: {resets.available_count} (worth using now: {resets.applicable_now_count})"
-        )
+        line = f"Saved resets: {resets.available_count}"
+        if resets.applicable_now_count > 0:
+            line += f"  {resets.usage_url}"
+        active_console.print(line)
 
 
 def render_collection(

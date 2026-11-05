@@ -30,10 +30,15 @@ class ProviderError(BaseModel):
 
 
 class SavedResets(BaseModel):
-    """Saved usage-limit resets held by an account and usable at collection time."""
+    """Saved usage-limit resets held by an account.
+
+    ``applicable_now_count`` is the service's count of resets that would restore a
+    usage window at collection time; ``usage_url`` is the page that redeems them.
+    """
 
     available_count: int = Field(ge=0)
     applicable_now_count: int = Field(ge=0)
+    usage_url: str
 
     model_config = ConfigDict(frozen=True)
 

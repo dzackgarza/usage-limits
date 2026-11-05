@@ -24,6 +24,9 @@ from usage_limits.base import ProviderAccount
 from usage_limits.contracts import SavedResets
 from usage_limits.table import UsageRow
 
+# Saved reset credits are redeemed from this page; URL taken from the Codex CLI binary.
+CODEX_USAGE_URL = "https://chatgpt.com/settings/usage"
+
 
 class CodexTokens(TypedDict):
     access_token: str
@@ -229,6 +232,7 @@ class CodexProvider(ProviderAccount):
         return SavedResets(
             available_count=available,
             applicable_now_count=applicable,
+            usage_url=CODEX_USAGE_URL,
         )
 
     def to_rows(self, raw: WhamUsageResponse) -> list[UsageRow]:

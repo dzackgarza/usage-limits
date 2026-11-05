@@ -53,8 +53,7 @@ Reads OAuth refresh tokens from the internal credential store, then calls the Go
 Uses its own OAuth login and refresh token to read Claude subscription usage.
 The saved reset count comes from the reset grant block in the OAuth usage response.
 `available_count` counts active, unpaused grants; `applicable_now_count` counts grants
-the service marks `usable_now`, shown as "worth using now". The grant block requires
-the Claude Code client surface and may change with that private API.
+the service marks `usable_now`. The grant block requires the Claude Code client surface and may change with that private API.
 
 - **Setup**: Run `usage-limits login claude` and complete the browser-based OAuth flow.
 
@@ -65,8 +64,7 @@ the Claude Code client surface and may change with that private API.
 Reads a ChatGPT WHAM API auth file, using either `usage-limits login codex` or the `codex login` command.
 The WHAM response reports saved reset credits for each active account.
 `available_count` is the held count; `applicable_now_count` is the count that
-would restore a usage window now. A held reset is not worth using while no
-limit needs restoring, so the two counts can differ.
+would restore a usage window now.
 
 - **Setup**: Run `usage-limits login codex` (for multi-account support) or `codex login`.
 
@@ -222,8 +220,10 @@ The caching layer:
 
 - Caches fetch failures themselves — if a provider is rate-limited, the error is persisted so subsequent calls within the TTL window skip the API entirely instead of retrying immediately.
 
-Successful Claude and Codex snapshots show saved reset counts below their usage table.
-JSON output puts the same counts in `providers[].saved_resets`; `null` means that
+Successful Claude and Codex snapshots show the saved reset count below their usage
+table, followed by the provider's usage page URL when a reset applies now.
+JSON output puts `available_count`, `applicable_now_count`, and `usage_url` in
+`providers[].saved_resets`; `null` means that
 the provider did not report a saved reset inventory, while a reported zero is a
 known empty inventory. These are saved one-time resets, separate from scheduled
 usage-window refresh times.
