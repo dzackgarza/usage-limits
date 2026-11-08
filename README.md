@@ -35,6 +35,7 @@ Failed providers show the original error type and message with no usage rows; su
 | Ollama Cloud | Cookie scrape | Visit ollama.com and log in via Chromium |
 | OpenCode Go | Cookie scrape | Visit opencode.ai and log in via Chromium |
 | OpenCode Zen | API probe | Nothing — pings a free endpoint, no auth needed |
+| OpenMath | OpenMath session | Run `usage-limits login openmath` |
 | OpenRouter | OTLP trace sink | Start the built-in trace server with `OPENROUTER_SINK_TOKEN` set |
 | Trae | SQLite database | Have Trae installed and logged in |
 
@@ -187,6 +188,16 @@ A successful response means the service is available.
 - **Setup**: Nothing required — no auth, no local files.
 
 - **Note**: Shows 0% used when available, errors propagate if the endpoint is down.
+
+### OpenMath
+
+Run `usage-limits login openmath` and approve the sign-in through SAIR in your
+browser. The command waits for OpenMath to confirm authorization, then saves the
+session to `~/.config/usage-limits/credentials/openmath/default.json`.
+Run the same command again to replace an expired or revoked session.
+
+`usage-limits --provider openmath` uses that saved session to collect usage.
+`OPENMATH_SESSION_TOKEN` and `OPENMATH_TOKEN`, when set, override the saved session.
 
 ### OpenRouter
 

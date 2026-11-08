@@ -25,7 +25,7 @@ def login_main(ctx: typer.Context) -> None:
         check=True,
     )
 
-    choices = ["antigravity", "codex", "claude"]
+    choices = ["antigravity", "codex", "claude", "openmath"]
     result = subprocess.run(
         [*["gum", "choose", "--header", "Select a provider to login:"], *choices],
         stdout=subprocess.PIPE,
@@ -42,6 +42,18 @@ def login_main(ctx: typer.Context) -> None:
         login_codex()
     elif choice == "claude":
         login_claude()
+    elif choice == "openmath":
+        login_openmath()
+
+
+@login_app.command("openmath")
+def login_openmath() -> None:
+    """Sign in to OpenMath through SAIR and replace the saved session."""
+    from usage_limits.auth.openmath import login_openmath as authorize
+
+    credential = authorize()
+    CredentialStore().save("openmath", "default", credential)
+    typer.echo("OpenMath session saved.")
 
 
 @login_app.command("claude")
