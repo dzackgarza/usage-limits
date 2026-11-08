@@ -30,12 +30,15 @@ def test_claude_to_rows_with_captured_fixture() -> None:
     assert weekly_all.pct_used == 100
     assert weekly_all.is_exhausted is True
     assert weekly_all.reset_at == datetime(2026, 11, 4, 5, 0, 0, 206173, tzinfo=UTC)
+    assert weekly_all.model is None
 
     weekly_scoped = rows[1]
     assert weekly_scoped.identifier == "Claude (Fable)"
     assert weekly_scoped.pct_used == 77
     assert weekly_scoped.is_exhausted is False
     assert weekly_scoped.reset_at == datetime(2026, 11, 4, 5, 0, 0, 206332, tzinfo=UTC)
+    # A model-scoped pool must be marked so consumers do not treat it as the account window.
+    assert weekly_scoped.model == "Fable"
 
     spend = rows[2]
     assert spend.identifier == "Claude (API Spend $250)"
