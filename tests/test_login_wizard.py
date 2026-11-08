@@ -16,6 +16,17 @@ from pathlib import Path
 import requests
 
 
+def test_openmath_login_is_available_from_cli() -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "usage_limits", "login", "openmath", "--help"],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "openmath" in result.stdout
+
+
 def test_login_wizard_invokes_real_gum_and_routes_correctly() -> None:
     """Test the login wizard by driving the real gum executable via a PTY."""
     env = os.environ.copy()
