@@ -162,11 +162,15 @@ class ClaudeProvider(ProviderAccount):
         rows: list[UsageRow] = []
         for entry in limits:
             label = _limit_label(entry)
+            scope = entry["scope"]
             rows.append(
                 UsageRow(
                     identifier=label,
                     pct_used=entry["percent"],
                     reset_at=_parse_dt(entry["resets_at"]),
+                    model=None
+                    if scope is None or scope["model"] is None
+                    else scope["model"]["display_name"],
                 )
             )
 

@@ -44,6 +44,10 @@ class UsageRow(BaseModel):
     reset_at: datetime | None = None
     """UTC reset timestamp; None = not applicable or already at full capacity."""
 
+    model: str | None = None
+    """Model whose separate pool this row meters; None = the account-wide window.
+    An exhausted model pool blocks only that model, not the account."""
+
     model_config = ConfigDict(frozen=True)
 
     @field_validator("pct_used", mode="before")
