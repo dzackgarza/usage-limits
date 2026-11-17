@@ -188,8 +188,6 @@ Checkmarks indicate implemented + tested.
 | OpenCode Zen | ⬜️ | stub — implementation pending |
 | OpenMath | ✅ | Bearer token → `POST /v1/org_model_usage` |
 
-> Optimized tool-use workflow for agents: see [SDL.md](./SDL.md).
-
 <!-- agent-memory:start -->
 # Agent memory
 
