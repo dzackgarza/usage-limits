@@ -111,6 +111,20 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
         )
 
 
+def _raise_for_status_with_body(resp: requests.Response) -> None:
+    """Like ``raise_for_status``, but keeps the server's error body.
+
+    The body (e.g. ``invalid_grant: Refresh token expired``) is the only place a
+    token endpoint says why it refused.
+    """
+    if resp.ok:
+        return
+    raise requests.HTTPError(
+        f"{resp.status_code} {resp.reason} for url: {resp.url}: {resp.text}",
+        response=resp,
+    )
+
+
 class LocalhostBrowserFlow:
     """OAuth 2.0 Authorization Code grant via localhost redirect."""
 
@@ -264,7 +278,7 @@ class LocalhostBrowserFlow:
 
         resp = self._post_token(token_data)
         if self.token_encoding == "json":
-            resp.raise_for_status()
+            _raise_for_status_with_body(resp)
         if not resp.ok:
             raise RuntimeError(f"Token exchange failed: {resp.status_code} {resp.text}")
 
@@ -311,7 +325,7 @@ class LocalhostBrowserFlow:
 
         resp = self._post_token(data)
         if self.token_encoding == "json":
-            resp.raise_for_status()
+            _raise_for_status_with_body(resp)
         if not resp.ok:
             if resp.status_code == 401:
                 error_response = cast(OAuthTokenErrorResponse, resp.json())

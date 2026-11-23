@@ -91,7 +91,7 @@ def _provider_classes() -> dict[str, type[UsageProvider]]:
 
 
 INACTIVE_PROVIDERS: frozenset[str] = frozenset(
-    {"deepseek", "opencode-go", "opencode-zen", "openrouter", "trae"}
+    {"cursor", "deepseek", "opencode-go", "opencode-zen", "openrouter", "trae"}
 )
 
 

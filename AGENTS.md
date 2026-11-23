@@ -180,7 +180,7 @@ Checkmarks indicate implemented + tested.
 | Copilot | ✅ | `gh auth token` → `GET /copilot_internal/user` |
 | Windsurf | :x: | archived — free tier unusable, constant "high demand" errors |
 | Kiro | ✅ | builtin |
-| Cursor | ✅ | SQLite `state.vscdb` → JWT → usage-summary API |
+| Cursor | ⬜️ | disabled (listed in `INACTIVE_PROVIDERS`); SQLite `state.vscdb` → JWT → usage-summary API |
 | Gemini CLI | ❌ | CLI hangs; will be deprecated soon |
 | Qoder | :x: | archived — free tier model worse than GPT-4o, unusable for real work |
 | Trae | ✅ | SQLite `storage.json` → `Cloud-IDE-JWT` → ent_usage API |
