@@ -10,6 +10,7 @@ Free plans have limit=0 — the provider treats this as exhausted (100%).
 from __future__ import annotations
 
 from usage_limits.providers.cursor import CursorProvider
+from usage_limits.registry import list_providers
 
 
 def test_cursor_live_api() -> None:
@@ -39,3 +40,11 @@ def test_cursor_live_api() -> None:
     if isinstance(limit, int) and limit == 0:
         assert plan_row.pct_used == 100.0
         assert plan_row.is_exhausted is True
+
+
+def test_cursor_is_not_in_default_collection() -> None:
+    """Cursor is disabled: the default `usage-limits` run must not collect it."""
+    (registered,) = [
+        provider for provider in list_providers() if provider.provider == "cursor"
+    ]
+    assert not registered.active

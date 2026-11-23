@@ -357,3 +357,25 @@ def test_codex_authorize_url_resolves_correctly_on_live_openai() -> None:
     assert "error" not in resp.url
     assert "authorize_hydra_invalid_request" not in resp.text
     assert resp.status_code == 200
+
+
+def test_refresh_json_error_surfaces_response_body() -> None:
+    flow = LocalhostBrowserFlow(
+        client_id="test_client",
+        client_secret=None,
+        scopes=[],
+        auth_url="https://auth.example.com",
+        token_url="https://token.example.com/token",
+        token_encoding="json",
+    )
+
+    with responses.RequestsMock() as rsps:
+        rsps.add(
+            responses.POST,
+            "https://token.example.com/token",
+            json={"error": "invalid_grant", "error_description": "Refresh token expired"},
+            status=400,
+        )
+
+        with pytest.raises(requests.HTTPError, match="Refresh token expired"):
+            flow.refresh("old_refresh_123")
