@@ -6,20 +6,48 @@ Uniform quota collection and rendering for CLI- and API-backed LLM providers.
 
 ## Quick start
 
-1. Run `uvx git+https://github.com/dzackgarza/usage-limits login <provider>` for any providers you wish to connect (e.g., `antigravity`, `codex`).
+Install the CLI with [uv](https://docs.astral.sh/uv/):
 
-2. Run `uvx git+https://github.com/dzackgarza/usage-limits doctor` — checks provider readiness and points out anything missing.
+```sh
+uv tool install git+https://github.com/dzackgarza/usage-limits
+```
 
-3. Run `uvx git+https://github.com/dzackgarza/usage-limits --help` — available commands and flags.
+1. Run `usage-limits --help` to discover commands and flags, and
+   `usage-limits providers list --json` to discover provider slugs and their default activation status.
+2. Set up the providers you intend to use according to the table below. For
+   app-managed OAuth, run a named login command, e.g. `usage-limits login claude`.
+   `usage-limits login --help` lists the supported login subcommands; other providers
+   use external CLIs, local files, or environment variables.
+3. Run `usage-limits doctor` for local credential and prerequisite checks and setup hints.
+   This is not a live quota check or proof that an API credential will work.
+4. Run `usage-limits --provider claude` to collect a single configured provider,
+   or `usage-limits` to collect all default-active providers. Add `--json` for the
+   same collection as structured data (including per-provider status and errors).
 
-4. Run `uvx git+https://github.com/dzackgarza/usage-limits` — collects and displays usage data from all available providers.
+For a one-off invocation without installing the tool, use
+`uvx --from git+https://github.com/dzackgarza/usage-limits usage-limits --help`.
 
-*(If you were previously using `cockpit-tools` for authentication, run `usage-limits migrate` to copy your existing credentials over.)*
+For old `cockpit-tools` credentials, use `usage-limits migrate antigravity` or
+`usage-limits migrate codex`; `usage-limits migrate --help` lists the available migrations.
+
+The `usage-limits` CLI is the primary interface. Its root command collects usage;
+named subcommands handle setup, inspection and the trace server. For example,
+`usage-limits providers list --help` shows the options for that command. Integrations should use the
+collection's `--json` output rather than scraping the rendered table or duplicating
+provider authentication and collection logic.
 
 ## Provider coverage
 
 Collection displays each provider's result separately.
 Failed providers show the original error type and message with no usage rows; successful providers remain visible.
+This applies to failures during a provider's collection. Errors before collection
+(for example, an unknown provider slug) can terminate the command. Check the
+provider status in JSON output; a command that returns a collection can contain
+failed providers. Missing credentials are not equivalent to zero usage.
+
+The table includes registered providers, not just those collected by default.
+Use `usage-limits --provider <slug>` to explicitly select a provider whose `active`
+field in `usage-limits providers list --json` is false.
 
 | Provider | Strategy | How to set up |
 | :--- | :--- | :--- |
@@ -31,6 +59,7 @@ Failed providers show the original error type and message with no usage rows; su
 | Copilot | GitHub CLI token | Run `gh auth login` |
 | Cursor | SQLite database | Have Cursor installed and logged in |
 | DeepSeek | API key + balance query | Set `DEEPSEEK_API_KEY` environment variable |
+| Freebuff | CLI profile / credential store | Log in through the Freebuff CLI; install Bun for keychain-backed profiles |
 | Kiro | SQLite | Have Kiro CLI installed and logged in |
 | Ollama Cloud | Cookie scrape | Visit ollama.com and log in via Chromium |
 | OpenCode Go | Cookie scrape | Visit opencode.ai and log in via Chromium |
@@ -160,7 +189,7 @@ Queries the DeepSeek `/user/balance` endpoint for prepaid account balance.
 
 - **Setup**: Set the `DEEPSEEK_API_KEY` environment variable.
 
-- **Note**: Silently returns no rows when the env var is unset (no error).
+- **Note**: An unset `DEEPSEEK_API_KEY` raises `KeyError`; the collection reports a provider error, not an empty successful balance. Set the key before running `usage-limits --provider deepseek`.
 
 ### Ollama Cloud
 
@@ -203,7 +232,7 @@ Run the same command again to replace an expired or revoked session.
 
 Usage is tracked by a built-in OTLP trace sink server that receives trace exports from OpenRouter and writes daily request counts to a state file.
 
-- **Setup**: Start the server with `uvx --from git+https://github.com/dzackgarza/usage-limits usage-limits serve`, with `OPENROUTER_SINK_TOKEN` set in the environment.
+- **Setup**: Start the server with `usage-limits serve`, with `OPENROUTER_SINK_TOKEN` set in the environment.
   Then configure OpenRouter to export OTLP traces to the server's `/v1/traces` endpoint.
 
 - **File**: `~/.local/state/openrouter_usage/traces.json` — daily count map written by the sink server.
@@ -220,16 +249,17 @@ Reads session tokens from the Trae global storage file, then exchanges them for 
 
 ## Caching
 
-All providers have a per-provider TTL on cached fetch results (default 0 — no caching).
-Claude Code is configured with a 300s TTL.
+All providers have a per-provider TTL on cached fetch results. The default is
+0 seconds (always fetch; results are still persisted). Claude Code and ChatGPT Pro
+use a 300-second TTL.
 
 The caching layer:
 
-- Writes every successful `fetch_raw` result to a JSON cache file in the provider's state directory.
+- Writes every successful `fetch_raw` result to a JSON cache file in the provider's state directory (separate per account for account-scoped providers).
 
-- Falls back to stale cached data when a live fetch fails (transient errors, rate limits).
+- Reuses a successful cached result only while it is within a positive TTL. Otherwise it attempts a fresh fetch; a failed live fetch never falls back to stale quota data.
 
-- Caches fetch failures themselves — if a provider is rate-limited, the error is persisted so subsequent calls within the TTL window skip the API entirely instead of retrying immediately.
+- Persists live-fetch failures as error-only cache entries, discarding any previous raw data and propagating the failure to the caller. An error-only entry is always a cache miss, even within the TTL; the next collection attempts a fresh fetch. This describes the shared cache, not provider-specific OAuth refresh or request cooldown behavior.
 
 Successful Claude and Codex snapshots show the saved reset count below their usage
 table, followed by the provider's usage page URL when a reset applies now.
