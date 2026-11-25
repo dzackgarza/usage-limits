@@ -26,7 +26,9 @@ notifications (via `ntfy`) when limits are reached.
   read, subprocess output). Use them instead of `dict[str, Any]` for structured data,
   so that each key access is typed.
 - Do not suppress type errors with `# type: ignore`. If mypy reports an error, fix
-  the type definition.
+  the type definition. The shared semgrep rules `py-no-type-ignore`, `py-no-any-type`
+  and `py-no-object-return` in `~/ai-review-ci` report `# type: ignore`, `Any` and
+  `-> object` in CI.
   Use `cast()` at JSON-decoding boundaries (`json.loads`, `resp.json()`) to assert the
   expected shape — this is an explicit programmer assertion, not a suppression.
 - Providers should inherit from `UsageProvider` in `src/usage_limits/base.py`.
