@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 
 def test_cli_runs_full_collection_pipeline() -> None:
@@ -35,3 +38,48 @@ def test_module_cli_lists_registered_providers_as_json() -> None:
     ]
     assert payload[0]["display_name"] == "Agy Secret Pool"
     assert "gemini-cli" not in {entry["provider"] for entry in payload}
+
+
+def test_cli_fetch_failure_replaces_stale_cache_and_is_retried(tmp_path: Path) -> None:
+    """An expired snapshot and a fresh error entry both require a real fetch."""
+    env = {**os.environ, "HOME": str(tmp_path)}
+    cache = tmp_path / ".local/state/claude_usage/default/_fetch_cache.json"
+    cache.parent.mkdir(parents=True)
+    raw = json.loads(
+        (Path(__file__).parent / "fixtures/claude_response.json").read_text()
+    )
+    stale_at = datetime.now(UTC) - timedelta(minutes=10)
+    cache.write_text(json.dumps({"raw": raw, "last_updated": stale_at.isoformat()}))
+
+    command = [sys.executable, "-m", "usage_limits", "--provider", "claude", "--json"]
+    first = subprocess.run(command, env=env, capture_output=True, check=True, text=True)
+    (snapshot,) = json.loads(first.stdout)["providers"]
+    assert snapshot["status"] == "error"
+    assert snapshot["rows"] == []
+    (error,) = snapshot["errors"]
+    assert error["type"] == "filenotfounderror"
+    entry = json.loads(cache.read_text())
+    assert entry["raw"] is None
+    assert entry["error_type"] == "FileNotFoundError"
+    assert entry["error_message"] == error["message"]
+    first_error_at = datetime.fromisoformat(entry["last_updated"])
+    assert stale_at < first_error_at
+
+    credential = tmp_path / ".config/usage-limits/credentials/claude/default.json"
+    credential.parent.mkdir(parents=True)
+    credential.write_text("{")
+    assert datetime.now(UTC) - first_error_at < timedelta(minutes=5)
+
+    second = subprocess.run(
+        command, env=env, capture_output=True, check=True, text=True
+    )
+    (snapshot,) = json.loads(second.stdout)["providers"]
+    assert snapshot["status"] == "error"
+    assert snapshot["rows"] == []
+    (error,) = snapshot["errors"]
+    assert error["type"] == "jsondecodeerror"
+    entry = json.loads(cache.read_text())
+    assert entry["raw"] is None
+    assert entry["error_type"] == "JSONDecodeError"
+    assert entry["error_message"] == error["message"]
+    assert first_error_at < datetime.fromisoformat(entry["last_updated"])
