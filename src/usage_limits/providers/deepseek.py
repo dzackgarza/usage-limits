@@ -1,7 +1,7 @@
 """DeepSeek API usage limits provider.
 
 Queries the ``/user/balance`` endpoint to check prepaid account balance.
-Requires ``DEEPSEEK_API_KEY`` env var; quietly returns no rows when unset.
+Requires ``DEEPSEEK_API_KEY`` env var; raises ``KeyError`` when unset.
 
 A configured ``max_amount`` (default $10 USD) is used to compute the
 ``pct_used`` from the ``total_balance`` returned by the API.
