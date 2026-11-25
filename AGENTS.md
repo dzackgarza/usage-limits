@@ -22,11 +22,10 @@ notifications (via `ntfy`) when limits are reached.
 - Follow standard Python conventions (PEP 8).
 - Use `ruff` for all formatting and linting.
 - Prefer type hints for all function signatures and class members.
-- **Define TypedDicts for every data shape that crosses a boundary** (API response, file
-  read, subprocess output).
-  Never use `dict[str, Any]` for structured data.
-  Every key access must be typed.
-- **Never suppress type errors** with `# type: ignore`. If mypy reports an error, fix
+- Define TypedDicts for each data shape that crosses a boundary (API response, file
+  read, subprocess output). Use them instead of `dict[str, Any]` for structured data,
+  so that each key access is typed.
+- Do not suppress type errors with `# type: ignore`. If mypy reports an error, fix
   the type definition.
   Use `cast()` at JSON-decoding boundaries (`json.loads`, `resp.json()`) to assert the
   expected shape — this is an explicit programmer assertion, not a suppression.
@@ -36,7 +35,7 @@ notifications (via `ntfy`) when limits are reached.
 
 ## Error and Failure Philosophy
 
-**The only valid failure mode is an uncaught exception.** Every rule below follows from
+The only valid failure mode is an uncaught exception. Every rule below follows from
 this.
 
 ### Do not interpret failures for the user
@@ -83,36 +82,38 @@ Note that for token-based OAuth credentials, token expiration (resulting in an e
 
 ## Testing Requirements
 
-### Mandatory rules
+### Test and parsing rules
 
-- **Every provider must have a test.** A provider with no test is assumed broken until
+- Each provider has a test. A provider with no test is assumed broken until
   proven otherwise. The test must exercise `fetch_raw` + `to_rows` against a captured
   real response or verified fixture.
-- **No silent fallthrough.** `to_rows` must never use `.get(key, default)` with a
-  default that is indistinguishable from valid low-usage data.
+- No silent fallthrough. `to_rows` does not use `.get(key, default)` with a
+  default that is indistinguishable from valid low-usage data. The ai-review-ci semgrep
+  rule `py-no-dict-get-default` rejects this pattern at commit time.
   If a key is missing from `fetch_raw` output, that is a parse error — fail explicitly,
   do not default to `0.0` or `[]`.
-- **No syntax-only rendering tests.** Constructing a `UsageRow` by hand and asserting it
+- No syntax-only rendering tests. Constructing a `UsageRow` by hand and asserting it
   renders is not a provider test.
   It tests rich, not the repository.
   Every provider test must pass real or captured API output through the provider's
   parsing logic.
-- **No coverage theater.** A passing test suite with zero provider coverage is fraud.
+- No coverage theater. A passing test suite with zero provider coverage proves nothing about the providers.
   Each provider's test must prove the provider produces correct rows from real-world
   representative input, not just that the framework doesn't crash.
-- **Run tests using `just test` or `pytest`.**
-- **No mocks.** Test against real data or captured responses.
-  No `unittest.mock`, `monkeypatch`, stubs, fakes, or simulated environments.
+- Run tests with `just test` or `pytest`.
+- No mocks. Test against real data or captured responses, not `unittest.mock`,
+  `monkeypatch`, stubs, fakes, or simulated environments. The ai-review-ci semgrep rules
+  `py-no-mock-import`, `py-no-magicmock`, and `py-no-monkeypatch` reject the first two.
 
 ### Banned patterns — the principle
 
-**A provider must never present fabricated data to the user.
-Crashing with a visible error is always correct.
-Producing plausible-looking output from a broken parser is fraud.**
+A provider never presents fabricated data to the user.
+A crash with a visible error is correct.
+Plausible-looking output from a broken parser misleads the user.
 
-**Every piece of code must assert that the resource it needs exists, and fail
+Code asserts that the resource it needs exists, and fails
 immediately if it does not.
-Fallbacks, defaults, silent recovery, and synthetic data are never acceptable.** If
+Fallbacks, defaults, silent recovery, and synthetic data are not acceptable. If
 `fetch_raw` needs a file, the file must be present.
 If `to_rows` needs a key, the key must be in the dict.
 If an API is required, the endpoint must respond.
