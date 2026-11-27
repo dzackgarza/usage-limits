@@ -1,3 +1,12 @@
+> **Planning migration — Spec Kit and itree**
+>
+> Select the work-unit issue with itree. Use Spec Kit to plan and execute the work.
+> The issue body and comments hold the current plan, tasks, progress and evidence.
+> Earlier instructions that assign this work to vault cards or a separate task list
+> identify records to migrate. Match each obligation to its owning issue. Preserve
+> task IDs, order, prerequisites, acceptance criteria and evidence. Verify the transfer
+> on the issue before retiring the old tracker. An open obligation stays open.
+
 # AGENTS.md
 
 ## Project Overview
@@ -214,7 +223,6 @@ agent-memory add --scope project --type trap --title <title> --content <content>
 agent-memory add --scope project --type advice --title <title> --content <content>
 agent-memory add --scope project --type context --title <title> --content <content>
 agent-memory add --scope project --type reference --title <title> --content <content>
-agent-memory add --scope project --type plan --title <title> --content <content>
 ```
 
 Use `agent-memory retrieve <key>`, `agent-memory update <key>`, and `agent-memory delete <key>` for memory CRUD.
