@@ -32,6 +32,8 @@ secret is each account's refresh token.
 
 from __future__ import annotations
 
+import platform
+import sys
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import TypedDict, cast
@@ -42,6 +44,7 @@ from usage_limits.base import ProviderAccount
 from usage_limits.table import ModelAvailability, UsageRow
 
 WINDOW_LABELS: dict[str, str] = {"weekly": "Weekly", "5h": "5h"}
+ARCHITECTURE_LABELS = {"x86_64": "amd64", "aarch64": "arm64", "arm64": "arm64"}
 
 
 class QuotaBucket(TypedDict, total=False):
@@ -60,20 +63,8 @@ class QuotaGroup(TypedDict, total=False):
     description: str
 
 
-class ModelQuotaBucket(TypedDict, total=False):
-    modelId: str
-    tokenType: str
-    remainingFraction: float
-    resetTime: str
-
-
-class RetrieveUserQuotaResponse(TypedDict, total=False):
-    buckets: list[ModelQuotaBucket]
-
-
 class AntigravityRaw(TypedDict):
     groups: list[QuotaGroup]
-    user_quota: RetrieveUserQuotaResponse
 
 
 class LoadCodeAssistResponse(TypedDict):
@@ -155,10 +146,16 @@ class AntigravityAccount(ProviderAccount):
 
     def _request_headers(self) -> dict[str, str]:
         token = self._get_access_token()
+        architecture = ARCHITECTURE_LABELS[platform.machine().lower()]
+        user_agent = (
+            "antigravity/cli/1.5.14 "
+            f"(aidev_client; os_type={sys.platform}; arch={architecture}; "
+            "cl=1004422050; auth_method=consumer)"
+        )
         return {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
-            "User-Agent": "antigravity",
+            "User-Agent": user_agent,
         }
 
     @staticmethod
@@ -193,29 +190,11 @@ class AntigravityAccount(ProviderAccount):
         resp.raise_for_status()
         return cast(AntigravityRaw, resp.json())
 
-    def _retrieve_user_quota(
-        self,
-        headers: dict[str, str],
-        summary_request: RetrieveUserQuotaSummaryRequest,
-    ) -> RetrieveUserQuotaResponse:
-        resp = requests.post(
-            f"{self._base_url()}/v1internal:retrieveUserQuota",
-            headers=headers,
-            json=summary_request,
-        )
-        resp.raise_for_status()
-        return cast(RetrieveUserQuotaResponse, resp.json())
-
     def fetch_raw(self) -> AntigravityRaw:
         headers = self._request_headers()
         load_raw = self._load_code_assist(headers)
         summary_request = self._quota_summary_request(load_raw)
-        summary_raw = self._retrieve_user_quota_summary(headers, summary_request)
-        user_quota = self._retrieve_user_quota(headers, summary_request)
-        return {
-            "groups": summary_raw["groups"],
-            "user_quota": user_quota,
-        }
+        return self._retrieve_user_quota_summary(headers, summary_request)
 
     @staticmethod
     def _quota_summary_request(
@@ -241,13 +220,10 @@ class AntigravityAccount(ProviderAccount):
 
     def to_rows(self, raw: AntigravityRaw) -> list[UsageRow]:
         rows: list[UsageRow] = []
-        has_gemini_group = False
 
         for group in raw["groups"]:
             buckets = group["buckets"]
             group_name = group["displayName"]
-            if "gemini" in group_name.lower():
-                has_gemini_group = True
             active = [b for b in buckets if not b.get("disabled")]
             binding = (
                 min(active, key=lambda b: b["remainingFraction"]) if active else None
@@ -271,26 +247,6 @@ class AntigravityAccount(ProviderAccount):
                 rows.append(
                     UsageRow(
                         identifier=identifier,
-                        pct_used=round(pct_used),
-                        reset_at=reset_at,
-                    )
-                )
-
-        if not has_gemini_group:
-            user_quota_buckets = raw.get("user_quota", {}).get("buckets", [])
-            gemini_buckets = [
-                b
-                for b in user_quota_buckets
-                if "gemini" in b.get("modelId", "").lower()
-            ]
-            if gemini_buckets:
-                first = gemini_buckets[0]
-                remaining = first["remainingFraction"]
-                pct_used = (1.0 - remaining) * 100.0
-                reset_at = self._parse_reset(first.get("resetTime"))
-                rows.append(
-                    UsageRow(
-                        identifier="Gemini Models (Weekly)",
                         pct_used=round(pct_used),
                         reset_at=reset_at,
                     )

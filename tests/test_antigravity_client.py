@@ -28,9 +28,15 @@ def test_versioned_client_identity_returns_all_authoritative_summary_windows() -
         group_name, window = identifier.rsplit(" (", 1)
         row = by_id[f"{group_name} ({labels[window[:-1]]})"]
         assert row.pct_used == round((1.0 - bucket["remainingFraction"]) * 100.0)
-        assert row.reset_at == datetime.fromisoformat(
-            bucket["resetTime"].replace("Z", "+00:00")
-        ).astimezone(UTC)
+        reset_time = bucket.get("resetTime")
+        expected_reset = (
+            None
+            if reset_time is None
+            else datetime.fromisoformat(reset_time.replace("Z", "+00:00")).astimezone(
+                UTC
+            )
+        )
+        assert row.reset_at == expected_reset
 
     assert (
         by_id["Gemini Models (5h)"].reset_at != by_id["Gemini Models (Weekly)"].reset_at
