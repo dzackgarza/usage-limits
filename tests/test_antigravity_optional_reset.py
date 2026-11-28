@@ -16,7 +16,7 @@ def test_optional_summary_reset_preserves_recovered_gemini_quota() -> None:
 
     assert [(row.identifier, row.pct_used, row.reset_at) for row in rows] == [
         (
-            "Gemini Models (Weekly)",
+            "Gemini Models (5h)",
             41,
             datetime(2026, 11, 28, 13, 7, 12, tzinfo=UTC),
         ),
