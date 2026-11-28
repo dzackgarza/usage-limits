@@ -91,7 +91,15 @@ def _provider_classes() -> dict[str, type[UsageProvider]]:
 
 
 INACTIVE_PROVIDERS: frozenset[str] = frozenset(
-    {"cursor", "deepseek", "opencode-go", "opencode-zen", "openrouter", "trae"}
+    {
+        "agy-secret-pool",
+        "cursor",
+        "deepseek",
+        "opencode-go",
+        "opencode-zen",
+        "openrouter",
+        "trae",
+    }
 )
 
 
@@ -219,7 +227,6 @@ def collect_all(
         provider.provider for provider in list_providers() if provider.active
     ]
 
-    # Expand slugs into provider instances (one per account for multi-account)
     instances: list[UsageProvider] = []
     for slug in selected:
         instances.extend(_resolve_instances(slug))

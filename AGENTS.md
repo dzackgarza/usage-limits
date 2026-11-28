@@ -187,6 +187,7 @@ Checkmarks indicate implemented + tested.
 | Provider | Status | Technique |
 | --- | :---: | --- |
 | Antigravity | ✅ | builtin |
+| Agy Secret Pool | ⬜️ | disabled (listed in `INACTIVE_PROVIDERS`); shares Antigravity credentials |
 | Claude Code | ✅ | builtin |
 | Codex | ✅ | builtin |
 | Copilot | ✅ | `gh auth token` → `GET /copilot_internal/user` |

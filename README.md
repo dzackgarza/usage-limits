@@ -52,7 +52,7 @@ field in `usage-limits providers list --json` is false.
 | Provider | Strategy | How to set up |
 | :--- | :--- | :--- |
 | Antigravity | Local OAuth | Run `usage-limits login antigravity` |
-| Agy Secret Pool | Local OAuth (shares Antigravity) | Run `usage-limits login antigravity` |
+| Agy Secret Pool | Archived; inactive by default | Run `usage-limits --provider agy-secret-pool` to collect explicitly |
 | Claude Code | App-owned subscription OAuth | Run `usage-limits login claude` |
 | Codex | Local OAuth | Run `usage-limits login codex` (or `codex login`) |
 | ChatGPT Pro | Estimated message counts from ChatGPT history | Run `codex login`, then `usage-limits` |
@@ -168,10 +168,9 @@ Reads session tokens from the VS Code global storage SQLite database, then excha
 
 ### Agy Secret Pool
 
-Surfaces a second, independently-metered Gemini quota pool that lives on production `cloudcode-pa` and is reachable with the same Antigravity credentials.
-The Antigravity CLI enforces against its daily-channel host, so this pool sits unused by `agy` but is fully usable for direct inference — it shows up here as spare capacity.
-
-- **Setup**: None beyond `usage-limits login antigravity` — it reuses those credentials.
+The archived provider reads the second, independently-metered Gemini quota pool on production `cloudcode-pa` with the same Antigravity credentials.
+It is inactive by default.
+Run `usage-limits --provider agy-secret-pool` to collect it explicitly.
 
 - **Files**: shares `~/.config/usage-limits/credentials/antigravity/<account>.json`
 

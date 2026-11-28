@@ -37,6 +37,7 @@ def test_module_cli_lists_registered_providers_as_json() -> None:
         "claude",
     ]
     assert payload[0]["display_name"] == "Agy Secret Pool"
+    assert payload[0]["active"] is False
     assert "gemini-cli" not in {entry["provider"] for entry in payload}
 
 
