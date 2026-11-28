@@ -41,14 +41,13 @@ import requests
 from usage_limits.base import ProviderAccount
 from usage_limits.table import ModelAvailability, UsageRow
 
-# Display label per quota window; absent on older per-model plans.
 WINDOW_LABELS: dict[str, str] = {"weekly": "Weekly", "5h": "5h"}
 
 
 class QuotaBucket(TypedDict, total=False):
     bucketId: str
     displayName: str
-    window: str  # "weekly" | "5h"; absent on per-model plans
+    window: str
     resetTime: str
     description: str
     disabled: bool
@@ -249,8 +248,6 @@ class AntigravityAccount(ProviderAccount):
             group_name = group["displayName"]
             if "gemini" in group_name.lower():
                 has_gemini_group = True
-            # Within a group, a disabled window is superseded by the binding
-            # (most-restrictive active) window — render it with that limit/reset.
             active = [b for b in buckets if not b.get("disabled")]
             binding = (
                 min(active, key=lambda b: b["remainingFraction"]) if active else None
@@ -263,7 +260,7 @@ class AntigravityAccount(ProviderAccount):
                 )
                 remaining = source["remainingFraction"]
                 pct_used = (1.0 - remaining) * 100.0
-                reset_at = self._parse_reset(source["resetTime"])
+                reset_at = self._parse_reset(source.get("resetTime"))
 
                 window = bucket.get("window")
                 if window:
@@ -279,7 +276,6 @@ class AntigravityAccount(ProviderAccount):
                     )
                 )
 
-        # Fallback to user_quota for the Gemini bucket if summary dropped it
         if not has_gemini_group:
             user_quota_buckets = raw.get("user_quota", {}).get("buckets", [])
             gemini_buckets = [
@@ -288,7 +284,6 @@ class AntigravityAccount(ProviderAccount):
                 if "gemini" in b.get("modelId", "").lower()
             ]
             if gemini_buckets:
-                # All gemini models share identical remainingFraction and resetTime
                 first = gemini_buckets[0]
                 remaining = first["remainingFraction"]
                 pct_used = (1.0 - remaining) * 100.0
@@ -305,8 +300,6 @@ class AntigravityAccount(ProviderAccount):
         return rows
 
     def availability(self, rows: list[UsageRow]) -> list[ModelAvailability]:
-        # Pooled plans share quota per family; per-model plans expose model rows.
-        # Either way these keywords classify a row into one of two families.
         families: list[tuple[str, tuple[str, ...]]] = [
             ("Gemini", ("gemini",)),
             ("Claude/GPT", ("claude", "gpt")),
