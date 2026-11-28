@@ -1,0 +1,32 @@
+{
+  "groups": [
+    {
+      "buckets": [
+        {
+          "bucketId": "3p-weekly",
+          "displayName": "Weekly Limit Remaining",
+          "window": "weekly",
+          "remainingFraction": 1
+        },
+        {
+          "bucketId": "3p-5h",
+          "displayName": "Five Hour Limit Remaining",
+          "window": "5h",
+          "remainingFraction": 1
+        }
+      ],
+      "displayName": "Claude and GPT models",
+      "description": "Models within this group: Claude Opus 5.5, Claude Sonnet 5.5, GPT-OSS 120B"
+    }
+  ],
+  "user_quota": {
+    "buckets": [
+      {
+        "resetTime": "2026-11-28T13:07:12Z",
+        "tokenType": "WTUS",
+        "modelId": "gemini-2.5-flash",
+        "remainingFraction": 0.58764327
+      }
+    ]
+  }
+}
